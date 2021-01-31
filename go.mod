@@ -1,4 +1,4 @@
-module roytman/jrpc
+module github.com/roytman/ovsdb-etcd
 
 go 1.15
 
