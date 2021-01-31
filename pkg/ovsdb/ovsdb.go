@@ -19,12 +19,12 @@ func (s *ServOVSDB) Get_schema(line string, reply *interface{}) error {
 	return nil
 }
 
-func (s *ServOVSDB) AddSchema(schemaName, schemaFile string) error {
+func AddSchema(serv *ServOVSDB, schemaName, schemaFile string) error {
 	data, err := ioutil.ReadFile(schemaFile)
 	if err != nil {
 		return err
 	}
-	s.schemas[schemaName] =  string(data)
+	serv.schemas[schemaName] =  string(data)
 	return nil
 }
 
