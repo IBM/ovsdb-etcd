@@ -2,6 +2,7 @@ package ovsdb
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 )
 type ServOVSDB struct {
@@ -16,6 +17,29 @@ func (s *ServOVSDB) Get_schema(line string, reply *interface{}) error {
 		return err
 	}
 	*reply = f
+	return nil
+}
+
+func (s *ServOVSDB) Monitor_cond(param []interface{}, reply *interface{}) error {
+	fmt.Printf("Monitor_cond %T %+v\n", param, param)
+	//f := *param
+	for k, v := range param {
+		fmt.Printf("k = %v v = %v \n", k, v)
+	}
+	*reply = "{Monitor_cond}"
+	return nil
+}
+
+func (s *ServOVSDB) Monitor_cond_since(param *interface{}, reply *interface{}) error {
+	fmt.Printf("Monitor_cond %+v\n", *param)
+
+	*reply = "{Monitor_cond_since}"
+	return nil
+}
+
+func (s *ServOVSDB) Echo(line []byte, reply *interface{}) error {
+	fmt.Printf("Echo %s\n", string(line))
+	*reply = string(line)
 	return nil
 }
 

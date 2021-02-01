@@ -82,7 +82,8 @@ func main() {
 				if err != nil {
 					continue
 				}
-				ms.ServeCodec(ovsdb.NewCodec(conn))
+				//ms.ServeCodec(ovsdb.NewCodec(conn))
+				ms.ServeCodec(ovsdb.NewServerCodec(conn))
 			}
 		}()
 	}
@@ -91,6 +92,6 @@ func main() {
 		if err != nil {
 			continue
 		}
-		ms.ServeCodec(ovsdb.NewCodec(conn))
+		ms.ServeCodec(ovsdb.NewServerCodec(conn))
 	}
 }

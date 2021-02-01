@@ -22,7 +22,7 @@ func main() {
 		}
 		var reply *string
 		fmt.Println("Client")
-		err = client.Call("get_schema", "_Server", &reply)
+		err = client.Call("monitor_cond", "[\"_Server\",[\"monid\",\"_Server\"],{\"Database\":[{\"columns\":[\"cid\",\"connected\",\"index\",\"leader\",\"model\",\"name\",\"schema\",\"sid\"]}]}]", &reply)
 		if err != nil {
 			log.Fatal(err)
 		}
