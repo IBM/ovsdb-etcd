@@ -16,17 +16,28 @@ const UNIX_SOCKET = "/tmp/ovsdb-etcd.sock"
 
 
 func main() {
-	// create and init OVSD service
-	ovsdbServ := ovsdb.NewService()
 
-	err := ovsdb.AddSchema(ovsdbServ, "_Server", "./json/_server.ovsschema")
+	dbServ, err := ovsdb.NewDBServer([]string{"localhost:2379"})
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = ovsdb.AddSchema(ovsdbServ,"OVN_Northbound", "./json/ovn-nb.ovsschema")
+
+
+	err = dbServ.AddSchema("_Server", "./json/_server.ovsschema")
 	if err != nil {
 		log.Fatal(err)
 	}
+	err = dbServ.AddSchema("OVN_Northbound", "./json/ovn-nb.ovsschema")
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = dbServ.LoadServerData()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// create and init OVSD service
+	ovsdbServ := ovsdb.NewService(dbServ)
 
 	/*
 	data, err := ioutil.ReadFile("./pkg/server/cond.json")
