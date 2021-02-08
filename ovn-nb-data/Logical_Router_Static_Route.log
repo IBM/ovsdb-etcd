@@ -1,0 +1,134 @@
+_uuid               : 01c3bc10-332e-4668-9bd9-f67e63c53afd
+bfd                 : []
+external_ids        : {}
+ip_prefix           : "fd98::2"
+nexthop             : "fd98::2"
+options             : {}
+output_port         : []
+policy              : []
+
+_uuid               : 93431fc9-c663-4ca9-9e7c-bbf964c39471
+bfd                 : []
+external_ids        : {}
+ip_prefix           : "0.0.0.0/0"
+nexthop             : "172.18.0.1"
+options             : {}
+output_port         : rtoe-GR_ovn-worker2
+policy              : []
+
+_uuid               : 6aeb90da-9ee7-4947-ac18-9ad742a1008f
+bfd                 : []
+external_ids        : {}
+ip_prefix           : "100.64.0.3"
+nexthop             : "100.64.0.3"
+options             : {}
+output_port         : []
+policy              : []
+
+_uuid               : 65215a82-3c7d-49d3-9ebd-62bc978bb457
+bfd                 : []
+external_ids        : {}
+ip_prefix           : "10.244.0.0/24"
+nexthop             : "10.244.0.2"
+options             : {}
+output_port         : []
+policy              : src-ip
+
+_uuid               : 4a828663-b619-4470-a8e3-59f5977e88ec
+bfd                 : []
+external_ids        : {}
+ip_prefix           : "100.64.0.2"
+nexthop             : "100.64.0.2"
+options             : {}
+output_port         : []
+policy              : []
+
+_uuid               : dac55e3b-6b15-46bf-b8eb-9431d963f3d8
+bfd                 : []
+external_ids        : {}
+ip_prefix           : "fd98::3"
+nexthop             : "fd98::3"
+options             : {}
+output_port         : []
+policy              : []
+
+_uuid               : 1b4c524c-a36f-41d0-8bcf-cbd3e5f8171a
+bfd                 : []
+external_ids        : {}
+ip_prefix           : "10.244.1.0/24"
+nexthop             : "10.244.1.2"
+options             : {}
+output_port         : []
+policy              : src-ip
+
+_uuid               : fe4089a4-33f1-4f82-b8bb-aaa01e027c5c
+bfd                 : []
+external_ids        : {}
+ip_prefix           : "fd98::4"
+nexthop             : "fd98::4"
+options             : {}
+output_port         : []
+policy              : []
+
+_uuid               : a4c5198c-417a-4c00-9d8e-799c0b603f0e
+bfd                 : []
+external_ids        : {}
+ip_prefix           : "10.244.0.0/16"
+nexthop             : "100.64.0.1"
+options             : {}
+output_port         : []
+policy              : []
+
+_uuid               : b57fbccd-675e-471d-8aed-8b279f0d65eb
+bfd                 : []
+external_ids        : {}
+ip_prefix           : "10.244.2.0/24"
+nexthop             : "10.244.2.2"
+options             : {}
+output_port         : []
+policy              : src-ip
+
+_uuid               : 31b69005-4c12-4555-8103-e42ffc1a7abf
+bfd                 : []
+external_ids        : {}
+ip_prefix           : "0.0.0.0/0"
+nexthop             : "172.18.0.1"
+options             : {}
+output_port         : rtoe-GR_ovn-worker
+policy              : []
+
+_uuid               : 815544ad-3bd9-4224-8776-75a3effabe28
+bfd                 : []
+external_ids        : {}
+ip_prefix           : "10.244.0.0/16"
+nexthop             : "100.64.0.1"
+options             : {}
+output_port         : []
+policy              : []
+
+_uuid               : baa3b44e-3831-4575-a3f5-80bb6ec2910f
+bfd                 : []
+external_ids        : {}
+ip_prefix           : "100.64.0.4"
+nexthop             : "100.64.0.4"
+options             : {}
+output_port         : []
+policy              : []
+
+_uuid               : e4c2100f-f7ba-4129-a11f-0b4d854a7c28
+bfd                 : []
+external_ids        : {}
+ip_prefix           : "10.244.0.0/16"
+nexthop             : "100.64.0.1"
+options             : {}
+output_port         : []
+policy              : []
+
+_uuid               : 7115ddef-8cad-4fc9-8471-63715480e4fd
+bfd                 : []
+external_ids        : {}
+ip_prefix           : "0.0.0.0/0"
+nexthop             : "172.18.0.1"
+options             : {}
+output_port         : rtoe-GR_ovn-control-plane
+policy              : []

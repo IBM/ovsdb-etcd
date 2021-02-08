@@ -1,0 +1,11 @@
+_uuid               : 6be9235a-b3b6-41d7-a5aa-356b5b3c96cc
+acls                : []
+external_ids        : {name=clusterPortGroup}
+name                : clusterPortGroup
+ports               : [25f2e69e-4bac-4529-9082-9f94da060cf1, 73000cf3-73d0-4283-8aad-bcf181626a40, be25033c-27df-42a2-9765-52bc06acc71c]
+
+_uuid               : ee4d82d2-3a7d-4737-be8d-656374f5d56c
+acls                : []
+external_ids        : {name=clusterRtrPortGroup}
+name                : clusterRtrPortGroup
+ports               : [b4298483-cf17-46d4-9da1-034eab065ff1, b6e1fc02-0306-4887-8e36-e8b0ec22b16c, fcf06a69-16c2-4f34-b3a4-282a641862f8]

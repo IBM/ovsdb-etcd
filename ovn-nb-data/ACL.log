@@ -1,0 +1,32 @@
+_uuid               : aa2bab19-9b31-4d01-b1ad-f5e49dd269f8
+action              : allow-related
+direction           : to-lport
+external_ids        : {}
+log                 : false
+match               : "ip4.src==10.244.0.2"
+meter               : []
+name                : []
+priority            : 1001
+severity            : []
+
+_uuid               : 3ed181f9-7c68-47ee-bcdc-6cf393a02772
+action              : allow-related
+direction           : to-lport
+external_ids        : {}
+log                 : false
+match               : "ip4.src==10.244.1.2"
+meter               : []
+name                : []
+priority            : 1001
+severity            : []
+
+_uuid               : 7071b927-cc6d-4145-8849-395e6226fdac
+action              : allow-related
+direction           : to-lport
+external_ids        : {}
+log                 : false
+match               : "ip4.src==10.244.2.2"
+meter               : []
+name                : []
+priority            : 1001
+severity            : []

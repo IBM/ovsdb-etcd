@@ -1,0 +1,5 @@
+_uuid               : 1d9ba317-630c-435d-b61b-7ff19c461f0b
+action              : drop
+burst_size          : 0
+external_ids        : {}
+rate                : 20

@@ -1,0 +1,6 @@
+_uuid               : 99c45e0b-3688-4992-900c-7d5a25930ba3
+chassis_name        : "1bd76edb-8626-4ecd-8185-788bd2121bda"
+external_ids        : {dgp_name=rtos-node_local_switch}
+name                : rtos-node_local_switch_1bd76edb-8626-4ecd-8185-788bd2121bda
+options             : {}
+priority            : 100

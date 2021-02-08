@@ -1,0 +1,119 @@
+_uuid               : 32cc16f0-cda7-4c63-87d7-d30349ce32d7
+external_ids        : {k8s-cluster-lb-tcp=yes}
+health_check        : []
+ip_port_mappings    : {}
+name                : ""
+options             : {}
+protocol            : tcp
+selection_fields    : []
+vips                : {"10.96.0.10:53"="10.244.0.3:53,10.244.0.4:53", "10.96.0.10:9153"="10.244.0.3:9153,10.244.0.4:9153", "10.96.0.1:443"="172.18.0.4:6443"}
+
+_uuid               : 65bd48d9-5d2b-4dd3-a993-50876a5f4a05
+external_ids        : {k8s-cluster-lb-udp=yes}
+health_check        : []
+ip_port_mappings    : {}
+name                : ""
+options             : {}
+protocol            : udp
+selection_fields    : []
+vips                : {"10.96.0.10:53"="10.244.0.3:53,10.244.0.4:53"}
+
+_uuid               : a6850cf1-5aee-462c-9195-5397d6417938
+external_ids        : {SCTP_lb_gateway_router=GR_ovn-control-plane}
+health_check        : []
+ip_port_mappings    : {}
+name                : ""
+options             : {}
+protocol            : sctp
+selection_fields    : []
+vips                : {}
+
+_uuid               : 53e13052-4a7e-4857-be8f-c234d978482f
+external_ids        : {TCP_lb_gateway_router=GR_ovn-worker2}
+health_check        : []
+ip_port_mappings    : {}
+name                : ""
+options             : {}
+protocol            : tcp
+selection_fields    : []
+vips                : {}
+
+_uuid               : 6be22262-6c30-4cd3-929b-23e79f90182f
+external_ids        : {UDP_lb_gateway_router=GR_ovn-worker2}
+health_check        : []
+ip_port_mappings    : {}
+name                : ""
+options             : {}
+protocol            : udp
+selection_fields    : []
+vips                : {}
+
+_uuid               : 3f00965b-7930-4232-8cee-cf877ca1da04
+external_ids        : {TCP_lb_gateway_router=GR_ovn-worker}
+health_check        : []
+ip_port_mappings    : {}
+name                : ""
+options             : {}
+protocol            : tcp
+selection_fields    : []
+vips                : {}
+
+_uuid               : d7b47c1b-55bc-45a9-bb0d-4032e327c3d2
+external_ids        : {k8s-cluster-lb-sctp=yes}
+health_check        : []
+ip_port_mappings    : {}
+name                : ""
+options             : {}
+protocol            : sctp
+selection_fields    : []
+vips                : {}
+
+_uuid               : d8df5624-a22e-447b-95cc-fc40f60b6aa4
+external_ids        : {UDP_lb_gateway_router=GR_ovn-control-plane}
+health_check        : []
+ip_port_mappings    : {}
+name                : ""
+options             : {}
+protocol            : udp
+selection_fields    : []
+vips                : {}
+
+_uuid               : 667a3465-d536-4561-9daa-210a32ad7a5a
+external_ids        : {UDP_lb_gateway_router=GR_ovn-worker}
+health_check        : []
+ip_port_mappings    : {}
+name                : ""
+options             : {}
+protocol            : udp
+selection_fields    : []
+vips                : {}
+
+_uuid               : 0c0d7ca5-c56d-4130-9e8f-5d8ffb3a5915
+external_ids        : {TCP_lb_gateway_router=GR_ovn-control-plane}
+health_check        : []
+ip_port_mappings    : {}
+name                : ""
+options             : {}
+protocol            : tcp
+selection_fields    : []
+vips                : {}
+
+_uuid               : 3a2be97e-8be5-44c5-91b9-a93e1767e374
+external_ids        : {SCTP_lb_gateway_router=GR_ovn-worker}
+health_check        : []
+ip_port_mappings    : {}
+name                : ""
+options             : {}
+protocol            : sctp
+selection_fields    : []
+vips                : {}
+
+_uuid               : 90f32ca6-e752-4ea9-9e49-6ff3d3cc4e18
+external_ids        : {SCTP_lb_gateway_router=GR_ovn-worker2}
+health_check        : []
+ip_port_mappings    : {}
+name                : ""
+options             : {}
+protocol            : sctp
+selection_fields    : []
+vips                : {}

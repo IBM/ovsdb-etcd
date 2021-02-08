@@ -1,0 +1,142 @@
+_uuid               : 0028e530-18da-4b1d-bec3-ca6f4f8954b5
+enabled             : []
+external_ids        : {}
+gateway_chassis     : []
+ha_chassis_group    : []
+ipv6_prefix         : []
+ipv6_ra_configs     : {}
+mac                 : "0a:58:0a:f4:00:01"
+name                : rtos-ovn-control-plane
+networks            : ["10.244.0.1/24"]
+options             : {}
+peer                : []
+
+_uuid               : a5731950-de12-4d55-8687-5fa7d2571742
+enabled             : []
+external_ids        : {gateway-physical-ip=yes}
+gateway_chassis     : []
+ha_chassis_group    : []
+ipv6_prefix         : []
+ipv6_ra_configs     : {}
+mac                 : "02:42:ac:12:00:02"
+name                : rtoe-GR_ovn-worker2
+networks            : ["172.18.0.2/16"]
+options             : {}
+peer                : []
+
+_uuid               : a3be4bc9-9bd0-496f-9796-afc43f6cae12
+enabled             : []
+external_ids        : {}
+gateway_chassis     : []
+ha_chassis_group    : []
+ipv6_prefix         : []
+ipv6_ra_configs     : {}
+mac                 : "0a:58:64:40:00:04"
+name                : rtoj-GR_ovn-worker2
+networks            : ["100.64.0.4/16", "fd98::4/64"]
+options             : {}
+peer                : []
+
+_uuid               : d54fc12c-ecd5-44c6-a2b9-bda4e0534d6b
+enabled             : []
+external_ids        : {gateway-physical-ip=yes}
+gateway_chassis     : []
+ha_chassis_group    : []
+ipv6_prefix         : []
+ipv6_ra_configs     : {}
+mac                 : "02:42:ac:12:00:04"
+name                : rtoe-GR_ovn-control-plane
+networks            : ["172.18.0.4/16"]
+options             : {}
+peer                : []
+
+_uuid               : 7268435c-3a36-4db8-aef8-a194f2edd2bd
+enabled             : []
+external_ids        : {}
+gateway_chassis     : []
+ha_chassis_group    : []
+ipv6_prefix         : []
+ipv6_ra_configs     : {}
+mac                 : "0a:58:64:40:00:03"
+name                : rtoj-GR_ovn-worker
+networks            : ["100.64.0.3/16", "fd98::3/64"]
+options             : {}
+peer                : []
+
+_uuid               : d293e3dc-3cca-499c-9bce-0c2d619f6df7
+enabled             : []
+external_ids        : {}
+gateway_chassis     : []
+ha_chassis_group    : []
+ipv6_prefix         : []
+ipv6_ra_configs     : {}
+mac                 : "0a:58:64:40:00:01"
+name                : rtoj-ovn_cluster_router
+networks            : ["100.64.0.1/16", "fd98::1/64"]
+options             : {}
+peer                : []
+
+_uuid               : af4e1844-8479-476f-a45a-6444475f0062
+enabled             : []
+external_ids        : {}
+gateway_chassis     : []
+ha_chassis_group    : []
+ipv6_prefix         : []
+ipv6_ra_configs     : {}
+mac                 : "0a:58:64:40:00:02"
+name                : rtoj-GR_ovn-control-plane
+networks            : ["100.64.0.2/16", "fd98::2/64"]
+options             : {}
+peer                : []
+
+_uuid               : 28997de6-8ea1-4338-80de-72fde80c8d95
+enabled             : []
+external_ids        : {gateway-physical-ip=yes}
+gateway_chassis     : []
+ha_chassis_group    : []
+ipv6_prefix         : []
+ipv6_ra_configs     : {}
+mac                 : "02:42:ac:12:00:03"
+name                : rtoe-GR_ovn-worker
+networks            : ["172.18.0.3/16"]
+options             : {}
+peer                : []
+
+_uuid               : 18502ff7-e896-4bba-989b-3548267848a8
+enabled             : []
+external_ids        : {}
+gateway_chassis     : []
+ha_chassis_group    : []
+ipv6_prefix         : []
+ipv6_ra_configs     : {}
+mac                 : "0a:58:0a:f4:02:01"
+name                : rtos-ovn-worker
+networks            : ["10.244.2.1/24"]
+options             : {}
+peer                : []
+
+_uuid               : d4171d97-758d-4ce1-a7e8-2daf3f872844
+enabled             : []
+external_ids        : {}
+gateway_chassis     : [99c45e0b-3688-4992-900c-7d5a25930ba3]
+ha_chassis_group    : []
+ipv6_prefix         : []
+ipv6_ra_configs     : {}
+mac                 : "0a:58:a9:fe:00:02"
+name                : rtos-node_local_switch
+networks            : ["169.254.0.2/20"]
+options             : {}
+peer                : []
+
+_uuid               : 6b7d2637-cee1-481c-8273-523ca7d99d9d
+enabled             : []
+external_ids        : {}
+gateway_chassis     : []
+ha_chassis_group    : []
+ipv6_prefix         : []
+ipv6_ra_configs     : {}
+mac                 : "0a:58:0a:f4:01:01"
+name                : rtos-ovn-worker2
+networks            : ["10.244.1.1/24"]
+options             : {}
+peer                : []

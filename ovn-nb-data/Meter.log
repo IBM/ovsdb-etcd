@@ -1,0 +1,6 @@
+_uuid               : 5e1ee798-511a-429f-b4a5-23c4476e6c1b
+bands               : [1d9ba317-630c-435d-b61b-7ff19c461f0b]
+external_ids        : {}
+fair                : []
+name                : acl-logging
+unit                : pktps

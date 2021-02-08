@@ -1,0 +1,8 @@
+_uuid               : 413afe3e-79ff-4583-88a6-f02b70b8e927
+external_ids        : {}
+inactivity_probe    : 0
+is_connected        : true
+max_backoff         : []
+other_config        : {}
+status              : {bound_port="6641", n_connections="3", sec_since_connect="0", sec_since_disconnect="0"}
+target              : "ptcp:6641:172.18.0.4"

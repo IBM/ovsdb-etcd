@@ -2,9 +2,11 @@ package ovsdb
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"io/ioutil"
+	"strings"
 	"time"
 )
 
@@ -24,16 +26,113 @@ func NewDBServer( endpoints []string) (*DBServer, error) {
 	}
 	// TODO
 	//defer cli.Close()
-	fmt.Printf("etcd client is connected")
+	fmt.Println("etcd client is connected")
 	return &DBServer{cli: cli, schemas:make(map[string]string)}, nil
 }
 
-func (con *DBServer)AddSchema(schemaName, schemaFile string) error {
+ func (con *DBServer)AddSchema(schemaName, schemaFile string) error {
 	data, err := ioutil.ReadFile(schemaFile)
 	if err != nil {
 		return err
 	}
 	con.schemas[schemaName] =  string(data)
+	 var s interface{}
+	 err = json.Unmarshal(data, &s)
+	 if err != nil {
+		 return err
+	 }
+	// fmt.Printf("Schema = %v \n", s)
+	 m := s.(map[string]interface{})
+	 tables, ok := m["tables"]
+	 if !ok {
+	 	// TODO
+	 	fmt.Printf("Schema doesn't have tables")
+	 	return nil
+	 }
+	 tMap := tables.(map[string]interface{})
+	 for tName, table := range tMap {
+	 	tabMap := table.(map[string]interface{})
+	 	columns, ok := tabMap["columns"]
+		 if !ok {
+			 // TODO
+			 fmt.Printf("Table doesn't have columns")
+			 continue
+		 }
+		 columnsmap := columns.(map[string]interface{})
+		 for k, v := range columnsmap {
+		 	fmt.Printf(" Table %s column %s \n", tName, k)
+		 	colValMap := v.(map[string]interface{})
+		 	keyEntry, ok := colValMap["type"]
+			 if !ok {
+				 // TODO
+				 fmt.Printf("------------ The column %s doesn't have key type\n", k)
+				 continue
+			 }
+
+				// fmt.Printf(" Table %s key %s value -->%s %T %v\n", tName, k, cvn, cvv, cvv)
+				 switch keyEntry.(type) {
+				 case string:
+					 fmt.Printf("!!!  Table %s column %s type %s\n", tName, k, keyEntry)
+				 case map[string]interface {}:
+				 	m2 := keyEntry.(map[string]interface {})
+					key, ok := m2["key"]
+					if !ok {
+						 // TODO
+						 fmt.Printf("------------ The column %s doesn't have key type.key, we'll try type\n", k)
+						 t := m2["type"]
+						 switch t.(type) {
+						 case string:
+							 fmt.Printf("!!!  Table %s column %s type %s\n", tName, k, t)
+						 default:
+							 fmt.Printf("!!!  Table %s column %s type %T %s\n", tName, k, t, t)
+						 }
+						 continue
+					 }
+					 value, okV := m2["value"]
+					 if okV {
+					 	var mapKey string
+						 switch key.(type) {
+						 case string:
+							 mapKey = key.(string)
+						 case map[string]interface{}:
+							 k2Map := key.(map[string]interface{})
+							 mapKey = k2Map["type"].(string)
+						 default:
+							 fmt.Printf(" $$$$=> Table %s column  %s keyType --> %T %v\n", tName, k, key, key)
+						 }
+					 	// we support only maps with string keys
+					 	switch value.(type) {
+						case string:
+							fmt.Printf("!!!  Table %s column %s type %s\n", tName, k, "map[" + mapKey + "]" + value.(string))
+						case map[string]interface{}:
+							valueMap := value.(map[string]interface{})
+							fmt.Printf("!!!  Table %s column %s type %s\n", tName, k, "map[" + mapKey + "]" + valueMap["type"].(string))
+						default:
+							fmt.Printf(" $$$$=> Table %s column  %s keyType --> %T %v\n", tName, k, value, value)
+						}
+						 continue
+					 }
+					 switch key.(type) {
+					 case string:
+						 fmt.Printf("!!!  Table %s column %s type %s\n", tName, k, key)
+						 continue
+					 case map[string]interface{}:
+						 k2Map := key.(map[string]interface{})
+
+						 /*for k2, v2 := range k2Map {
+						 	 fmt.Printf(" Table %s key %s value -+-+> %v  key = %v value =  %T %v\n", tName, k, keyEntry, k2, v2, v2)
+						  }*/
+						 fmt.Printf("!!!2222  Table %s column %s type %s\n", tName, k, k2Map["type"])
+					 default:
+						 fmt.Printf(" ===> Table %s column  %s keyType --> %T %v\n", tName, k, key, key)
+					 }
+
+				 default:
+					 fmt.Printf(" ===> Table %s key %s value --> %T %v\n", tName, k, keyEntry, keyEntry)
+				 }
+
+		 }
+	 }
 	return nil
 }
 
@@ -53,7 +152,63 @@ func (con *DBServer) LoadServerData() error {
 	_, err = con.cli.Put(ctx, "ovsdb/_Server/Database/b828af52-6cab-4b46-9870-e4e80e033aad/initial/connected", "true")
 	_, err = con.cli.Put(ctx, "ovsdb/_Server/Database/b828af52-6cab-4b46-9870-e4e80e033aad/initial/leader", "true")
 	_, err = con.cli.Put(ctx, "ovsdb/_Server/Database/b828af52-6cab-4b46-9870-e4e80e033aad/initial/schema", con.schemas["OVN_Northbound"])
-	cancel()
+
+	// OVN_Northbound
+	// NB_Global
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/NB_Global/a5088a51-7756-4dd4-909c-b7c59c9fcce7/connections", "[413afe3e-79ff-4583-88a6-f02b70b8e927]")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/NB_Global/a5088a51-7756-4dd4-909c-b7c59c9fcce7/options", "{e2e_timestamp=\"1612817071\", mac_prefix=\"86:a9:cb\", max_tunid=\"16711680\", northd_internal_version=\"20.12.0-20.14.0-52.0\", northd_probe_interval=\"5000\", svc_monitor_mac=\"5a:d9:62:39:9f:87\"}")
+
+	//ACL
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/ACL/aa2bab19-9b31-4d01-b1ad-f5e49dd269f8/action", "allow-related")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/ACL/aa2bab19-9b31-4d01-b1ad-f5e49dd269f8/direction", "to-lport")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/ACL/aa2bab19-9b31-4d01-b1ad-f5e49dd269f8/match", "ip4.src==10.244.0.2")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/ACL/aa2bab19-9b31-4d01-b1ad-f5e49dd269f8/priority", "1001")
+
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/ACL/aa2bab19-9b31-4d01-b1ad-f5e49dd269f8/action", "allow-related")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/ACL/aa2bab19-9b31-4d01-b1ad-f5e49dd269f8/direction", "to-lport")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/ACL/aa2bab19-9b31-4d01-b1ad-f5e49dd269f8/match", "ip4.src==10.244.0.2")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/ACL/aa2bab19-9b31-4d01-b1ad-f5e49dd269f8/priority", "1001")
+
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/ACL/3ed181f9-7c68-47ee-bcdc-6cf393a02772/action", "allow-related")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/ACL/3ed181f9-7c68-47ee-bcdc-6cf393a02772/direction", "to-lport")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/ACL/3ed181f9-7c68-47ee-bcdc-6cf393a02772/match", "ip4.src==10.244.1.2")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/ACL/3ed181f9-7c68-47ee-bcdc-6cf393a02772/priority", "1001")
+
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/ACL/7071b927-cc6d-4145-8849-395e6226fdac/action", "allow-related")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/ACL/7071b927-cc6d-4145-8849-395e6226fdac/direction", "to-lport")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/ACL/7071b927-cc6d-4145-8849-395e6226fdac/match", "ip4.src==10.244.1.2")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/ACL/7071b927-cc6d-4145-8849-395e6226fdac/priority", "1001")
+
+	//Address_Set
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Address_Set/532757d0-bc2e-41b9-bafe-2542f995b011/addresses", "[\"10.244.0.5\"]")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Address_Set/532757d0-bc2e-41b9-bafe-2542f995b011/external_ids", "{name=local-path-storage_v4}")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Address_Set/532757d0-bc2e-41b9-bafe-2542f995b011/name", "a10956707444534956691")
+
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Address_Set/8e33c234-2da4-4e5f-858f-4bcd5bc3c68b/external_ids", "{name=default_v4}")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Address_Set/8e33c234-2da4-4e5f-858f-4bcd5bc3c68b/name", "a5154718082306775057")
+
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Address_Set/3581fd85-1428-45a8-9702-edec71dda0a1/addresses", "[\"10.244.0.3\", \"10.244.0.4\"]")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Address_Set/3581fd85-1428-45a8-9702-edec71dda0a1/external_ids", "{name=kube-system_v4}")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Address_Set/3581fd85-1428-45a8-9702-edec71dda0a1/name", "a6937002112706621489")
+
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Address_Set/99ad8ae1-bc86-4662-bca4-a88fd675ee3d/external_ids", "{name=ovn-kubernetes_v4}")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Address_Set/99ad8ae1-bc86-4662-bca4-a88fd675ee3d/name", "a5675285926127865604")
+
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Address_Set/fde500ad-eff5-47a3-be0b-02e7c23a1357/external_ids", "{name=kube-public_v4}")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Address_Set/fde500ad-eff5-47a3-be0b-02e7c23a1357/name", "a18363165982804349389")
+
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Address_Set/0af13342-2ea7-486d-825a-b57bd70a8cbc/external_ids", "{name=kube-node-lease_v4}")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Address_Set/0af13342-2ea7-486d-825a-b57bd70a8cbc/name", "a16235039932615691331")
+
+ 	//Connection
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Connection/413afe3e-79ff-4583-88a6-f02b70b8e927/status", "{bound_port=\"6641\", n_connections=\"3\", sec_since_connect=\"0\", sec_since_disconnect=\"0\"}")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Connection/413afe3e-79ff-4583-88a6-f02b70b8e927/target", "ptcp:6641:172.18.0.4")
+
+
+
+
+
+		cancel()
 	return err
 }
 
@@ -71,3 +226,62 @@ func (con *DBServer) GetData(prefix string) (*clientv3.GetResponse, error) {
 	}
 	return resp, err
 }
+
+func (con *DBServer) GetMarshaled(prefix string, columns []interface{})  (*[]map[string]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	resp, err := con.cli.Get(ctx, prefix,clientv3.WithFromKey())
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+	retMaps := map[string]map[string]string{}
+	columnsMap := map[string]bool{}
+	for _, col := range columns {
+		columnsMap[col.(string)] = true
+	}
+	fmt.Printf("GetMarshaled columnsMap = %+v\n", columnsMap)
+	for _, v := range resp.Kvs {
+		keys := strings.Split(string(v.Key), "/")
+		len := len(keys)
+		fmt.Printf("GetMarshaled col name = %s %s\n", keys[len-1], string(v.Key))
+		if _, ok := columnsMap[keys[len-1]]; !ok {
+			fmt.Printf("GetMarshaled NO\n")
+			continue
+		}
+		valsmap, ok := retMaps[keys[len-3]]
+		fmt.Printf("GetMarshaled valsmap=%v\n", valsmap)
+		if !ok {
+			valsmap = map[string]string{}
+		}
+		valsmap[keys[len-1]] = string(v.Value)
+		fmt.Printf("GetMarshaled $v=%v\n", keys[len-1], string(v.Value))
+
+		// TODO
+		retMaps[keys[len-3]] = valsmap
+	}
+	values := []map[string]string{}
+	for _, value := range retMaps {
+		values = append(values, value)
+	}
+	return &values, nil
+}
+
+/*func Marshal(kv []*mvccpb.KeyValue) (*[]map[string]string, error) {
+	retMaps := map[string]map[string]string{}
+	for _, v := range kv {
+		keys := strings.Split(string(v.Key), "/")
+		len := len(keys)
+		valsmap, ok := retMaps[keys[len-2]]
+		if !ok {
+			valsmap = map[string]string{}
+		}
+		valsmap[keys[len-1]] = string(v.Value)
+		// TODO
+		retMaps[keys[len-2]] = valsmap
+	}
+	values := []map[string]string{}
+	for _, value := range retMaps {
+		values = append(values, value)
+	}
+	return &values, nil
+}*/

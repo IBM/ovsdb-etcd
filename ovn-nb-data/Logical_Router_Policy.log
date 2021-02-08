@@ -1,0 +1,116 @@
+_uuid               : e70b41f0-5575-4c04-b435-80016beb87a0
+action              : allow
+external_ids        : {}
+match               : "ip4.src == 10.244.0.0/16 && ip4.dst == 172.18.0.3/32"
+nexthop             : []
+nexthops            : []
+options             : {}
+priority            : 101
+
+_uuid               : ffe013b0-3974-415c-b67f-fe7dc34628e3
+action              : reroute
+external_ids        : {}
+match               : "ip4.src == 10.244.0.2 && ip4.dst == 172.18.0.4 /* ovn-control-plane */"
+nexthop             : []
+nexthops            : ["169.254.0.1"]
+options             : {}
+priority            : 1005
+
+_uuid               : dfd28891-5aa8-4508-b37b-f3145f6ee8fe
+action              : reroute
+external_ids        : {}
+match               : "inport == \"rtos-ovn-control-plane\" && ip4.dst == 172.18.0.4 /* ovn-control-plane */"
+nexthop             : []
+nexthops            : ["10.244.0.2"]
+options             : {}
+priority            : 1004
+
+_uuid               : 8c506059-dba8-415d-a84d-6cd1af3eeed6
+action              : allow
+external_ids        : {}
+match               : "ip4.src == 10.244.0.0/16 && ip4.dst == 172.18.0.2/32"
+nexthop             : []
+nexthops            : []
+options             : {}
+priority            : 101
+
+_uuid               : 5e9cf2a3-e9e1-4b97-b3e6-6c18bd338b75
+action              : reroute
+external_ids        : {}
+match               : "ip4.src == 10.244.1.2  && ip4.dst != 10.244.0.0/16 /* inter-ovn-worker2 */"
+nexthop             : []
+nexthops            : ["169.254.0.1"]
+options             : {}
+priority            : 1003
+
+_uuid               : 2e04ae7b-a706-4dff-95f7-9d83de2529c0
+action              : reroute
+external_ids        : {}
+match               : "ip4.src == 10.244.0.2  && ip4.dst != 10.244.0.0/16 /* inter-ovn-control-plane */"
+nexthop             : []
+nexthops            : ["169.254.0.1"]
+options             : {}
+priority            : 1003
+
+_uuid               : 035fbfeb-0972-4f53-a0f6-493c67223370
+action              : reroute
+external_ids        : {}
+match               : "ip4.src == 10.244.2.2 && ip4.dst == 172.18.0.3 /* ovn-worker */"
+nexthop             : []
+nexthops            : ["169.254.0.1"]
+options             : {}
+priority            : 1005
+
+_uuid               : bf157b54-c8f6-4e45-95c7-6bebff4d63e9
+action              : reroute
+external_ids        : {}
+match               : "inport == \"rtos-ovn-worker2\" && ip4.dst == 172.18.0.2 /* ovn-worker2 */"
+nexthop             : []
+nexthops            : ["10.244.1.2"]
+options             : {}
+priority            : 1004
+
+_uuid               : 242653ec-3efe-47f5-8225-b8595465b6ef
+action              : allow
+external_ids        : {}
+match               : "ip4.src == 10.244.0.0/16 && ip4.dst == 172.18.0.4/32"
+nexthop             : []
+nexthops            : []
+options             : {}
+priority            : 101
+
+_uuid               : ee614326-2326-4d57-8721-58a659fcbd6e
+action              : reroute
+external_ids        : {}
+match               : "ip4.src == 10.244.1.2 && ip4.dst == 172.18.0.2 /* ovn-worker2 */"
+nexthop             : []
+nexthops            : ["169.254.0.1"]
+options             : {}
+priority            : 1005
+
+_uuid               : 02f2f106-9b5c-4f03-9026-475a6ca6159d
+action              : reroute
+external_ids        : {}
+match               : "inport == \"rtos-ovn-worker\" && ip4.dst == 172.18.0.3 /* ovn-worker */"
+nexthop             : []
+nexthops            : ["10.244.2.2"]
+options             : {}
+priority            : 1004
+
+_uuid               : 5c568adf-2518-43e0-be1e-6d4efd26490a
+action              : reroute
+external_ids        : {}
+match               : "ip4.src == 10.244.2.2  && ip4.dst != 10.244.0.0/16 /* inter-ovn-worker */"
+nexthop             : []
+nexthops            : ["169.254.0.1"]
+options             : {}
+priority            : 1003
+
+_uuid               : 60b80577-782a-43c3-ba89-b89dbe8b60e7
+action              : allow
+external_ids        : {}
+match               : "ip4.src == 10.244.0.0/16 && ip4.dst == 10.244.0.0/16"
+nexthop             : []
+nexthops            : []
+options             : {}
+priority            : 101
