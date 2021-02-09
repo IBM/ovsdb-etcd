@@ -13,6 +13,7 @@ import (
 type DBServer struct {
 	cli *clientv3.Client
 	schemas map[string]string
+	schemaTypes map[string]map[string]map[string]string
 }
 
 func NewDBServer( endpoints []string) (*DBServer, error) {
@@ -27,7 +28,9 @@ func NewDBServer( endpoints []string) (*DBServer, error) {
 	// TODO
 	//defer cli.Close()
 	fmt.Println("etcd client is connected")
-	return &DBServer{cli: cli, schemas:make(map[string]string)}, nil
+	return &DBServer{cli: cli,
+		schemas:make(map[string]string),
+	    schemaTypes: make(map[string]map[string]map[string]string)}, nil
 }
 
  func (con *DBServer)AddSchema(schemaName, schemaFile string) error {
@@ -36,28 +39,36 @@ func NewDBServer( endpoints []string) (*DBServer, error) {
 		return err
 	}
 	con.schemas[schemaName] =  string(data)
-	 var s interface{}
-	 err = json.Unmarshal(data, &s)
-	 if err != nil {
+
+	var schemaTypes map[string]map[string]string
+	var ok bool
+	if schemaTypes, ok = con.schemaTypes[schemaName]; !ok {
+		schemaTypes = make(map[string]map[string]string)
+	}
+
+	var s interface{}
+	err = json.Unmarshal(data, &s)
+	if err != nil {
 		 return err
-	 }
-	// fmt.Printf("Schema = %v \n", s)
-	 m := s.(map[string]interface{})
-	 tables, ok := m["tables"]
-	 if !ok {
+	}
+	m := s.(map[string]interface{})
+	tables, ok := m["tables"]
+	if !ok {
 	 	// TODO
 	 	fmt.Printf("Schema doesn't have tables")
 	 	return nil
-	 }
-	 tMap := tables.(map[string]interface{})
-	 for tName, table := range tMap {
+	}
+	tMap := tables.(map[string]interface{})
+	for tName, table := range tMap {
 	 	tabMap := table.(map[string]interface{})
+	 	columnTypesMap := make(map[string]string)
 	 	columns, ok := tabMap["columns"]
 		 if !ok {
 			 // TODO
 			 fmt.Printf("Table doesn't have columns")
 			 continue
 		 }
+		schemaTypes[tName] = columnTypesMap
 		 columnsmap := columns.(map[string]interface{})
 		 for k, v := range columnsmap {
 		 	fmt.Printf(" Table %s column %s \n", tName, k)
@@ -73,6 +84,7 @@ func NewDBServer( endpoints []string) (*DBServer, error) {
 				 switch keyEntry.(type) {
 				 case string:
 					 fmt.Printf("!!!  Table %s column %s type %s\n", tName, k, keyEntry)
+					 columnsmap[k] = keyEntry.(string)
 				 case map[string]interface {}:
 				 	m2 := keyEntry.(map[string]interface {})
 					key, ok := m2["key"]
@@ -83,8 +95,9 @@ func NewDBServer( endpoints []string) (*DBServer, error) {
 						 switch t.(type) {
 						 case string:
 							 fmt.Printf("!!!  Table %s column %s type %s\n", tName, k, t)
+							 columnsmap[k] = t.(string)
 						 default:
-							 fmt.Printf("!!!  Table %s column %s type %T %s\n", tName, k, t, t)
+							 fmt.Printf("$$$$  Table %s column %s type %T %s\n", tName, k, t, t)
 						 }
 						 continue
 					 }
@@ -104,6 +117,7 @@ func NewDBServer( endpoints []string) (*DBServer, error) {
 					 	switch value.(type) {
 						case string:
 							fmt.Printf("!!!  Table %s column %s type %s\n", tName, k, "map[" + mapKey + "]" + value.(string))
+
 						case map[string]interface{}:
 							valueMap := value.(map[string]interface{})
 							fmt.Printf("!!!  Table %s column %s type %s\n", tName, k, "map[" + mapKey + "]" + valueMap["type"].(string))
@@ -200,9 +214,25 @@ func (con *DBServer) LoadServerData() error {
 	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Address_Set/0af13342-2ea7-486d-825a-b57bd70a8cbc/external_ids", "{name=kube-node-lease_v4}")
 	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Address_Set/0af13342-2ea7-486d-825a-b57bd70a8cbc/name", "a16235039932615691331")
 
- 	//Connection
+ 	// Connection
 	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Connection/413afe3e-79ff-4583-88a6-f02b70b8e927/status", "{bound_port=\"6641\", n_connections=\"3\", sec_since_connect=\"0\", sec_since_disconnect=\"0\"}")
 	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Connection/413afe3e-79ff-4583-88a6-f02b70b8e927/target", "ptcp:6641:172.18.0.4")
+
+	// Forwarding_Group
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Forwarding_Group/6be9235a-b3b6-41d7-a5aa-356b5b3c96cc/external_ids", "{name=clusterPortGroup}")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Forwarding_Group/6be9235a-b3b6-41d7-a5aa-356b5b3c96cc/name", "clusterPortGroup")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Forwarding_Group/6be9235a-b3b6-41d7-a5aa-356b5b3c96cc/ports", "[25f2e69e-4bac-4529-9082-9f94da060cf1, 73000cf3-73d0-4283-8aad-bcf181626a40, be25033c-27df-42a2-9765-52bc06acc71c]")
+
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Forwarding_Group/ee4d82d2-3a7d-4737-be8d-656374f5d56c/external_ids", "{name=clusterRtrPortGroup}")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Forwarding_Group/ee4d82d2-3a7d-4737-be8d-656374f5d56c/name", "clusterRtrPortGroup")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Forwarding_Group/ee4d82d2-3a7d-4737-be8d-656374f5d56c/ports", "[b4298483-cf17-46d4-9da1-034eab065ff1, b6e1fc02-0306-4887-8e36-e8b0ec22b16c, fcf06a69-16c2-4f34-b3a4-282a641862f8]")
+
+	// Gateway_Chassis
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Gateway_Chassis/99c45e0b-3688-4992-900c-7d5a25930ba3/chassis_name", "1bd76edb-8626-4ecd-8185-788bd2121bda")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Gateway_Chassis/99c45e0b-3688-4992-900c-7d5a25930ba3/external_ids", "{dgp_name=rtos-node_local_switch}")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Gateway_Chassis/99c45e0b-3688-4992-900c-7d5a25930ba3/name", "rtos-node_local_switch_1bd76edb-8626-4ecd-8185-788bd2121bda")
+	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/Gateway_Chassis/99c45e0b-3688-4992-900c-7d5a25930ba3/priority", "100")
+
 
 
 
