@@ -3,6 +3,8 @@ module github.com/roytman/ovsdb-etcd
 go 1.15
 
 require (
+	github.com/go-delve/delve v1.6.0 // indirect
+	github.com/stretchr/testify v1.4.0
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20200910180754-dd1b699fc489 // indirect
 	go.etcd.io/etcd/client/v3 v3.0.0-20210127081512-a4fac14353e7
 	google.golang.org/genproto v0.0.0-20201210142538-e3217bee35cc // indirect
