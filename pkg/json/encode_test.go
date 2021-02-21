@@ -57,23 +57,6 @@ var options Map = Map{
 	"svc_monitor_mac":         "e2:d2:ac:ad:7b:8a",
 }
 
-type NB_Global struct {
-	Uuid           Uuid      `json:"_uuid"`
-	NamedUuid      NamedUuid `json:"_named_uuid"`
-	Name           string    `json:"name"`
-	NbCfg          int       `json:"nb_cfg"`
-	NbCfgTimestamp int       `json:"nb_cfg_timestamp"`
-	SbCfg          int       `json:"sb_cfg"`
-	SbCfgTimestamp int       `json:"sb_cfg_timestamp"`
-	HvCfg          int       `json:"hv_cfg"`
-	HvCfgTimestamp int       `json:"hv_cfg_timestamp"`
-	ExternalIds    Map       `json:"external_ids"`
-	Connections    Set      `json:"connections"`
-	Ssl            Set       `json:"ssl"`
-	Options        Map       `json:"options"`
-	Ipsec          bool      `json:"ipsec"`
-}
-
 var nb NB_Global = NB_Global{
 	Uuid:        uuid,
 	NamedUuid:   namedUuid,
