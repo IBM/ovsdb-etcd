@@ -32,7 +32,7 @@ var _ = Describe("jason encoder", func() {
 		nb = NB_Global {
 			Uuid:        uuid,
 			NamedUuid:   namedUuid,
-			Connections: "71a565df-188f-42d0-9f18-74e180e27889",
+			Connections: Set{"71a565df-188f-42d0-9f18-74e180e27889"},
 			Options:     options,
 		}
 	)
@@ -68,7 +68,7 @@ var _ = Describe("jason encoder", func() {
 		`"hv_cfg":0,` +
 		`"hv_cfg_timestamp":0,` +
 		`"external_ids":["map",[]],` +
-		`"connections":["uuid","71a565df-188f-42d0-9f18-74e180e27889"],` +
+		`"connections":"71a565df-188f-42d0-9f18-74e180e27889",` +
 		`"ssl":["set",[]],` +
 		`"options":` + expectedOptions + `,` +
 		`"ipsec":false` +

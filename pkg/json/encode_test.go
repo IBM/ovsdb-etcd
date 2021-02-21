@@ -68,7 +68,7 @@ type NB_Global struct {
 	HvCfg          int       `json:"hv_cfg"`
 	HvCfgTimestamp int       `json:"hv_cfg_timestamp"`
 	ExternalIds    Map       `json:"external_ids"`
-	Connections    Uuid      `json:"connections"`
+	Connections    Set      `json:"connections"`
 	Ssl            Set       `json:"ssl"`
 	Options        Map       `json:"options"`
 	Ipsec          bool      `json:"ipsec"`
@@ -77,7 +77,7 @@ type NB_Global struct {
 var nb NB_Global = NB_Global{
 	Uuid:        uuid,
 	NamedUuid:   namedUuid,
-	Connections: "71a565df-188f-42d0-9f18-74e180e27889",
+	Connections: Set{"71a565df-188f-42d0-9f18-74e180e27889"},
 	Options:     options,
 }
 

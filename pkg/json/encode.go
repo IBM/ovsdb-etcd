@@ -29,7 +29,10 @@ func (m Map) MarshalJSON() ([]byte, error) {
 
 func (s Set) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
-	buf.WriteString(`["set",[`)
+	var needWrap = (len(s) != 1)
+	if(needWrap){
+		buf.WriteString(`["set",[`)
+	}
 	if s != nil {
 		for _, v := range s {
 			x, _ := json.Marshal(v)
@@ -37,6 +40,8 @@ func (s Set) MarshalJSON() ([]byte, error) {
 		}
 		buf.Truncate(buf.Len() - 1)
 	}
-	buf.WriteString(`]]`)
+	if(needWrap) {
+		buf.WriteString(`]]`)
+	}
 	return buf.Bytes(), nil
 }
