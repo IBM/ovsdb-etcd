@@ -42,6 +42,41 @@ type NB_Global2 struct {
 	Ipsec          bool      `json:"ipsec"`
 }
 
+//tmp types
+type NB_Global2_3 struct {
+	//Uuid           Uuid      `json:"_uuid"`
+	//NamedUuid      NamedUuid `json:"_named_uuid"`
+	Name           string    `json:"name"`
+	NbCfg          int       `json:"nb_cfg"`
+	NbCfgTimestamp int       `json:"nb_cfg_timestamp"`
+	SbCfg          int       `json:"sb_cfg"`
+	SbCfgTimestamp int       `json:"sb_cfg_timestamp"`
+	HvCfg          int       `json:"hv_cfg"`
+	HvCfgTimestamp int       `json:"hv_cfg_timestamp"`
+	ExternalIds    map[string]string `json:"external_ids"`
+	Connections    []interface{}       `json:"connections"`
+	Ssl            []interface{}       `json:"ssl"`
+	Options        map[string]string `json:"options"`
+	Ipsec          bool      `json:"ipsec"`
+}
+
+type NB_Global2_5 struct {
+	//Uuid           Uuid      `json:"_uuid"`
+	//NamedUuid      NamedUuid `json:"_named_uuid"`
+	Name           string    `json:"name"`
+	NbCfg          int       `json:"nb_cfg"`
+	NbCfgTimestamp int       `json:"nb_cfg_timestamp"`
+	SbCfg          int       `json:"sb_cfg"`
+	SbCfgTimestamp int       `json:"sb_cfg_timestamp"`
+	HvCfg          int       `json:"hv_cfg"`
+	HvCfgTimestamp int       `json:"hv_cfg_timestamp"`
+	ExternalIds    map[string]string `json:"external_ids"`
+	//Connections    Set       `json:"connections"`
+	//Ssl            Set       `json:"ssl"`
+	Options        map[string]string `json:"options"`
+	Ipsec          bool      `json:"ipsec"`
+}
+
 type NB_Global3 struct {
 	//Uuid           Uuid      `json:"_uuid"`
 	//NamedUuid      NamedUuid `json:"_named_uuid"`

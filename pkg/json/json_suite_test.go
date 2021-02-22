@@ -41,11 +41,21 @@ var _ = Describe("jason encoder", func() {
 			Connections: Set{"71a565df-188f-42d0-9f18-74e180e27889"},
 			Options:     optionsObj,
 		}
+		nbObj2_5 = NB_Global2_5 {
+			//Connections: Set{"71a565df-188f-42d0-9f18-74e180e27889"},
+			Options:     optionsObj,
+		}
 		*/
+		nbObj2_3 = NB_Global2_3 {
+			Connections: []interface{}{"71a565df-188f-42d0-9f18-74e180e27889"},
+			Options:     optionsObj,
+		}
+		/*
 		nbObj3 = NB_Global3 {
 			//Connections: Set{"71a565df-188f-42d0-9f18-74e180e27889"},
 			//Options:     optionsObj,
 		}
+		*/
 	)
 
 	var(
@@ -100,8 +110,37 @@ var _ = Describe("jason encoder", func() {
 			`"options":` + optionsJson + `,` +
 			`"ipsec":false` +
 			`}`
-		*/
 
+		nbJson2_5 = `{` +
+			`"name":"",` +
+			`"nb_cfg":0,` +
+			`"nb_cfg_timestamp":0,` +
+			`"sb_cfg":0,` +
+			`"sb_cfg_timestamp":0,` +
+			`"hv_cfg":0,` +
+			`"hv_cfg_timestamp":0,` +
+			`"external_ids":["map",[]],` +
+			//`"connections":"71a565df-188f-42d0-9f18-74e180e27889",` +
+			//`"ssl":["set",[]],` +
+			`"options":` + optionsJson + `,` +
+			`"ipsec":false` +
+			`}`
+		*/
+		nbJson2_3 = `{` +
+			`"name":"",` +
+			`"nb_cfg":0,` +
+			`"nb_cfg_timestamp":0,` +
+			`"sb_cfg":0,` +
+			`"sb_cfg_timestamp":0,` +
+			`"hv_cfg":0,` +
+			`"hv_cfg_timestamp":0,` +
+			`"external_ids":["map",[]],` +
+			`"connections":"71a565df-188f-42d0-9f18-74e180e27889",` +
+			`"ssl":["set",[]],` +
+			`"options":` + optionsJson + `,` +
+			`"ipsec":false` +
+			`}`
+		/*
 		nbJson3 = `{` +
 			`"name":"",` +
 			`"nb_cfg":0,` +
@@ -116,6 +155,7 @@ var _ = Describe("jason encoder", func() {
 			`"options":` + optionsJson + `,` +
 			`"ipsec":false` +
 			`}`
+		*/
 	)
 
 	DescribeTable("the marshall operation (content should be equal)",
@@ -173,7 +213,7 @@ var _ = Describe("jason encoder", func() {
 
 			//v := NB_Global2{}
 			//var v interface{}
-			var v NB_Global3
+			var v NB_Global2_3
 
 			err := json.Unmarshal([]byte(input), &v)
 			if err != nil {
@@ -183,7 +223,9 @@ var _ = Describe("jason encoder", func() {
 			Expect(v).To(Equal(expected))
 		},
 
-		Entry("uuid ",nbJson3,nbObj3),
+		//Entry("uuid ",nbJson3,nbObj3),
+		//Entry("uuid ",nbJson2_5,nbObj2_5),
+		Entry("uuid ",nbJson2_3,nbObj2_3),
 		//Entry("uuid ",nbJson2,nbObj2),
 		//Entry("named uuid",namedUuidJson,namedUuidObj),
 	)
