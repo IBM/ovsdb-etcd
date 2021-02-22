@@ -821,7 +821,6 @@
       },
       "isRoot": false
     },
-    North
     "HA_Chassis_Group": {
       "columns": {
         "name": { "type": "string" },
