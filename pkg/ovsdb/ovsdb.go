@@ -119,6 +119,14 @@ func (s *ServOVSDB) Cancel(param *interface{}, reply *interface{}) error {
 	return nil
 }
 
+// The "monitor" request enables a client to replicate tables or subsets of tables within an OVSDB database by
+// requesting notifications of changes to those tables and by receiving the complete initial state of a table or a
+// subset of a table.
+// "params": [<db-name>, <json-value>, <monitor-requests>]
+// The response object has the following members:
+//   "result": <table-updates>
+//   "error": null
+//   "id": same "id" as request
 func (s *ServOVSDB) Monitor(param *interface{}, reply *interface{}) error {
 	fmt.Printf("Monitor %T, %+v\n", *param, *param)
 

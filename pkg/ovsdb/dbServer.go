@@ -2,7 +2,6 @@ package ovsdb
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"io/ioutil"
@@ -39,114 +38,6 @@ func NewDBServer( endpoints []string) (*DBServer, error) {
 		return err
 	}
 	con.schemas[schemaName] =  string(data)
-
-	var schemaTypes map[string]map[string]string
-	var ok bool
-	if schemaTypes, ok = con.schemaTypes[schemaName]; !ok {
-		schemaTypes = make(map[string]map[string]string)
-	}
-
-	var s interface{}
-	err = json.Unmarshal(data, &s)
-	if err != nil {
-		 return err
-	}
-	m := s.(map[string]interface{})
-	tables, ok := m["tables"]
-	if !ok {
-	 	// TODO
-	 	fmt.Printf("Schema doesn't have tables")
-	 	return nil
-	}
-	tMap := tables.(map[string]interface{})
-	for tName, table := range tMap {
-	 	tabMap := table.(map[string]interface{})
-	 	columnTypesMap := make(map[string]string)
-	 	columns, ok := tabMap["columns"]
-		 if !ok {
-			 // TODO
-			 fmt.Printf("Table doesn't have columns")
-			 continue
-		 }
-		schemaTypes[tName] = columnTypesMap
-		 columnsmap := columns.(map[string]interface{})
-		 for k, v := range columnsmap {
-		 	fmt.Printf(" Table %s column %s \n", tName, k)
-		 	colValMap := v.(map[string]interface{})
-		 	keyEntry, ok := colValMap["type"]
-			 if !ok {
-				 // TODO
-				 fmt.Printf("------------ The column %s doesn't have key type\n", k)
-				 continue
-			 }
-
-				// fmt.Printf(" Table %s key %s value -->%s %T %v\n", tName, k, cvn, cvv, cvv)
-				 switch keyEntry.(type) {
-				 case string:
-					 fmt.Printf("!!!  Table %s column %s type %s\n", tName, k, keyEntry)
-					 columnsmap[k] = keyEntry.(string)
-				 case map[string]interface {}:
-				 	m2 := keyEntry.(map[string]interface {})
-					key, ok := m2["key"]
-					if !ok {
-						 // TODO
-						 fmt.Printf("------------ The column %s doesn't have key type.key, we'll try type\n", k)
-						 t := m2["type"]
-						 switch t.(type) {
-						 case string:
-							 fmt.Printf("!!!  Table %s column %s type %s\n", tName, k, t)
-							 columnsmap[k] = t.(string)
-						 default:
-							 fmt.Printf("$$$$  Table %s column %s type %T %s\n", tName, k, t, t)
-						 }
-						 continue
-					 }
-					 value, okV := m2["value"]
-					 if okV {
-					 	var mapKey string
-						 switch key.(type) {
-						 case string:
-							 mapKey = key.(string)
-						 case map[string]interface{}:
-							 k2Map := key.(map[string]interface{})
-							 mapKey = k2Map["type"].(string)
-						 default:
-							 fmt.Printf(" $$$$=> Table %s column  %s keyType --> %T %v\n", tName, k, key, key)
-						 }
-					 	// we support only maps with string keys
-					 	switch value.(type) {
-						case string:
-							fmt.Printf("!!!  Table %s column %s type %s\n", tName, k, "map[" + mapKey + "]" + value.(string))
-
-						case map[string]interface{}:
-							valueMap := value.(map[string]interface{})
-							fmt.Printf("!!!  Table %s column %s type %s\n", tName, k, "map[" + mapKey + "]" + valueMap["type"].(string))
-						default:
-							fmt.Printf(" $$$$=> Table %s column  %s keyType --> %T %v\n", tName, k, value, value)
-						}
-						 continue
-					 }
-					 switch key.(type) {
-					 case string:
-						 fmt.Printf("!!!  Table %s column %s type %s\n", tName, k, key)
-						 continue
-					 case map[string]interface{}:
-						 k2Map := key.(map[string]interface{})
-
-						 /*for k2, v2 := range k2Map {
-						 	 fmt.Printf(" Table %s key %s value -+-+> %v  key = %v value =  %T %v\n", tName, k, keyEntry, k2, v2, v2)
-						  }*/
-						 fmt.Printf("!!!2222  Table %s column %s type %s\n", tName, k, k2Map["type"])
-					 default:
-						 fmt.Printf(" ===> Table %s column  %s keyType --> %T %v\n", tName, k, key, key)
-					 }
-
-				 default:
-					 fmt.Printf(" ===> Table %s key %s value --> %T %v\n", tName, k, keyEntry, keyEntry)
-				 }
-
-		 }
-	 }
 	return nil
 }
 
