@@ -6,19 +6,20 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"k8s.io/klog"
 	"os"
 	"runtime"
 	"strings"
+
+	"k8s.io/klog"
 )
 
 var (
-	SchemaFile     	string
-	PkgName			string
-	BasePackage     string
-	OutputFile 		string
-	DestinationDir  string
-	needsInclude = false
+	SchemaFile     string
+	PkgName        string
+	BasePackage    string
+	OutputFile     string
+	DestinationDir string
+	needsInclude   = false
 )
 
 func Run() {
@@ -43,7 +44,7 @@ func Run() {
 		PkgName = schemaInst["name"].(string)
 	}
 	// TODO add configuration
-	dir := DestinationDir +"/" + PkgName
+	dir := DestinationDir + "/" + PkgName
 	err = os.MkdirAll(dir, os.ModePerm)
 	if err != nil {
 		klog.Errorf("Cannot create output dir %s: %v", dir, err)
@@ -51,7 +52,7 @@ func Run() {
 	}
 	output, err := os.Create(dir + "/" + OutputFile)
 	if err != nil {
-		klog.Errorf("Cannot create output file %s: %v", dir + "/" + OutputFile, err)
+		klog.Errorf("Cannot create output file %s: %v", dir+"/"+OutputFile, err)
 		return
 	}
 	defer output.Close()
@@ -87,19 +88,19 @@ func Run() {
 		return
 	}
 	writer.Flush()
-	klog.Infof("The new code is stored in %s", dir + "/" + OutputFile)
+	klog.Infof("The new code is stored in %s", dir+"/"+OutputFile)
 }
 
 func printStruct(w io.Writer, tableName string, columns []string) error {
-	if _, err := fmt.Fprintf(w,"type %s struct { \n", tableName); err != nil {
+	if _, err := fmt.Fprintf(w, "type %s struct { \n", tableName); err != nil {
 		return err
 	}
 	for _, line := range columns {
-		if _, err := fmt.Fprintf(w,"\t%s", line); err != nil {
+		if _, err := fmt.Fprintf(w, "\t%s", line); err != nil {
 			return err
 		}
 	}
-	_, err := fmt.Fprintln(w,"}\n")
+	_, err := fmt.Fprintln(w, "}\n")
 	return err
 }
 
@@ -108,10 +109,10 @@ func writeToFile(w io.Writer, structs map[string][]string) error {
 		klog.Warningf("No tables, nothing to write")
 		return nil
 	}
-	if _, err := fmt.Fprintf(w,"package %s\n\n", PkgName); err != nil {
+	if _, err := fmt.Fprintf(w, "package %s\n\n", PkgName); err != nil {
 		return err
 	}
-	if(needsInclude) {
+	if needsInclude {
 		if _, err := fmt.Fprintf(w, "import \"%s\"\n\n", BasePackage); err != nil {
 			return nil
 		}
@@ -141,11 +142,11 @@ func getValueType(value interface{}) (string, error) {
 		}
 		return "", fmt.Errorf("Value %v doesn't have type", value)
 	default:
-		return "",  fmt.Errorf("getValueType, unsupported value type %T %v", value, value)
+		return "", fmt.Errorf("getValueType, unsupported value type %T %v", value, value)
 	}
 }
 
-func parseColumns(tableName string, columns interface{} ) ([]string, error) {
+func parseColumns(tableName string, columns interface{}) ([]string, error) {
 	columnsMap := columns.(map[string]interface{})
 	structColumns := []string{}
 	for field, v := range columnsMap {
@@ -165,7 +166,7 @@ func parseColumns(tableName string, columns interface{} ) ([]string, error) {
 				t2v, isMap := k2Map["value"]
 				var mapValue string
 				if isMap {
-					v, err := getValueType(t2v);
+					v, err := getValueType(t2v)
 					if err != nil {
 						return nil, fmt.Errorf("parseColumns, table %s column %s, getValueType returned %v",
 							tableName, field, err)
@@ -199,11 +200,11 @@ func parseColumns(tableName string, columns interface{} ) ([]string, error) {
 						l = createFiledLine(fieldName, t2, field, max, isMax)
 					}
 				default:
-					return nil, fmt.Errorf("parseColumns table %s column %s, column type:key is %T",tableName, field, t2)
+					return nil, fmt.Errorf("parseColumns table %s column %s, column type:key is %T", tableName, field, t2)
 				}
 
 			default:
-				return nil, fmt.Errorf("parseColumns table %s column %s, column type is %T",tableName, field, vt)
+				return nil, fmt.Errorf("parseColumns table %s column %s, column type is %T", tableName, field, vt)
 			}
 			structColumns = append(structColumns, l)
 		}
@@ -215,7 +216,7 @@ func createMapFiled(fieldName string, keyType interface{}, valueType interface{}
 	return fmt.Sprintf(" %s \tmap[%s]%s `json:\"%s\"`\n", fieldName, typeConvert(keyType), typeConvert(valueType), field)
 }
 
-func createFiledLine(fieldName string, filedType interface{}, field string, max interface{}, isSet bool ) string {
+func createFiledLine(fieldName string, filedType interface{}, field string, max interface{}, isSet bool) string {
 	if isSet {
 		maxStr := fmt.Sprintf("%v", max)
 		if maxStr != "1" {
@@ -225,15 +226,14 @@ func createFiledLine(fieldName string, filedType interface{}, field string, max 
 	return fmt.Sprintf(" %s \t%s `json:\"%s\"`\n", fieldName, typeConvert(filedType), field)
 }
 
-
-func typeConvert(typeName interface{}) string  {
+func typeConvert(typeName interface{}) string {
 	s := fmt.Sprintf("%s", typeName)
 	switch s {
 	case "string":
 		return s
 	case "boolean":
 		return "bool"
-		case "integer":
+	case "integer":
 		return "int64"
 	case "real":
 		return "float64"
@@ -245,7 +245,7 @@ func typeConvert(typeName interface{}) string  {
 	return ""
 }
 
-func toUppercase( name string) string {
+func toUppercase(name string) string {
 	startLetter := name[:1]
 	startLetter = strings.ToUpper(startLetter)
 	return startLetter + name[1:]
@@ -267,9 +267,8 @@ func Package() string {
 }
 
 func getBasePackage() string {
-	thisPackage := Package();
+	thisPackage := Package()
 	indx := strings.LastIndex(thisPackage, "/")
 	// TODO if indx == -1
 	return thisPackage[:indx] + "/json"
 }
-

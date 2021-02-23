@@ -10,12 +10,11 @@ import (
 	"github.com/roytman/ovsdb-etcd/pkg/codegenerator"
 )
 
-
 var (
 	rootCmd = &cobra.Command{
 		Use:   "generator",
 		Short: "A code generator for OVSDB schema types",
-		Long: `generator creates goLang code for tables defined by the OVSDB schema.`,
+		Long:  `generator creates goLang code for tables defined by the OVSDB schema.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			codegenerator.Run()
 		},
@@ -37,12 +36,11 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVarP(&codegenerator.SchemaFile, "schemaFile", "s", "", "input schema file")
 	rootCmd.MarkPersistentFlagRequired("schemaFile")
-	rootCmd.PersistentFlags().StringVarP(&codegenerator.OutputFile, "outputFile", "o", "types.go",  "ouput file for the generated code, default is 'types.go'")
-	rootCmd.PersistentFlags().StringVarP(&codegenerator.DestinationDir, "destinationDir", "d", ".",  "base directory to store generated code, default is '.'")
+	rootCmd.PersistentFlags().StringVarP(&codegenerator.OutputFile, "outputFile", "o", "types.go", "ouput file for the generated code, default is 'types.go'")
+	rootCmd.PersistentFlags().StringVarP(&codegenerator.DestinationDir, "destinationDir", "d", ".", "base directory to store generated code, default is '.'")
 	rootCmd.PersistentFlags().StringVarP(&codegenerator.PkgName, "packageName", "p", "", "the package of generated files, default is database name")
-	rootCmd.PersistentFlags().StringVarP(&codegenerator.BasePackage, "basePackage", "b", "",  "package with the base structures definitions, default is this 'repository/pkg/json'")
+	rootCmd.PersistentFlags().StringVarP(&codegenerator.BasePackage, "basePackage", "b", "", "package with the base structures definitions, default is this 'repository/pkg/json'")
 }
-
 
 func initConfig() {
 

@@ -13,7 +13,7 @@ type Codec struct {
 
 func (c *Codec) ReadRequestHeader(r *rpc.Request) error {
 	e := c.code.ReadRequestHeader(r)
-	if e!= nil {
+	if e != nil {
 		return e
 	}
 	dot := strings.LastIndex(r.ServiceMethod, ".")
@@ -27,7 +27,7 @@ func (c *Codec) ReadRequestHeader(r *rpc.Request) error {
 	methodName = startLetter + methodName[1:]
 	if needClass {
 		r.ServiceMethod = "ovsdb." + methodName
-	}  else {
+	} else {
 		r.ServiceMethod = r.ServiceMethod[:dot] + methodName
 	}
 	return e
@@ -46,5 +46,5 @@ func (c *Codec) Close() error {
 }
 
 func NewCodec(conn io.ReadWriteCloser) rpc.ServerCodec {
-	return &Codec{ code: jsonrpc.NewServerCodec(conn)}
+	return &Codec{code: jsonrpc.NewServerCodec(conn)}
 }

@@ -91,7 +91,7 @@ func (c *serverCodec) ReadRequestHeader(r *rpc.Request) error {
 	methodName = startLetter + methodName[1:]
 	if needClass {
 		r.ServiceMethod = "ovsdb." + methodName
-	}  else {
+	} else {
 		r.ServiceMethod = r.ServiceMethod[:dot] + methodName
 	}
 	return nil
@@ -113,7 +113,7 @@ func (c *serverCodec) ReadRequestBody(x interface{}) error {
 
 	// we need it to support positional JRPC parameters.
 	switch x.(type) {
-	case *[]interface{} :
+	case *[]interface{}:
 		e := json.Unmarshal(*c.req.Params, x)
 		if e != nil {
 			fmt.Printf("ReadRequestBody slice Error %v\n", e)

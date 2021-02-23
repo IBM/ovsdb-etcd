@@ -14,14 +14,12 @@ import (
 
 const UNIX_SOCKET = "/tmp/ovsdb-etcd.sock"
 
-
 func main() {
 
 	dbServ, err := ovsdb.NewDBServer([]string{"localhost:2379"})
 	if err != nil {
 		log.Fatal(err)
 	}
-
 
 	err = dbServ.AddSchema("_Server", "./json/_server.ovsschema")
 	if err != nil {
@@ -40,10 +38,10 @@ func main() {
 	ovsdbServ := ovsdb.NewService(dbServ)
 
 	/*
-	data, err := ioutil.ReadFile("./pkg/server/cond.json")
-	if err != nil {
-		log.Fatal(err)
-	}
+		data, err := ioutil.ReadFile("./pkg/server/cond.json")
+		if err != nil {
+			log.Fatal(err)
+		}
 	*/
 
 	//cond = string(data)
@@ -66,7 +64,6 @@ func main() {
 
 	ms := rpc.NewServer()
 	ms.RegisterName("ovsdb", ovsdbServ)
-
 
 	addyr, err := net.ResolveTCPAddr("tcp", "0.0.0.0:12345")
 	if err != nil {

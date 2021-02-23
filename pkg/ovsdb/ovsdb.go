@@ -12,15 +12,15 @@ type ServOVSDB struct {
 }
 
 type Initial struct {
-	InitialData	`json:"initial"`
+	InitialData `json:"initial"`
 }
 
 type InitialData struct {
-	Name string 	`json:"name"`
-	Model string 	`json:"model"`
-	Connected bool	`json:"connected"`
-	Schema string	`json:"schema"`
-	Leader bool		`json:"leader"`
+	Name      string `json:"name"`
+	Model     string `json:"model"`
+	Connected bool   `json:"connected"`
+	Schema    string `json:"schema"`
+	Leader    bool   `json:"leader"`
 }
 
 type Databases struct {
@@ -97,7 +97,7 @@ func (s *ServOVSDB) Transact(param []interface{}, reply *interface{}) error {
 				}
 				colomns, _ := valuesMap["columns"]
 				fmt.Printf("Columns type %T\n", colomns)
-				resp, err := s.dbServer.GetMarshaled("ovsdb/" + tabel.(string), colomns.([]interface{}))
+				resp, err := s.dbServer.GetMarshaled("ovsdb/"+tabel.(string), colomns.([]interface{}))
 				if err != nil {
 					return err
 				}
@@ -141,27 +141,26 @@ func (s *ServOVSDB) Update(param *interface{}, reply *interface{}) error {
 	return nil
 }
 
-func (s *ServOVSDB) Monitor_cancel  (param *interface{}, reply *interface{}) error {
+func (s *ServOVSDB) Monitor_cancel(param *interface{}, reply *interface{}) error {
 	fmt.Printf("Monitor_cancel %T, %+v\n", *param, *param)
 
 	*reply = "{Monitor_cancel}"
 	return nil
 }
 
-func (s *ServOVSDB) Lock  (param *interface{}, reply *interface{}) error {
+func (s *ServOVSDB) Lock(param *interface{}, reply *interface{}) error {
 	fmt.Printf("Lock %T, %+v\n", *param, *param)
 
 	*reply = "{Lock}"
 	return nil
 }
 
-func (s *ServOVSDB) Unlock  (param *interface{}, reply *interface{}) error {
+func (s *ServOVSDB) Unlock(param *interface{}, reply *interface{}) error {
 	fmt.Printf("Unlock %T, %+v\n", *param, *param)
 
 	*reply = "{Unlock}"
 	return nil
 }
-
 
 // The monitor_cond request enables a client to replicate subsets of tables within an OVSDB database by requesting
 // notifications of changes to rows matching one of the conditions specified in where by receiving the specified
@@ -200,19 +199,19 @@ func (s *ServOVSDB) Monitor_cond(param []interface{}, reply *interface{}) error 
 	if err != nil {
 		return err
 	}
-	databases := Databases{Database:map[string]Initial{}}
+	databases := Databases{Database: map[string]Initial{}}
 	for _, v := range resp.Kvs {
 		keys := strings.Split(string(v.Key), "/")
 		db, ok := databases.Database[keys[3]]
 		if !ok {
-			db  = Initial{}
+			db = Initial{}
 		}
 		switch keys[5] {
 		case "name":
 			db.Name = string(v.Value)
-		case "connected" :
+		case "connected":
 			db.Connected, _ = strconv.ParseBool(string(v.Value))
-		case "leader" :
+		case "leader":
 			db.Leader, _ = strconv.ParseBool(string(v.Value))
 		case "model":
 			db.Model = string(v.Value)
@@ -244,7 +243,6 @@ func (s *ServOVSDB) Get_server_id(param *interface{}, reply *interface{}) error 
 	*reply = "{Get_server_id}"
 	return nil
 }
-
 
 func (s *ServOVSDB) Set_db_change_aware(param *interface{}, reply *interface{}) error {
 	fmt.Printf("Set_db_change_aware %+v\n", *param)
