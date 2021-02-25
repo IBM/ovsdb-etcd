@@ -1,6 +1,7 @@
 package ovsdb
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -40,11 +41,10 @@ type TransactionResponse struct {
 //  	"result": [<db-name>,...]
 //   	"error": null
 //   	"id": same "id" as request
-func (s *ServOVSDB) List_dbs(param *interface{}, reply *interface{}) error {
-	fmt.Println("List_dbs")
+func (s *ServOVSDB) List_dbs(ctx context.Context, param interface{}) ([]string, error) {
+	// fmt.Printf("List_dbs param %T %v\n", param, param)
 	// TODO remove hardcoded list of DBs
-	*reply = []string{"_Server", "OVN_Northbound"}
-	return nil
+	return []string{"_Server", "OVN_Northbound"}, nil
 }
 
 // This operation retrieves a <database-schema> that describes hosted database <db-name>.
@@ -58,20 +58,28 @@ func (s *ServOVSDB) List_dbs(param *interface{}, reply *interface{}) error {
 // 		"result": null
 //      "error": "unknown database"
 //      "id": same "id" as request
-func (s *ServOVSDB) Get_schema(schemaName string, reply *interface{}) error {
-	fmt.Printf("Get_schema %s\n", schemaName)
+func (s *ServOVSDB) Get_schema(ctx context.Context, param interface{}) (interface{}, error) {
+	fmt.Printf("Get_schema prame %T %v\n", param, param)
+	var schemaName string
+	switch param.(type) {
+	case string:
+		schemaName = param.(string)
+	case []string:
+		schemaName = param.([]string)[0]
+	default:
+		// probably is a bad idea
+		schemaName = fmt.Sprintf("%s", param)
+	}
 	schema, ok := s.dbServer.schemas[schemaName]
 	if !ok {
-		*reply = nil
-		return fmt.Errorf("unknown database")
+		return nil, fmt.Errorf("unknown database")
 	}
 	var f interface{}
 	err := json.Unmarshal([]byte(schema), &f)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	*reply = f
-	return nil
+	return f, nil
 }
 
 // This method causes the database server to execute a series of operations in the specified order on a given database.
@@ -257,10 +265,15 @@ func (s *ServOVSDB) Convert(param *interface{}, reply *interface{}) error {
 	return nil
 }
 
-func (s *ServOVSDB) Echo(line []byte, reply *interface{}) error {
-	fmt.Printf("Echo %s\n", string(line))
-	*reply = string(line)
-	return nil
+// The "echo" method can be used by both clients and servers to verify the liveness of a database connection.
+// "params": JSON array with any contents
+// The response object has the following members:
+//     	"result": same as "params"
+//     	"error": null
+//		"id": the request "id" member
+func (s *ServOVSDB) Echo(ctx context.Context, param interface{}) (interface{}, error) {
+	fmt.Printf("Echo param %T %v\n", param, param)
+	return param, nil
 }
 
 func NewService(dbServer *DBServer) *ServOVSDB {

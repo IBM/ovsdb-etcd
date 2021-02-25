@@ -1,20 +1,37 @@
 package main
 
 import (
-	"fmt"
+	"flag"
+	"github.com/roytman/jrpc2/handler"
+	"github.com/roytman/jrpc2/metrics"
+	"github.com/roytman/jrpc2/server"
 	"log"
 	"net"
-	"net/rpc"
 	"os"
 	"runtime"
 
-	//	clientv3 "go.etcd.io/etcd/client/v3"
+	"github.com/roytman/jrpc2"
 	"github.com/roytman/ovsdb-etcd/pkg/ovsdb"
+
 )
 
 const UNIX_SOCKET = "/tmp/ovsdb-etcd.sock"
+const ETCD_LOCALHOST = "localhost:2379"
+
+var (
+	tcpAddress  = flag.String("tcp-address", "", "TCP service address")
+	unixAddress = flag.String("unix-address", "", "UNIX service address")
+	etcdMembers = flag.String("etcd-members", ETCD_LOCALHOST, "TCP service address")
+	maxTasks = flag.Int("max", 1, "Maximum concurrent tasks")
+)
+
 
 func main() {
+
+	flag.Parse()
+	if len(*tcpAddress) == 0 && len(*unixAddress) == 0 {
+		log.Fatal("You must provide a network-address (TCP and/or UNIX) to listen on")
+	}
 
 	dbServ, err := ovsdb.NewDBServer([]string{"localhost:2379"})
 	if err != nil {
@@ -35,71 +52,47 @@ func main() {
 	}
 
 	// create and init OVSD service
+	// Bind the methods of the math type to an assigner.
 	ovsdbServ := ovsdb.NewService(dbServ)
+	mux := handler.ServiceMap{
+		"Ovsdb": handler.NewService(ovsdbServ),
+	}
 
-	/*
-		data, err := ioutil.ReadFile("./pkg/server/cond.json")
+
+
+	if len(*tcpAddress) > 0 {
+		lst, err := net.Listen(jrpc2.Network(*tcpAddress), *tcpAddress)
 		if err != nil {
+			log.Fatalln("Listen:", err)
+		}
+		log.Printf("Listening at %v...", lst.Addr())
+
+		servOptions := &jrpc2.ServerOptions{
+			Logger:      log.New(os.Stderr, "[TCP.Server] ", log.LstdFlags|log.Lshortfile),
+			Concurrency: *maxTasks,
+			Metrics:     metrics.New(),
+			AllowPush:   true,
+			AllowV1:     true,
+		}
+		server.Loop(lst, server.NewStatic(mux), &server.LoopOptions{ServerOptions: servOptions})
+	}
+	if runtime.GOOS == "linux" && len(*unixAddress) > 0 {
+		if err := os.RemoveAll(*unixAddress); err != nil {
 			log.Fatal(err)
 		}
-	*/
-
-	//cond = string(data)
-	/*var cli *clientv3.Client
-	cli, err = clientv3.New(clientv3.Config{
-		Endpoints:   []string{"localhost:2379"},
-		DialTimeout: 5 * time.Second,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer cli.Close()
-	fmt.Printf("etcd client is connected")
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	_, err = cli.Put(ctx, "sample_key", "sample_value")
-	cancel()
-	if err != nil {
-		log.Fatal(err)
-	}*/
-
-	ms := rpc.NewServer()
-	ms.RegisterName("ovsdb", ovsdbServ)
-
-	addyr, err := net.ResolveTCPAddr("tcp", "0.0.0.0:12345")
-	if err != nil {
-		log.Fatal(err)
-	}
-	inbound, err := net.ListenTCP("tcp", addyr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("ovsdb-etcd server is bound on %v\n", addyr)
-
-	if runtime.GOOS == "linux" {
-		if err := os.RemoveAll(UNIX_SOCKET); err != nil {
-			log.Fatal(err)
-		}
-		inbound2, err := net.Listen("unix", UNIX_SOCKET)
+		lst, err := net.Listen(jrpc2.Network(*unixAddress), *unixAddress)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalln("Listen:", err)
 		}
-		fmt.Printf("ovsdb-etcd server is bound on %s\n", UNIX_SOCKET)
-		go func() {
-			for {
-				conn, err := inbound2.Accept()
-				if err != nil {
-					continue
-				}
-				//ms.ServeCodec(ovsdb.NewCodec(conn))
-				ms.ServeCodec(ovsdb.NewServerCodec(conn))
-			}
-		}()
-	}
-	for {
-		conn, err := inbound.Accept()
-		if err != nil {
-			continue
+		log.Printf("Listening at %v...", lst.Addr())
+
+		servOptions := &jrpc2.ServerOptions{
+			Logger:      log.New(os.Stderr, "[UNIX.Server] ", log.LstdFlags|log.Lshortfile),
+			Concurrency: *maxTasks,
+			Metrics:     metrics.New(),
+			AllowPush:   true,
+			AllowV1:     true,
 		}
-		ms.ServeCodec(ovsdb.NewServerCodec(conn))
+		server.Loop(lst, server.NewStatic(mux), &server.LoopOptions{ServerOptions: servOptions})
 	}
 }
