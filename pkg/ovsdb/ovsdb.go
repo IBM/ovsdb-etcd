@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	ovsjson "github.com/roytman/ovsdb-etcd/pkg/json"
 )
 
 type ServOVSDB struct {
@@ -42,7 +43,7 @@ type TransactionResponse struct {
 func (s *ServOVSDB) List_dbs(param *interface{}, reply *interface{}) error {
 	fmt.Println("List_dbs")
 	// TODO remove hardcoded list of DBs
-	*reply = []string{"_Server", "OVN_Northbound", "tests"}
+	*reply = []string{"_Server", "OVN_Northbound"}
 	return nil
 }
 
@@ -124,13 +125,13 @@ func (s *ServOVSDB) Cancel(param *interface{}, reply *interface{}) error {
 // subset of a table.
 // "params": [<db-name>, <json-value>, <monitor-requests>]
 // The response object has the following members:
-//   "result": <table-updates>
+//   "result": <table-updates>  If no tables' initial contents are requested, then "result" is an empty object
 //   "error": null
 //   "id": same "id" as request
 func (s *ServOVSDB) Monitor(param *interface{}, reply *interface{}) error {
 	fmt.Printf("Monitor %T, %+v\n", *param, *param)
 
-	*reply = "{Monitor}"
+	*reply = ovsjson.EmptyStruct{}
 	return nil
 }
 
