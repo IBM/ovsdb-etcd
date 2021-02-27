@@ -18,8 +18,8 @@ func list_dbs(ctx context.Context, cli *jrpc2.Client) (result []string, err erro
 	return
 }
 
-func echo(ctx context.Context, cli *jrpc2.Client) (result []string, err error) {
-	err = cli.CallResult(ctx, "echo", []string{"ech0"}, &result)
+func echo(ctx context.Context, cli *jrpc2.Client) (result []interface{}, err error) {
+	err = cli.CallResult(ctx, "echo", []string{"ech0", "echo32"}, &result)
 	return
 }
 

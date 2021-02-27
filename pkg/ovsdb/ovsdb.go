@@ -13,9 +13,6 @@ type ServOVSDB struct {
 	dbServer DBServer
 }
 
-type Initial struct {
-	InitialData `json:"initial"`
-}
 
 type InitialData struct {
 	Name      string `json:"name"`
@@ -26,7 +23,7 @@ type InitialData struct {
 }
 
 type Databases struct {
-	Database map[string]Initial `json:"Database"`
+	Database map[string]ovsjson.Initial `json:"Database"`
 }
 
 type TransactionResponse struct {
@@ -66,6 +63,8 @@ func (s *ServOVSDB) Get_schema(ctx context.Context, param interface{}) (interfac
 		schemaName = param.(string)
 	case []string:
 		schemaName = param.([]string)[0]
+	case []interface{}:
+		schemaName = fmt.Sprintf("%s", param.([]interface{})[0])
 	default:
 		// probably is a bad idea
 		schemaName = fmt.Sprintf("%s", param)
@@ -91,7 +90,7 @@ func (s *ServOVSDB) Get_schema(ctx context.Context, param interface{}) (interfac
 // Regardless of whether errors occur in the database operations, the response is always a JSON-RPC response with null
 // "error" and a "result" member that is an array with the same number of elements as "params".  Each element of the
 // "result" array corresponds to the same element of the "params" array.
-func (s *ServOVSDB) Transact(param []interface{}, reply *interface{}) error {
+func (s *ServOVSDB) Transact(ctx context.Context, param []interface{}) (interface{}, error) {
 	for k, v := range param {
 		fmt.Printf("Transact k = %d v= %#v\n", k, v)
 		valuesMap, ok := v.(map[string]interface{})
@@ -102,30 +101,27 @@ func (s *ServOVSDB) Transact(param []interface{}, reply *interface{}) error {
 			if valuesMap["op"] == "select" {
 				tabel, okt := valuesMap["table"]
 				if !okt {
-					return fmt.Errorf("Table is not specified")
+					return nil, fmt.Errorf("Table is not specified")
 				}
 				colomns, _ := valuesMap["columns"]
 				fmt.Printf("Columns type %T\n", colomns)
 				resp, err := s.dbServer.GetMarshaled("ovsdb/"+tabel.(string), colomns.([]interface{}))
 				if err != nil {
-					return err
+					return nil, err
 				}
 				tr := TransactionResponse{Rows: *resp}
-				*reply = tr
-				return nil
+				return tr, nil
 			}
 		}
 	}
 
-	*reply = "{Transact}"
-	return nil
+	return "{Transact}", nil
 }
 
-func (s *ServOVSDB) Cancel(param *interface{}, reply *interface{}) error {
-	fmt.Printf("Cancel %T, %+v\n", *param, *param)
+func (s *ServOVSDB) Cancel(ctx context.Context, param interface{}) (interface{}, error) {
+	fmt.Printf("Cancel %T, %+v\n", param, param)
 
-	*reply = "{Cancel}"
-	return nil
+	return  "{Cancel}", nil
 }
 
 // The "monitor" request enables a client to replicate tables or subsets of tables within an OVSDB database by
@@ -136,39 +132,34 @@ func (s *ServOVSDB) Cancel(param *interface{}, reply *interface{}) error {
 //   "result": <table-updates>  If no tables' initial contents are requested, then "result" is an empty object
 //   "error": null
 //   "id": same "id" as request
-func (s *ServOVSDB) Monitor(param *interface{}, reply *interface{}) error {
-	fmt.Printf("Monitor %T, %+v\n", *param, *param)
+func (s *ServOVSDB) Monitor(ctx context.Context, param interface{}) (interface{}, error) {
+	fmt.Printf("Monitor %T, %+v\n", param, param)
 
-	*reply = ovsjson.EmptyStruct{}
-	return nil
+	return  ovsjson.EmptyStruct{}, nil
 }
 
-func (s *ServOVSDB) Update(param *interface{}, reply *interface{}) error {
-	fmt.Printf("Update %T, %+v\n", *param, *param)
+func (s *ServOVSDB) Update(ctx context.Context, param interface{}) (interface{}, error) {
+	fmt.Printf("Update %T, %+v\n", param, param)
 
-	*reply = "{Update}"
-	return nil
+	return "{Update}", nil
 }
 
-func (s *ServOVSDB) Monitor_cancel(param *interface{}, reply *interface{}) error {
-	fmt.Printf("Monitor_cancel %T, %+v\n", *param, *param)
+func (s *ServOVSDB) Monitor_cancel(ctx context.Context, param interface{}) (interface{}, error) {
+	fmt.Printf("Monitor_cancel %T, %+v\n", param, param)
 
-	*reply = "{Monitor_cancel}"
-	return nil
+	return "{Monitor_cancel}", nil
 }
 
-func (s *ServOVSDB) Lock(param *interface{}, reply *interface{}) error {
-	fmt.Printf("Lock %T, %+v\n", *param, *param)
+func (s *ServOVSDB) Lock(ctx context.Context, param interface{}) (interface{}, error){
+	fmt.Printf("Lock %T, %+v\n", param, param)
 
-	*reply = "{Lock}"
-	return nil
+	return "{Lock}", nil
 }
 
-func (s *ServOVSDB) Unlock(param *interface{}, reply *interface{}) error {
-	fmt.Printf("Unlock %T, %+v\n", *param, *param)
+func (s *ServOVSDB) Unlock(ctx context.Context, param interface{}) (interface{}, error) {
+	fmt.Printf("Unlock %T, %+v\n", param, param)
 
-	*reply = "{Unlock}"
-	return nil
+	return "{Unlock}", nil
 }
 
 // The monitor_cond request enables a client to replicate subsets of tables within an OVSDB database by requesting
@@ -201,68 +192,69 @@ func (s *ServOVSDB) Unlock(param *interface{}, reply *interface{}) error {
 //  "result": <table-updates2>
 //  "error": null
 //  "id": same "id" as request
-func (s *ServOVSDB) Monitor_cond(param []interface{}, reply *interface{}) error {
+func (s *ServOVSDB) Monitor_cond(ctx context.Context, param []interface{}) (interface{}, error) {
 	fmt.Printf("Monitor_cond %T %+v\n", param, param)
 
 	resp, err := s.dbServer.GetData("ovsdb/" + param[0].(string))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	databases := Databases{Database: map[string]Initial{}}
+
+	databases := Databases{Database: map[string]ovsjson.Initial{}}
 	for _, v := range resp.Kvs {
 		keys := strings.Split(string(v.Key), "/")
-		db, ok := databases.Database[keys[3]]
+		in, ok := databases.Database[keys[3]]
+		var id InitialData
 		if !ok {
-			db = Initial{}
+			in = ovsjson.Initial{}
+			databases.Database[keys[3]] = in
 		}
+		if in.Initial == nil {
+			in.Initial = InitialData{}
+		}
+		id = in.Initial.(InitialData)
 		switch keys[5] {
 		case "name":
-			db.Name = string(v.Value)
+			id.Name = string(v.Value)
 		case "connected":
-			db.Connected, _ = strconv.ParseBool(string(v.Value))
+			id.Connected, _ = strconv.ParseBool(string(v.Value))
 		case "leader":
-			db.Leader, _ = strconv.ParseBool(string(v.Value))
+			id.Leader, _ = strconv.ParseBool(string(v.Value))
 		case "model":
-			db.Model = string(v.Value)
+			id.Model = string(v.Value)
 		case "schema":
-			db.Schema = string(v.Value)
+			id.Schema = string(v.Value)
 		}
-		databases.Database[keys[3]] = db
+		databases.Database[keys[3]] = ovsjson.Initial{Initial: id}
 	}
-	*reply = databases
-	return nil
+	return databases, nil
 }
 
-func (s *ServOVSDB) Monitor_cond_change(param *interface{}, reply *interface{}) error {
-	fmt.Printf("Monitor_cond_change %T, %+v\n", *param, *param)
+func (s *ServOVSDB) Monitor_cond_change(ctx context.Context, param interface{}) (interface{}, error){
+	fmt.Printf("Monitor_cond_change %T, %+v\n", param, param)
 
-	*reply = "{Monitor_cond_change}"
-	return nil
+	return "{Monitor_cond_change}", nil
 }
 
-func (s *ServOVSDB) Monitor_cond_since(param *interface{}, reply *interface{}) error {
-	fmt.Printf("Monitor_cond_since %T, %+v\n", *param, *param)
+func (s *ServOVSDB) Monitor_cond_since(ctx context.Context, param interface{}) (interface{}, error) {
+	fmt.Printf("Monitor_cond_since %T, %+v\n", param, param)
 
-	*reply = "{Monitor_cond_since}"
-	return nil
+	return  "{Monitor_cond_since}", nil
 }
 
-func (s *ServOVSDB) Get_server_id(param *interface{}, reply *interface{}) error {
-	fmt.Printf("Get_server_id %+v\n", *param)
-	*reply = "{Get_server_id}"
-	return nil
+func (s *ServOVSDB) Get_server_id(ctx context.Context, param interface{}) (interface{}, error) {
+	fmt.Printf("Get_server_id %+v\n", param)
+	return "{Get_server_id}", nil
 }
 
-func (s *ServOVSDB) Set_db_change_aware(param *interface{}, reply *interface{}) error {
-	fmt.Printf("Set_db_change_aware %+v\n", *param)
-	*reply = "{Set_db_change_aware}"
-	return nil
+func (s *ServOVSDB) Set_db_change_aware(ctx context.Context, param interface{}) (interface{}, error){
+	fmt.Printf("Set_db_change_aware %+v\n", param)
+	return "{Set_db_change_aware}", nil
 }
 
-func (s *ServOVSDB) Convert(param *interface{}, reply *interface{}) error {
-	fmt.Printf("Convert %+v\n", *param)
-	*reply = "{Convert}"
-	return nil
+func (s *ServOVSDB) Convert(ctx context.Context, param interface{}) (interface{}, error) {
+	fmt.Printf("Convert %+v\n", param)
+	return "{Convert}", nil
 }
 
 // The "echo" method can be used by both clients and servers to verify the liveness of a database connection.
