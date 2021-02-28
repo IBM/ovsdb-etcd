@@ -139,7 +139,7 @@ type Logical_Switch struct {
 type Logical_Switch_Port struct {
 	Parent_name       string            `json:"parent_name"`
 	Tag_request       int64             `json:"tag_request"`
-	Addresses         []string          `json:"addresses"`
+	Addresses         json.Set          `json:"addresses"`
 	Dynamic_addresses string            `json:"dynamic_addresses"`
 	Enabled           bool              `json:"enabled"`
 	Dhcpv4_options    json.Uuid         `json:"dhcpv4_options"`
@@ -149,7 +149,7 @@ type Logical_Switch_Port struct {
 	External_ids      map[string]string `json:"external_ids"`
 	Type              string            `json:"type"`
 	Options           map[string]string `json:"options"`
-	Port_security     []string          `json:"port_security"`
+	Port_security     json.Set          `json:"port_security"`
 	Up                bool              `json:"up"`
 	Dhcpv6_options    json.Uuid         `json:"dhcpv6_options"`
 }
@@ -171,7 +171,7 @@ type Load_Balancer struct {
 	Protocol         string            `json:"protocol"`
 	Health_check     []json.Uuid       `json:"health_check"`
 	Ip_port_mappings map[string]string `json:"ip_port_mappings"`
-	Selection_fields []string          `json:"selection_fields"`
+	Selection_fields json.Set          `json:"selection_fields"`
 	Options          map[string]string `json:"options"`
 	External_ids     map[string]string `json:"external_ids"`
 }
@@ -181,12 +181,12 @@ type Logical_Router_Port struct {
 	Peer             string            `json:"peer"`
 	Enabled          bool              `json:"enabled"`
 	Ipv6_ra_configs  map[string]string `json:"ipv6_ra_configs"`
-	Ipv6_prefix      []string          `json:"ipv6_prefix"`
+	Ipv6_prefix      json.Set          `json:"ipv6_prefix"`
 	External_ids     map[string]string `json:"external_ids"`
 	Ha_chassis_group json.Uuid         `json:"ha_chassis_group"`
 	Gateway_chassis  []json.Uuid       `json:"gateway_chassis"`
 	Options          map[string]string `json:"options"`
-	Networks         []string          `json:"networks"`
+	Networks         json.Set          `json:"networks"`
 	Name             string            `json:"name"`
 }
 
@@ -194,7 +194,7 @@ type Forwarding_Group struct {
 	Vmac         string            `json:"vmac"`
 	Liveness     bool              `json:"liveness"`
 	External_ids map[string]string `json:"external_ids"`
-	Child_port   []string          `json:"child_port"`
+	Child_port   json.Set          `json:"child_port"`
 	Name         string            `json:"name"`
 	Vip          string            `json:"vip"`
 }
@@ -204,7 +204,7 @@ type Logical_Router_Policy struct {
 	Match        string            `json:"match"`
 	Action       string            `json:"action"`
 	Nexthop      string            `json:"nexthop"`
-	Nexthops     []string          `json:"nexthops"`
+	Nexthops     json.Set          `json:"nexthops"`
 	Options      map[string]string `json:"options"`
 	External_ids map[string]string `json:"external_ids"`
 }
@@ -226,7 +226,7 @@ type Connection struct {
 }
 
 type Address_Set struct {
-	Addresses    []string          `json:"addresses"`
+	Addresses    json.Set          `json:"addresses"`
 	External_ids map[string]string `json:"external_ids"`
 	Name         string            `json:"name"`
 }

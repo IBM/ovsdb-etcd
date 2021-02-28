@@ -18,7 +18,7 @@ type Load_Balancer struct {
 
 type Address_Set struct {
 	Name      string   `json:"name"`
-	Addresses []string `json:"addresses"`
+	Addresses json.Set `json:"addresses"`
 }
 
 type DHCP_Options struct {
@@ -42,9 +42,9 @@ type HA_Chassis_Group struct {
 
 type RBAC_Permission struct {
 	Table         string   `json:"table"`
-	Authorization []string `json:"authorization"`
+	Authorization json.Set `json:"authorization"`
 	Insert_delete bool     `json:"insert_delete"`
-	Update        []string `json:"update"`
+	Update        json.Set `json:"update"`
 }
 
 type Meter_Band struct {
@@ -64,7 +64,7 @@ type Logical_DP_Group struct {
 }
 
 type Port_Group struct {
-	Ports []string `json:"ports"`
+	Ports json.Set `json:"ports"`
 	Name  string   `json:"name"`
 }
 
@@ -110,11 +110,11 @@ type Chassis struct {
 	Nb_cfg                int64             `json:"nb_cfg"`
 	External_ids          map[string]string `json:"external_ids"`
 	Other_config          map[string]string `json:"other_config"`
-	Transport_zones       []string          `json:"transport_zones"`
+	Transport_zones       json.Set          `json:"transport_zones"`
 	Name                  string            `json:"name"`
 	Hostname              string            `json:"hostname"`
 	Encaps                []json.Uuid       `json:"encaps"`
-	Vtep_logical_switches []string          `json:"vtep_logical_switches"`
+	Vtep_logical_switches json.Set          `json:"vtep_logical_switches"`
 }
 
 type MAC_Binding struct {
@@ -137,7 +137,7 @@ type Port_Binding struct {
 	Options          map[string]string `json:"options"`
 	Chassis          json.Uuid         `json:"chassis"`
 	Encap            json.Uuid         `json:"encap"`
-	Nat_addresses    []string          `json:"nat_addresses"`
+	Nat_addresses    json.Set          `json:"nat_addresses"`
 	Logical_port     string            `json:"logical_port"`
 	Tunnel_key       int64             `json:"tunnel_key"`
 	Parent_port      string            `json:"parent_port"`
@@ -145,7 +145,7 @@ type Port_Binding struct {
 	Virtual_parent   string            `json:"virtual_parent"`
 	Ha_chassis_group json.Uuid         `json:"ha_chassis_group"`
 	Datapath         json.Uuid         `json:"datapath"`
-	Mac              []string          `json:"mac"`
+	Mac              json.Set          `json:"mac"`
 	Type             string            `json:"type"`
 	External_ids     map[string]string `json:"external_ids"`
 }
