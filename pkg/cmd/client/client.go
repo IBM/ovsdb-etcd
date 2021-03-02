@@ -4,17 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	ovsjson "github.com/roytman/ovsdb-etcd/pkg/json"
 	"log"
 	"net"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
+
 )
 
 var serverAddr = flag.String("server", "", "Server address")
 
 func list_dbs(ctx context.Context, cli *jrpc2.Client) (result []string, err error) {
-	err = cli.CallResult(ctx, "list_dbs", nil, &result)
+	err = cli.CallResult(ctx, "list_dbs", ovsjson.EmptyStruct{}, &result)
 	return
 }
 
@@ -24,7 +26,17 @@ func echo(ctx context.Context, cli *jrpc2.Client) (result []interface{}, err err
 }
 
 func get_server_id(ctx context.Context, cli *jrpc2.Client) (result interface{}, err error) {
-	err = cli.CallResult(ctx, "get_server_id", nil, &result)
+	err = cli.CallResult(ctx, "get_server_id",[]string{}, &result)
+	return
+}
+
+func lock(ctx context.Context, cli *jrpc2.Client, id string) (result interface{}, err error) {
+	err = cli.CallResult(ctx, "lock", []string{id}, &result)
+	return
+}
+
+func unlock(ctx context.Context, cli *jrpc2.Client, id string) (result interface{}, err error) {
+	err = cli.CallResult(ctx, "unlock", []string{id} , &result)
 	return
 }
 
@@ -53,13 +65,13 @@ func main() {
 	ctx := context.Background()
 
 	log.Print("\n-- Sending some individual requests...")
-
+/*
 	if dbs, err := list_dbs(ctx, cli); err != nil {
 		log.Fatalln("Ovsdb.List_dbs:", err)
 	} else {
 		log.Printf("Ovsdb.List_dbs result=%v", dbs)
 	}
-
+*/
 	if echo, err := echo(ctx, cli); err != nil {
 		log.Fatalln("Ovsdb.Echo:", err)
 	} else {
@@ -71,5 +83,17 @@ func main() {
 	} else {
 		log.Printf("Get_server_id result=%v", uuid)
 	}
+
+	if lock, err := lock(ctx, cli, "test1"); err != nil {
+		log.Fatalln("lock: %v", err)
+	} else {
+		log.Printf("lock result=%v", lock)
+	}
+	if lock, err := unlock(ctx, cli, "test1"); err != nil {
+		log.Fatalf("unlock: %v", err)
+	} else {
+		log.Printf("unlock result=%v", lock)
+	}
+
 
 }

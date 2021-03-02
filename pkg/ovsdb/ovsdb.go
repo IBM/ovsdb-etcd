@@ -13,7 +13,7 @@ import (
 )
 
 type ServOVSDB struct {
-	dbServer DBServer
+	dbServer *DBServer
 }
 
 type InitialData struct {
@@ -161,7 +161,7 @@ func (s *ServOVSDB) Monitor_cancel(ctx context.Context, param interface{}) (inte
 // Returns "result": {"locked": boolean}
 func (s *ServOVSDB) Lock(ctx context.Context, param interface{}) (interface{}, error) {
 	fmt.Printf("Lock %T, %+v\n", param, param)
-	defer notification(ctx)
+	//defer notification(ctx)
 	var id string
 	// param is []interface{}, but just in case ...
 	switch param.(type) {
@@ -179,7 +179,7 @@ func (s *ServOVSDB) Lock(ctx context.Context, param interface{}) (interface{}, e
 	case interface{}:
 		id = fmt.Sprintf("%s", param)
 	}
-	locked, err := s.dbServer.Lock(ctx context.Context, id)
+	locked, err := s.dbServer.Lock(ctx, id)
 	if err != nil {
 		// TODO should we return error ?
 		fmt.Printf("Lock returned error %v\n", err)
@@ -202,6 +202,24 @@ func notification(ctx context.Context) {
 
 func (s *ServOVSDB) Unlock(ctx context.Context, param interface{}) (interface{}, error) {
 	fmt.Printf("Unlock %T, %+v\n", param, param)
+	var id string
+	// param is []interface{}, but just in case ...
+	switch param.(type) {
+	case []interface{}:
+		intArray := param.([]interface{})
+		if len(intArray) == 0 {
+			// Error
+			fmt.Printf("Empty params")
+			return []interface{}{"locked", false}, nil
+		} else {
+			id = fmt.Sprintf("%s", intArray[0])
+		}
+	case string:
+		id = param.(string)
+	case interface{}:
+		id = fmt.Sprintf("%s", param)
+	}
+	_ = s.dbServer.Unlock(ctx, id)
 	return "{Unlock}", nil
 }
 
@@ -353,5 +371,5 @@ func (s *ServOVSDB) Echo(ctx context.Context, param interface{}) interface{}{
 }
 
 func NewService(dbServer *DBServer) *ServOVSDB {
-	return &ServOVSDB{dbServer: *dbServer}
+	return &ServOVSDB{dbServer: dbServer}
 }
