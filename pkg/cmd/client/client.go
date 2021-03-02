@@ -7,8 +7,8 @@ import (
 	"log"
 	"net"
 
-	"github.com/roytman/jrpc2"
-	"github.com/roytman/jrpc2/channel"
+	"github.com/creachadair/jrpc2"
+	"github.com/creachadair/jrpc2/channel"
 )
 
 var serverAddr = flag.String("server", "", "Server address")
@@ -20,6 +20,11 @@ func list_dbs(ctx context.Context, cli *jrpc2.Client) (result []string, err erro
 
 func echo(ctx context.Context, cli *jrpc2.Client) (result []interface{}, err error) {
 	err = cli.CallResult(ctx, "echo", []string{"ech0", "echo32"}, &result)
+	return
+}
+
+func get_server_id(ctx context.Context, cli *jrpc2.Client) (result interface{}, err error) {
+	err = cli.CallResult(ctx, "get_server_id", nil, &result)
 	return
 }
 
@@ -54,9 +59,17 @@ func main() {
 	} else {
 		log.Printf("Ovsdb.List_dbs result=%v", dbs)
 	}
-	if dbs, err := echo(ctx, cli); err != nil {
+
+	if echo, err := echo(ctx, cli); err != nil {
 		log.Fatalln("Ovsdb.Echo:", err)
 	} else {
-		log.Printf("Ovsdb.Echo result=%v", dbs)
+		log.Printf("Ovsdb.Echo result=%v", echo)
 	}
+
+	if uuid, err := get_server_id(ctx, cli); err != nil {
+		log.Fatalln("Get_server_id:", err)
+	} else {
+		log.Printf("Get_server_id result=%v", uuid)
+	}
+
 }

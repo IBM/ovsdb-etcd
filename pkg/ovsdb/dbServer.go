@@ -3,14 +3,18 @@ package ovsdb
 import (
 	"context"
 	"fmt"
+	"github.com/creachadair/jrpc2"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.etcd.io/etcd/client/v3/concurrency"
 	"io/ioutil"
 	"strings"
 	"time"
+	"github.com/google/uuid"
 )
 
 type DBServer struct {
 	cli         *clientv3.Client
+	uuid        string
 	schemas     map[string]string
 	schemaTypes map[string]map[string]map[string]string
 }
@@ -25,11 +29,40 @@ func NewDBServer(endpoints []string) (*DBServer, error) {
 		return nil, err
 	}
 	// TODO
-	//defer cli.Close()
+	defer cli.Close()
 	fmt.Println("etcd client is connected")
 	return &DBServer{cli: cli,
+		uuid:       uuid.NewString(),
 		schemas:     make(map[string]string),
 		schemaTypes: make(map[string]map[string]map[string]string)}, nil
+}
+
+func (con *DBServer) Lock (ctx context.Context, id string) (bool, error) {
+	cnx := context.TODO()
+	session, err := concurrency.NewSession(con.cli, concurrency.WithContext(cnx))
+	if err != nil {
+		return false, err
+	}
+	mutex := concurrency.NewMutex(session, "locks/" + id)
+	err = mutex.TryLock(cnx)
+	if err == nil {
+		return true, nil
+	}
+	go func() {
+		server := jrpc2.ServerFromContext(ctx)
+		server.Wait()
+		_  = mutex.Unlock(cnx)
+	}()
+	go func() {
+		err = mutex.Lock(cnx)
+		if err == nil {
+			// Send notification
+			fmt.Printf("Locked")
+		} else {
+			fmt.Printf("Lock error %v\n", err)
+		}
+	}()
+	return false, nil
 }
 
 func (con *DBServer) AddSchema(schemaName, schemaFile string) error {

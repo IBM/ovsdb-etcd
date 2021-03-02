@@ -157,7 +157,7 @@ func parseColumns(tableName string, columns interface{}) ([]string, error) {
 			switch vt.(type) {
 			case string:
 				// simple case like "name": {"type": "string"}
-				l = fmt.Sprintf(" %s\t%s `json:\"%s\"`\n", fieldName, typeConvert(vt), field)
+				l = fmt.Sprintf(" %s\t%s `json:\"%s,omitempty\"`\n", fieldName, typeConvert(vt), field)
 			case map[string]interface{}:
 				k2Map := vt.(map[string]interface{})
 				// check if it's a Set
@@ -213,17 +213,17 @@ func parseColumns(tableName string, columns interface{}) ([]string, error) {
 }
 
 func createMapFiled(fieldName string, keyType interface{}, valueType interface{}, field string) string {
-	return fmt.Sprintf(" %s \tmap[%s]%s `json:\"%s\"`\n", fieldName, typeConvert(keyType), typeConvert(valueType), field)
+	return fmt.Sprintf(" %s \tmap[%s]%s `json:\"%s,omitempty\"`\n", fieldName, typeConvert(keyType), typeConvert(valueType), field)
 }
 
 func createFiledLine(fieldName string, filedType interface{}, field string, max interface{}, isSet bool) string {
 	if isSet {
 		maxStr := fmt.Sprintf("%v", max)
 		if maxStr != "1" {
-			return fmt.Sprintf(" %s \t[]%s `json:\"%s\"`\n", fieldName, typeConvert(filedType), field)
+			return fmt.Sprintf(" %s \t[]%s `json:\"%s,omitempty\"`\n", fieldName, typeConvert(filedType), field)
 		}
 	}
-	return fmt.Sprintf(" %s \t%s `json:\"%s\"`\n", fieldName, typeConvert(filedType), field)
+	return fmt.Sprintf(" %s \t%s `json:\"%s,omitempty\"`\n", fieldName, typeConvert(filedType), field)
 }
 
 func typeConvert(typeName interface{}) string {

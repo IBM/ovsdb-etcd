@@ -2,15 +2,15 @@ package main
 
 import (
 	"flag"
-	"github.com/roytman/jrpc2/handler"
-	"github.com/roytman/jrpc2/metrics"
-	"github.com/roytman/jrpc2/server"
+	"github.com/creachadair/jrpc2/handler"
+	"github.com/creachadair/jrpc2/metrics"
+	"github.com/creachadair/jrpc2/server"
 	"log"
 	"net"
 	"os"
 	"runtime"
 
-	"github.com/roytman/jrpc2"
+	"github.com/creachadair/jrpc2"
 	"github.com/roytman/ovsdb-etcd/pkg/ovsdb"
 
 )
