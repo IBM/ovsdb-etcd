@@ -2,14 +2,17 @@ package ovsdb
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/creachadair/jrpc2"
 	"github.com/google/uuid"
+	"github.com/roytman/ovsdb-etcd/pkg/json/_Server"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"io/ioutil"
 	"strings"
 	"time"
+	ovsdbjson "github.com/roytman/ovsdb-etcd/pkg/json"
 )
 
 type DBServer struct {
@@ -102,24 +105,24 @@ func (con *DBServer) AddSchema(schemaName, schemaFile string) error {
 
 func (con *DBServer) LoadServerData() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	_, err := con.cli.Put(ctx, "ovsdb/_Server/Database/b85045f3-78d1-4d52-8831-cbac1f6a86b8/initial/name", "_Server")
-	if err != nil {
-		return err
+	for schemaName, schema := range con.schemas {
+		srv := _Server.Database{Model: "standalone", Name: schemaName, Uuid: ovsdbjson.Uuid(uuid.NewString()),
+			Connected: true, Leader: true, Schema: schema, Version: ovsdbjson.Uuid(uuid.NewString())}
+		data, err := json.Marshal(srv)
+		if err != nil {
+			return err
+		}
+		_, err = con.cli.Put(ctx, "ovsdb/_Server/Database/" + schemaName, string(data))
+		if err != nil {
+			return err
+		}
 	}
-	_, err = con.cli.Put(ctx, "ovsdb/_Server/Database/b85045f3-78d1-4d52-8831-cbac1f6a86b8/initial/model", "standalone")
-	_, err = con.cli.Put(ctx, "ovsdb/_Server/Database/b85045f3-78d1-4d52-8831-cbac1f6a86b8/initial/connected", "true")
-	_, err = con.cli.Put(ctx, "ovsdb/_Server/Database/b85045f3-78d1-4d52-8831-cbac1f6a86b8/initial/leader", "true")
-	_, err = con.cli.Put(ctx, "ovsdb/_Server/Database/b85045f3-78d1-4d52-8831-cbac1f6a86b8/initial/schema", con.schemas["_Server"])
 
-	_, err = con.cli.Put(ctx, "ovsdb/_Server/Database/b828af52-6cab-4b46-9870-e4e80e033aad/initial/name", "OVN_Northbound")
-	_, err = con.cli.Put(ctx, "ovsdb/_Server/Database/b828af52-6cab-4b46-9870-e4e80e033aad/initial/model", "standalone")
-	_, err = con.cli.Put(ctx, "ovsdb/_Server/Database/b828af52-6cab-4b46-9870-e4e80e033aad/initial/connected", "true")
-	_, err = con.cli.Put(ctx, "ovsdb/_Server/Database/b828af52-6cab-4b46-9870-e4e80e033aad/initial/leader", "true")
-	_, err = con.cli.Put(ctx, "ovsdb/_Server/Database/b828af52-6cab-4b46-9870-e4e80e033aad/initial/schema", con.schemas["OVN_Northbound"])
+
 
 	// OVN_Northbound
 	// NB_Global
-	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/NB_Global/a5088a51-7756-4dd4-909c-b7c59c9fcce7/connections", "[413afe3e-79ff-4583-88a6-f02b70b8e927]")
+	_, err := con.cli.Put(ctx, "ovsdb/OVN_Northbound/NB_Global/a5088a51-7756-4dd4-909c-b7c59c9fcce7/connections", "[413afe3e-79ff-4583-88a6-f02b70b8e927]")
 	_, err = con.cli.Put(ctx, "ovsdb/OVN_Northbound/NB_Global/a5088a51-7756-4dd4-909c-b7c59c9fcce7/options", "{e2e_timestamp=\"1612817071\", mac_prefix=\"86:a9:cb\", max_tunid=\"16711680\", northd_internal_version=\"20.12.0-20.14.0-52.0\", northd_probe_interval=\"5000\", svc_monitor_mac=\"5a:d9:62:39:9f:87\"}")
 
 	//ACL
@@ -187,10 +190,16 @@ func (con *DBServer) LoadServerData() error {
 	return err
 }
 
-func (con *DBServer) GetData(prefix string) (*clientv3.GetResponse, error) {
+func (con *DBServer) GetData(prefix string, keysOnly bool) (*clientv3.GetResponse, error) {
 	fmt.Printf("GetData " + prefix)
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	resp, err := con.cli.Get(ctx, prefix, clientv3.WithFromKey())
+	var resp *clientv3.GetResponse
+	var err error
+	if keysOnly {
+		resp, err = con.cli.Get(ctx, prefix, clientv3.WithFromKey(), clientv3.WithKeysOnly())
+	} else {
+		resp, err = con.cli.Get(ctx, prefix, clientv3.WithFromKey())
+	}
 	cancel()
 	if err != nil {
 		return nil, err

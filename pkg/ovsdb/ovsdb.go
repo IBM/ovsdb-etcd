@@ -42,8 +42,16 @@ type TransactionResponse struct {
 //   	"id": same "id" as request
 func (s *ServOVSDB) List_dbs(ctx context.Context, param interface{}) ([]string, error) {
 	// fmt.Printf("List_dbs param %T %v\n", param, param)
-	// TODO remove hardcoded list of DBs
-	return []string{"_Server", "OVN_Northbound"}, nil
+	resp, err := s.dbServer.GetData("ovsdb/_Server/Database/", true)
+	if err != nil {
+		return nil, err
+	}
+	dbs := []string{}
+	for _, kv := range resp.Kvs {
+		slices := strings.Split(string(kv.Key), "/")
+		dbs = append(dbs, slices[len(slices) - 1])
+	}
+	return dbs, nil
 }
 
 // This operation retrieves a <database-schema> that describes hosted database <db-name>.
@@ -256,7 +264,7 @@ func (s *ServOVSDB) Unlock(ctx context.Context, param interface{}) (interface{},
 func (s *ServOVSDB) Monitor_cond(ctx context.Context, param []interface{}) (interface{}, error) {
 	fmt.Printf("Monitor_cond %T %+v\n", param, param)
 
-	resp, err := s.dbServer.GetData("ovsdb/" + param[0].(string))
+	resp, err := s.dbServer.GetData("ovsdb/" + param[0].(string), false)
 	if err != nil {
 		return nil, err
 	}
