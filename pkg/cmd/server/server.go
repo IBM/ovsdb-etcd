@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -26,7 +27,7 @@ const ETCD_LOCALHOST = "localhost:2379"
 var (
 	tcpAddress  = flag.String("tcp-address", "", "TCP service address")
 	unixAddress = flag.String("unix-address", "", "UNIX service address")
-	etcdMembers = flag.String("etcd-members", ETCD_LOCALHOST, "TCP service address")
+	etcdMembers = flag.String("etcd-members", ETCD_LOCALHOST, "ETCD service addresses, separated by ',' ")
 	maxTasks    = flag.Int("max", 1, "Maximum concurrent tasks")
 )
 
@@ -37,8 +38,11 @@ func main() {
 		klog.Fatal("You must provide a network-address (TCP and/or UNIX) to listen on")
 	}
 
-	// TODO
-	dbServ, err := ovsdb.NewDBServer([]string{"localhost:2379"})
+	if len(*etcdMembers) == 0 {
+		klog.Fatal("Wrong ETCD members list '%s'", etcdMembers )
+	}
+	etcdServers := strings.Split(*etcdMembers, ",")
+	dbServ, err := ovsdb.NewDBServer(etcdServers)
 	if err != nil {
 		klog.Fatal(err)
 	}
