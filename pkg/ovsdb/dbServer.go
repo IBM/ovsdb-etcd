@@ -3,7 +3,10 @@ package ovsdb
 import (
 	"context"
 	"fmt"
+	"github.com/creachadair/jrpc2"
+	"github.com/google/uuid"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.etcd.io/etcd/client/v3/concurrency"
 	"io/ioutil"
 	"strings"
 	"time"
@@ -11,6 +14,7 @@ import (
 
 type DBServer struct {
 	cli         *clientv3.Client
+	uuid        string
 	schemas     map[string]string
 	schemaTypes map[string]map[string]map[string]string
 }
@@ -28,8 +32,63 @@ func NewDBServer(endpoints []string) (*DBServer, error) {
 	//defer cli.Close()
 	fmt.Println("etcd client is connected")
 	return &DBServer{cli: cli,
+		uuid:       uuid.NewString(),
 		schemas:     make(map[string]string),
 		schemaTypes: make(map[string]map[string]map[string]string)}, nil
+}
+
+func (con *DBServer) Lock (ctx context.Context, id string) (bool, error) {
+	cnx := context.TODO()
+	session, err := concurrency.NewSession(con.cli, concurrency.WithContext(cnx))
+	if err != nil {
+		return false, err
+	}
+	mutex := concurrency.NewMutex(session, "locks/" + id)
+	err = mutex.TryLock(cnx)
+	unlock := func() {
+		server := jrpc2.ServerFromContext(ctx)
+		server.Wait()
+		fmt.Println("UNLOCK")
+		err = mutex.Unlock(cnx)
+		if err!= nil {
+			fmt.Errorf("Unlock returned %v\n", err)
+		} else {
+			fmt.Printf("UNLOCKED done\n")
+		}
+	}
+	if err == nil {
+		go unlock()
+		return true, nil
+	}
+	go func() {
+		err = mutex.Lock(cnx)
+		if err == nil {
+			// Send notification
+			fmt.Println("Locked")
+			go unlock()
+			if err := jrpc2.PushNotify(ctx, "locked", []string{id}); err != nil {
+				fmt.Printf("notification %v\n", err)
+				return
+
+			}
+		} else {
+			fmt.Printf("Lock error %v\n", err)
+		}
+	}()
+	return false, nil
+}
+
+func (con *DBServer) Unlock (ctx context.Context, id string) error {
+	cnx := context.TODO()
+	session, err := concurrency.NewSession(con.cli, concurrency.WithContext(cnx))
+	if err != nil {
+		return err
+	}
+	mutex := concurrency.NewMutex(session, "locks/" + id)
+	// TODO
+	fmt.Printf( "is owner %+v\n", mutex.IsOwner())
+	mutex.Unlock(ctx)
+	return nil
 }
 
 func (con *DBServer) AddSchema(schemaName, schemaFile string) error {

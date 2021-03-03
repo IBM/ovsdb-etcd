@@ -1,5 +1,7 @@
 package json
 
+const ZERO_UUID = "00000000-0000-0000-0000-000000000000"
+
 type Uuid string
 
 type NamedUuid string
@@ -8,7 +10,7 @@ type Map map[string]string
 
 type Set []string
 
-type EmptyStruct struct {}
+type EmptyStruct struct{}
 
 // presents for initial updates
 type Initial struct {
@@ -29,5 +31,3 @@ type Delete struct {
 type Modify struct {
 	Modify interface{} `json:"modify"`
 }
-
-
