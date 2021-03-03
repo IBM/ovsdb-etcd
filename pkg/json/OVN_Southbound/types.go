@@ -21,6 +21,11 @@ type Logical_Flow struct {
 	Actions          string            `json:"actions,omitempty"`
 }
 
+type Address_Set struct {
+	Name      string   `json:"name"`
+	Addresses json.Set `json:"addresses"`
+}
+
 type Datapath_Binding struct {
 	Tunnel_key     int64             `json:"tunnel_key,omitempty"`
 	Load_balancers []json.Uuid       `json:"load_balancers,omitempty"`
@@ -48,6 +53,13 @@ type Chassis_Private struct {
 	External_ids     map[string]string `json:"external_ids,omitempty"`
 }
 
+type RBAC_Permission struct {
+	Table         string   `json:"table"`
+	Authorization json.Set `json:"authorization"`
+	Insert_delete bool     `json:"insert_delete"`
+	Update        json.Set `json:"update"`
+}
+
 type RBAC_Role struct {
 	Name        string               `json:"name,omitempty"`
 	Permissions map[string]json.Uuid `json:"permissions,omitempty"`
@@ -70,6 +82,11 @@ type DHCPv6_Options struct {
 type Address_Set struct {
 	Name      string   `json:"name,omitempty"`
 	Addresses []string `json:"addresses,omitempty"`
+}
+
+type Port_Group struct {
+	Ports json.Set `json:"ports"`
+	Name  string   `json:"name"`
 }
 
 type IP_Multicast struct {
@@ -117,6 +134,17 @@ type HA_Chassis struct {
 	Priority     int64             `json:"priority,omitempty"`
 }
 
+type Chassis struct {
+	Nb_cfg                int64             `json:"nb_cfg"`
+	External_ids          map[string]string `json:"external_ids"`
+	Other_config          map[string]string `json:"other_config"`
+	Transport_zones       json.Set          `json:"transport_zones"`
+	Name                  string            `json:"name"`
+	Hostname              string            `json:"hostname"`
+	Encaps                []json.Uuid       `json:"encaps"`
+	Vtep_logical_switches json.Set          `json:"vtep_logical_switches"`
+}
+
 type SSL struct {
 	Certificate       string            `json:"certificate,omitempty"`
 	Ca_cert           string            `json:"ca_cert,omitempty"`
@@ -141,6 +169,24 @@ type HA_Chassis_Group struct {
 	Ha_chassis   []json.Uuid       `json:"ha_chassis,omitempty"`
 	Ref_chassis  []json.Uuid       `json:"ref_chassis,omitempty"`
 	External_ids map[string]string `json:"external_ids,omitempty"`
+}
+
+type Port_Binding struct {
+	Gateway_chassis  []json.Uuid       `json:"gateway_chassis"`
+	Options          map[string]string `json:"options"`
+	Chassis          json.Uuid         `json:"chassis"`
+	Encap            json.Uuid         `json:"encap"`
+	Nat_addresses    json.Set          `json:"nat_addresses"`
+	Logical_port     string            `json:"logical_port"`
+	Tunnel_key       int64             `json:"tunnel_key"`
+	Parent_port      string            `json:"parent_port"`
+	Tag              int64             `json:"tag"`
+	Virtual_parent   string            `json:"virtual_parent"`
+	Ha_chassis_group json.Uuid         `json:"ha_chassis_group"`
+	Datapath         json.Uuid         `json:"datapath"`
+	Mac              json.Set          `json:"mac"`
+	Type             string            `json:"type"`
+	External_ids     map[string]string `json:"external_ids"`
 }
 
 type Logical_DP_Group struct {
