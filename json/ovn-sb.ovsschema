@@ -5,7 +5,11 @@
   "tables": {
     "SB_Global": {
       "columns": {
-        "nb_cfg": { "type": { "key": "integer" } },
+        "nb_cfg": {
+          "type": {
+            "key": "integer"
+          }
+        },
         "external_ids": {
           "type": {
             "key": "string",
@@ -42,15 +46,21 @@
             "max": "unlimited"
           }
         },
-        "ipsec": { "type": "boolean" }
+        "ipsec": {
+          "type": "boolean"
+        }
       },
       "maxRows": 1,
       "isRoot": true
     },
     "Chassis": {
       "columns": {
-        "name": { "type": "string" },
-        "hostname": { "type": "string" },
+        "name": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
         "encaps": {
           "type": {
             "key": {
@@ -68,7 +78,11 @@
             "max": "unlimited"
           }
         },
-        "nb_cfg": { "type": { "key": "integer" } },
+        "nb_cfg": {
+          "type": {
+            "key": "integer"
+          }
+        },
         "external_ids": {
           "type": {
             "key": "string",
@@ -94,11 +108,17 @@
         }
       },
       "isRoot": true,
-      "indexes": [ [ "name" ] ]
+      "indexes": [
+        [
+          "name"
+        ]
+      ]
     },
     "Chassis_Private": {
       "columns": {
-        "name": { "type": "string" },
+        "name": {
+          "type": "string"
+        },
         "chassis": {
           "type": {
             "key": {
@@ -110,8 +130,16 @@
             "max": 1
           }
         },
-        "nb_cfg": { "type": { "key": "integer" } },
-        "nb_cfg_timestamp": { "type": { "key": "integer" } },
+        "nb_cfg": {
+          "type": {
+            "key": "integer"
+          }
+        },
+        "nb_cfg_timestamp": {
+          "type": {
+            "key": "integer"
+          }
+        },
         "external_ids": {
           "type": {
             "key": "string",
@@ -122,7 +150,11 @@
         }
       },
       "isRoot": true,
-      "indexes": [ [ "name" ] ]
+      "indexes": [
+        [
+          "name"
+        ]
+      ]
     },
     "Encap": {
       "columns": {
@@ -132,7 +164,11 @@
               "type": "string",
               "enum": [
                 "set",
-                [ "geneve", "stt", "vxlan" ]
+                [
+                  "geneve",
+                  "stt",
+                  "vxlan"
+                ]
               ]
             }
           }
@@ -145,14 +181,25 @@
             "max": "unlimited"
           }
         },
-        "ip": { "type": "string" },
-        "chassis_name": { "type": "string" }
+        "ip": {
+          "type": "string"
+        },
+        "chassis_name": {
+          "type": "string"
+        }
       },
-      "indexes": [ [ "type", "ip" ] ]
+      "indexes": [
+        [
+          "type",
+          "ip"
+        ]
+      ]
     },
     "Address_Set": {
       "columns": {
-        "name": { "type": "string" },
+        "name": {
+          "type": "string"
+        },
         "addresses": {
           "type": {
             "key": "string",
@@ -161,12 +208,18 @@
           }
         }
       },
-      "indexes": [ [ "name" ] ],
+      "indexes": [
+        [
+          "name"
+        ]
+      ],
       "isRoot": true
     },
     "Port_Group": {
       "columns": {
-        "name": { "type": "string" },
+        "name": {
+          "type": "string"
+        },
         "ports": {
           "type": {
             "key": "string",
@@ -175,7 +228,11 @@
           }
         }
       },
-      "indexes": [ [ "name" ] ],
+      "indexes": [
+        [
+          "name"
+        ]
+      ],
       "isRoot": true
     },
     "Logical_Flow": {
@@ -232,8 +289,12 @@
             }
           }
         },
-        "match": { "type": "string" },
-        "actions": { "type": "string" },
+        "match": {
+          "type": "string"
+        },
+        "actions": {
+          "type": "string"
+        },
         "external_ids": {
           "type": {
             "key": "string",
@@ -271,7 +332,9 @@
             }
           }
         },
-        "name": { "type": "string" },
+        "name": {
+          "type": "string"
+        },
         "tunnel_key": {
           "type": {
             "key": {
@@ -294,21 +357,32 @@
         }
       },
       "indexes": [
-        [ "datapath", "tunnel_key" ],
-        [ "datapath", "name" ]
+        [
+          "datapath",
+          "tunnel_key"
+        ],
+        [
+          "datapath",
+          "name"
+        ]
       ],
       "isRoot": true
     },
     "Meter": {
       "columns": {
-        "name": { "type": "string" },
+        "name": {
+          "type": "string"
+        },
         "unit": {
           "type": {
             "key": {
               "type": "string",
               "enum": [
                 "set",
-                [ "kbps", "pktps" ]
+                [
+                  "kbps",
+                  "pktps"
+                ]
               ]
             }
           }
@@ -325,7 +399,11 @@
           }
         }
       },
-      "indexes": [ [ "name" ] ],
+      "indexes": [
+        [
+          "name"
+        ]
+      ],
       "isRoot": true
     },
     "Meter_Band": {
@@ -336,7 +414,9 @@
               "type": "string",
               "enum": [
                 "set",
-                [ "drop" ]
+                [
+                  "drop"
+                ]
               ]
             }
           }
@@ -393,13 +473,21 @@
           }
         }
       },
-      "indexes": [ [ "tunnel_key" ] ],
+      "indexes": [
+        [
+          "tunnel_key"
+        ]
+      ],
       "isRoot": true
     },
     "Port_Binding": {
       "columns": {
-        "logical_port": { "type": "string" },
-        "type": { "type": "string" },
+        "logical_port": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
         "gateway_chassis": {
           "type": {
             "key": {
@@ -518,16 +606,27 @@
         }
       },
       "indexes": [
-        [ "datapath", "tunnel_key" ],
-        [ "logical_port" ]
+        [
+          "datapath",
+          "tunnel_key"
+        ],
+        [
+          "logical_port"
+        ]
       ],
       "isRoot": true
     },
     "MAC_Binding": {
       "columns": {
-        "logical_port": { "type": "string" },
-        "ip": { "type": "string" },
-        "mac": { "type": "string" },
+        "logical_port": {
+          "type": "string"
+        },
+        "ip": {
+          "type": "string"
+        },
+        "mac": {
+          "type": "string"
+        },
         "datapath": {
           "type": {
             "key": {
@@ -537,12 +636,19 @@
           }
         }
       },
-      "indexes": [ [ "logical_port", "ip" ] ],
+      "indexes": [
+        [
+          "logical_port",
+          "ip"
+        ]
+      ],
       "isRoot": true
     },
     "DHCP_Options": {
       "columns": {
-        "name": { "type": "string" },
+        "name": {
+          "type": "string"
+        },
         "code": {
           "type": {
             "key": {
@@ -578,7 +684,9 @@
     },
     "DHCPv6_Options": {
       "columns": {
-        "name": { "type": "string" },
+        "name": {
+          "type": "string"
+        },
         "code": {
           "type": {
             "key": {
@@ -594,7 +702,11 @@
               "type": "string",
               "enum": [
                 "set",
-                [ "ipv6", "str", "mac" ]
+                [
+                  "ipv6",
+                  "str",
+                  "mac"
+                ]
               ]
             }
           }
@@ -604,7 +716,9 @@
     },
     "Connection": {
       "columns": {
-        "target": { "type": "string" },
+        "target": {
+          "type": "string"
+        },
         "max_backoff": {
           "type": {
             "key": {
@@ -622,8 +736,12 @@
             "max": 1
           }
         },
-        "read_only": { "type": "boolean" },
-        "role": { "type": "string" },
+        "read_only": {
+          "type": "boolean"
+        },
+        "role": {
+          "type": "string"
+        },
         "other_config": {
           "type": {
             "key": "string",
@@ -654,16 +772,32 @@
           "ephemeral": true
         }
       },
-      "indexes": [ [ "target" ] ]
+      "indexes": [
+        [
+          "target"
+        ]
+      ]
     },
     "SSL": {
       "columns": {
-        "private_key": { "type": "string" },
-        "certificate": { "type": "string" },
-        "ca_cert": { "type": "string" },
-        "bootstrap_ca_cert": { "type": "boolean" },
-        "ssl_protocols": { "type": "string" },
-        "ssl_ciphers": { "type": "string" },
+        "private_key": {
+          "type": "string"
+        },
+        "certificate": {
+          "type": "string"
+        },
+        "ca_cert": {
+          "type": "string"
+        },
+        "bootstrap_ca_cert": {
+          "type": "boolean"
+        },
+        "ssl_protocols": {
+          "type": "string"
+        },
+        "ssl_ciphers": {
+          "type": "string"
+        },
         "external_ids": {
           "type": {
             "key": "string",
@@ -708,10 +842,14 @@
     },
     "RBAC_Role": {
       "columns": {
-        "name": { "type": "string" },
+        "name": {
+          "type": "string"
+        },
         "permissions": {
           "type": {
-            "key": { "type": "string" },
+            "key": {
+              "type": "string"
+            },
             "value": {
               "type": "uuid",
               "refTable": "RBAC_Permission",
@@ -726,7 +864,9 @@
     },
     "RBAC_Permission": {
       "columns": {
-        "table": { "type": "string" },
+        "table": {
+          "type": "string"
+        },
         "authorization": {
           "type": {
             "key": "string",
@@ -734,7 +874,9 @@
             "max": "unlimited"
           }
         },
-        "insert_delete": { "type": "boolean" },
+        "insert_delete": {
+          "type": "boolean"
+        },
         "update": {
           "type": {
             "key": "string",
@@ -747,7 +889,9 @@
     },
     "Gateway_Chassis": {
       "columns": {
-        "name": { "type": "string" },
+        "name": {
+          "type": "string"
+        },
         "chassis": {
           "type": {
             "key": {
@@ -785,7 +929,11 @@
           }
         }
       },
-      "indexes": [ [ "name" ] ],
+      "indexes": [
+        [
+          "name"
+        ]
+      ],
       "isRoot": false
     },
     "HA_Chassis": {
@@ -823,7 +971,9 @@
     },
     "HA_Chassis_Group": {
       "columns": {
-        "name": { "type": "string" },
+        "name": {
+          "type": "string"
+        },
         "ha_chassis": {
           "type": {
             "key": {
@@ -855,7 +1005,11 @@
           }
         }
       },
-      "indexes": [ [ "name" ] ],
+      "indexes": [
+        [
+          "name"
+        ]
+      ],
       "isRoot": true
     },
     "Controller_Event": {
@@ -866,7 +1020,9 @@
               "type": "string",
               "enum": [
                 "set",
-                [ "empty_lb_backends" ]
+                [
+                  "empty_lb_backends"
+                ]
               ]
             }
           }
@@ -890,7 +1046,11 @@
             "max": 1
           }
         },
-        "seq_num": { "type": { "key": "integer" } }
+        "seq_num": {
+          "type": {
+            "key": "integer"
+          }
+        }
       },
       "isRoot": true
     },
@@ -919,9 +1079,15 @@
             "max": 1
           }
         },
-        "eth_src": { "type": "string" },
-        "ip4_src": { "type": "string" },
-        "ip6_src": { "type": "string" },
+        "eth_src": {
+          "type": "string"
+        },
+        "ip4_src": {
+          "type": "string"
+        },
+        "ip6_src": {
+          "type": "string"
+        },
         "table_size": {
           "type": {
             "key": "integer",
@@ -950,14 +1116,22 @@
             "max": 1
           }
         },
-        "seq_no": { "type": "integer" }
+        "seq_no": {
+          "type": "integer"
+        }
       },
-      "indexes": [ [ "datapath" ] ],
+      "indexes": [
+        [
+          "datapath"
+        ]
+      ],
       "isRoot": true
     },
     "IGMP_Group": {
       "columns": {
-        "address": { "type": "string" },
+        "address": {
+          "type": "string"
+        },
         "datapath": {
           "type": {
             "key": {
@@ -992,19 +1166,30 @@
           }
         }
       },
-      "indexes": [ [ "address", "datapath", "chassis" ] ],
+      "indexes": [
+        [
+          "address",
+          "datapath",
+          "chassis"
+        ]
+      ],
       "isRoot": true
     },
     "Service_Monitor": {
       "columns": {
-        "ip": { "type": "string" },
+        "ip": {
+          "type": "string"
+        },
         "protocol": {
           "type": {
             "key": {
               "type": "string",
               "enum": [
                 "set",
-                [ "tcp", "udp" ]
+                [
+                  "tcp",
+                  "udp"
+                ]
               ]
             },
             "min": 0,
@@ -1020,16 +1205,26 @@
             }
           }
         },
-        "logical_port": { "type": "string" },
-        "src_mac": { "type": "string" },
-        "src_ip": { "type": "string" },
+        "logical_port": {
+          "type": "string"
+        },
+        "src_mac": {
+          "type": "string"
+        },
+        "src_ip": {
+          "type": "string"
+        },
         "status": {
           "type": {
             "key": {
               "type": "string",
               "enum": [
                 "set",
-                [ "online", "offline", "error" ]
+                [
+                  "online",
+                  "offline",
+                  "error"
+                ]
               ]
             },
             "min": 0,
@@ -1053,12 +1248,21 @@
           }
         }
       },
-      "indexes": [ [ "logical_port", "ip", "port", "protocol" ] ],
+      "indexes": [
+        [
+          "logical_port",
+          "ip",
+          "port",
+          "protocol"
+        ]
+      ],
       "isRoot": true
     },
     "Load_Balancer": {
       "columns": {
-        "name": { "type": "string" },
+        "name": {
+          "type": "string"
+        },
         "vips": {
           "type": {
             "key": "string",
@@ -1073,7 +1277,11 @@
               "type": "string",
               "enum": [
                 "set",
-                [ "tcp", "udp", "sctp" ]
+                [
+                  "tcp",
+                  "udp",
+                  "sctp"
+                ]
               ]
             },
             "min": 0,
