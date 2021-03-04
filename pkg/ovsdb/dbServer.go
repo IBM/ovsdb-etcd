@@ -56,7 +56,7 @@ func (con *DBServer) Lock(ctx context.Context, id string) (bool, error) {
 		fmt.Println("UNLOCK")
 		err = mutex.Unlock(cnx)
 		if err != nil {
-			fmt.Errorf("Unlock returned %v\n", err)
+			err = fmt.Errorf("Unlock returned %v\n", err)
 		} else {
 			fmt.Printf("UNLOCKED done\n")
 		}
@@ -112,10 +112,12 @@ func (con *DBServer) LoadServerData() error {
 			Connected: true, Leader: true, Schema: schema, Version: ovsdbjson.Uuid(uuid.NewString())}
 		data, err := json.Marshal(srv)
 		if err != nil {
+			cancel = nil
 			return err
 		}
 		_, err = con.cli.Put(ctx, "ovsdb/_Server/Database/"+schemaName, string(data))
 		if err != nil {
+			cancel = nil
 			return err
 		}
 	}
