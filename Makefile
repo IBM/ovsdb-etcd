@@ -10,6 +10,7 @@ generate:
 	go run $(GEN) -s ./json/ovn-nb.ovsschema -d $(CODE_GEN_DIR)
 	go run $(GEN) -s ./json/ovn-sb.ovsschema -d $(CODE_GEN_DIR)
 	go run $(GEN) -s ./json/_server.ovsschema -d $(CODE_GEN_DIR)
+	gofmt -s -w $(CODE_GEN_DIR)
 
 VERIFY += fmt
 .PHONY: fmt

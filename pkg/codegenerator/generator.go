@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"runtime"
+	"sort"
 	"strings"
 
 	"k8s.io/klog"
@@ -66,7 +67,13 @@ func Run() {
 	tabMaps := map[string][]string{}
 
 	tablesMap := tables.(map[string]interface{})
-	for tableName, table := range tablesMap {
+	keys := make([]string, 0, len(tablesMap))
+	for k := range tablesMap {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, tableName := range keys {
+		table := tablesMap[tableName]
 		klog.V(6).Infof("Table name %s", tableName)
 		tabMap := table.(map[string]interface{})
 		columns, ok := tabMap["columns"]
@@ -125,10 +132,17 @@ func writeToFile(w io.Writer, structs map[string][]string) error {
 			return nil
 		}
 	}
-	for tableName, columns := range structs {
+	keys := make([]string, 0, len(structs))
+	for k := range structs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, tableName := range keys {
+		columns := structs[tableName]
 		if err := printStruct(w, tableName, columns); err != nil {
 			return err
 		}
+
 	}
 	return nil
 }
@@ -157,7 +171,13 @@ func getValueType(value interface{}) (string, error) {
 func parseColumns(tableName string, columns interface{}) ([]string, error) {
 	columnsMap := columns.(map[string]interface{})
 	structColumns := []string{}
-	for field, v := range columnsMap {
+	keys := make([]string, 0, len(columnsMap))
+	for k := range columnsMap {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, field := range keys {
+		v := columnsMap[field]
 		fieldName := toUppercase(field)
 		typeValue := v.(map[string]interface{})
 		var l string
