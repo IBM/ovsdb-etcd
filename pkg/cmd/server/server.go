@@ -74,7 +74,6 @@ func main() {
 		cancel()
 	}()
 
-
 	servOptions := &jrpc2.ServerOptions{
 		Concurrency: *maxTasks,
 		Metrics:     metrics.New(),
@@ -122,7 +121,7 @@ func main() {
 
 }
 
-func serverLoop(ctx context.Context, lst net.Listener, newService func() server.Service, serverOpts *jrpc2.ServerOptions, wg *sync.WaitGroup)  error {
+func serverLoop(ctx context.Context, lst net.Listener, newService func() server.Service, serverOpts *jrpc2.ServerOptions, wg *sync.WaitGroup) error {
 	for {
 		conn, err := lst.Accept()
 		if err != nil {

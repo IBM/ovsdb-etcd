@@ -49,7 +49,7 @@ func (s *ServOVSDB) List_dbs(ctx context.Context, param interface{}) ([]string, 
 	dbs := []string{}
 	for _, kv := range resp.Kvs {
 		slices := strings.Split(string(kv.Key), "/")
-		dbs = append(dbs, slices[len(slices) - 1])
+		dbs = append(dbs, slices[len(slices)-1])
 	}
 	return dbs, nil
 }
@@ -264,7 +264,7 @@ func (s *ServOVSDB) Unlock(ctx context.Context, param interface{}) (interface{},
 func (s *ServOVSDB) Monitor_cond(ctx context.Context, param []interface{}) (interface{}, error) {
 	fmt.Printf("Monitor_cond %T %+v\n", param, param)
 
-	resp, err := s.dbServer.GetData("ovsdb/" + param[0].(string), false)
+	resp, err := s.dbServer.GetData("ovsdb/"+param[0].(string), false)
 	if err != nil {
 		return nil, err
 	}
@@ -373,7 +373,7 @@ func (s *ServOVSDB) Convert(ctx context.Context, param interface{}) (interface{}
 //     	"result": same as "params"
 //     	"error": null
 //		"id": the request "id" member
-func (s *ServOVSDB) Echo(ctx context.Context, param interface{}) interface{}{
+func (s *ServOVSDB) Echo(ctx context.Context, param interface{}) interface{} {
 	fmt.Printf("Echo param %T %v\n", param, param)
 	return param
 }
