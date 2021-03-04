@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	ovsjson "github.com/roytman/ovsdb-etcd/pkg/json"
 	"log"
 	"net"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
 
+	ovsjson "github.com/ibm/ovsdb-etcd/pkg/json"
 )
 
 var serverAddr = flag.String("server", "", "Server address")
@@ -26,7 +26,7 @@ func echo(ctx context.Context, cli *jrpc2.Client) (result []interface{}, err err
 }
 
 func get_server_id(ctx context.Context, cli *jrpc2.Client) (result interface{}, err error) {
-	err = cli.CallResult(ctx, "get_server_id",[]string{}, &result)
+	err = cli.CallResult(ctx, "get_server_id", []string{}, &result)
 	return
 }
 
@@ -36,7 +36,7 @@ func lock(ctx context.Context, cli *jrpc2.Client, id string) (result interface{}
 }
 
 func unlock(ctx context.Context, cli *jrpc2.Client, id string) (result interface{}, err error) {
-	err = cli.CallResult(ctx, "unlock", []string{id} , &result)
+	err = cli.CallResult(ctx, "unlock", []string{id}, &result)
 	return
 }
 
@@ -94,6 +94,5 @@ func main() {
 	} else {
 		log.Printf("unlock result=%v", lock)
 	}
-
 
 }

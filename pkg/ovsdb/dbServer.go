@@ -4,15 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/creachadair/jrpc2"
-	"github.com/google/uuid"
-	"github.com/roytman/ovsdb-etcd/pkg/json/_Server"
-	clientv3 "go.etcd.io/etcd/client/v3"
-	"go.etcd.io/etcd/client/v3/concurrency"
 	"io/ioutil"
 	"strings"
 	"time"
-	ovsdbjson "github.com/roytman/ovsdb-etcd/pkg/json"
+
+	"github.com/creachadair/jrpc2"
+	"github.com/google/uuid"
+	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.etcd.io/etcd/client/v3/concurrency"
+
+	ovsdbjson "github.com/ibm/ovsdb-etcd/pkg/json"
+	"github.com/ibm/ovsdb-etcd/pkg/json/_Server"
 )
 
 type DBServer struct {
@@ -35,25 +37,25 @@ func NewDBServer(endpoints []string) (*DBServer, error) {
 	//defer cli.Close()
 	fmt.Println("etcd client is connected")
 	return &DBServer{cli: cli,
-		uuid:       uuid.NewString(),
+		uuid:        uuid.NewString(),
 		schemas:     make(map[string]string),
 		schemaTypes: make(map[string]map[string]map[string]string)}, nil
 }
 
-func (con *DBServer) Lock (ctx context.Context, id string) (bool, error) {
+func (con *DBServer) Lock(ctx context.Context, id string) (bool, error) {
 	cnx := context.TODO()
 	session, err := concurrency.NewSession(con.cli, concurrency.WithContext(cnx))
 	if err != nil {
 		return false, err
 	}
-	mutex := concurrency.NewMutex(session, "locks/" + id)
+	mutex := concurrency.NewMutex(session, "locks/"+id)
 	err = mutex.TryLock(cnx)
 	unlock := func() {
 		server := jrpc2.ServerFromContext(ctx)
 		server.Wait()
 		fmt.Println("UNLOCK")
 		err = mutex.Unlock(cnx)
-		if err!= nil {
+		if err != nil {
 			fmt.Errorf("Unlock returned %v\n", err)
 		} else {
 			fmt.Printf("UNLOCKED done\n")
@@ -81,15 +83,15 @@ func (con *DBServer) Lock (ctx context.Context, id string) (bool, error) {
 	return false, nil
 }
 
-func (con *DBServer) Unlock (ctx context.Context, id string) error {
+func (con *DBServer) Unlock(ctx context.Context, id string) error {
 	cnx := context.TODO()
 	session, err := concurrency.NewSession(con.cli, concurrency.WithContext(cnx))
 	if err != nil {
 		return err
 	}
-	mutex := concurrency.NewMutex(session, "locks/" + id)
+	mutex := concurrency.NewMutex(session, "locks/"+id)
 	// TODO
-	fmt.Printf( "is owner %+v\n", mutex.IsOwner())
+	fmt.Printf("is owner %+v\n", mutex.IsOwner())
 	mutex.Unlock(ctx)
 	return nil
 }
@@ -112,13 +114,11 @@ func (con *DBServer) LoadServerData() error {
 		if err != nil {
 			return err
 		}
-		_, err = con.cli.Put(ctx, "ovsdb/_Server/Database/" + schemaName, string(data))
+		_, err = con.cli.Put(ctx, "ovsdb/_Server/Database/"+schemaName, string(data))
 		if err != nil {
 			return err
 		}
 	}
-
-
 
 	// OVN_Northbound
 	// NB_Global

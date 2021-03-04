@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/viper"
 	"k8s.io/klog"
 
-	"github.com/roytman/ovsdb-etcd/pkg/codegenerator"
+	"github.com/ibm/ovsdb-etcd/pkg/codegenerator"
 )
 
 var (

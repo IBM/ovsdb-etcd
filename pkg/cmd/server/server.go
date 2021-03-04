@@ -18,7 +18,7 @@ import (
 	"github.com/creachadair/jrpc2/server"
 	"k8s.io/klog"
 
-	"github.com/roytman/ovsdb-etcd/pkg/ovsdb"
+	"github.com/ibm/ovsdb-etcd/pkg/ovsdb"
 )
 
 const UNIX_SOCKET = "/tmp/ovsdb-etcd.sock"

@@ -1,6 +1,6 @@
 package OVN_Southbound
 
-import "github.com/roytman/ovsdb-etcd/pkg/json"
+import "github.com/ibm/ovsdb-etcd/pkg/json"
 
 type Load_Balancer struct {
 	Name         string            `json:"name,omitempty"`

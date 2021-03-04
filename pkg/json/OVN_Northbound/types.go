@@ -1,6 +1,6 @@
 package OVN_Northbound
 
-import "github.com/roytman/ovsdb-etcd/pkg/json"
+import "github.com/ibm/ovsdb-etcd/pkg/json"
 
 type Meter_Band struct {
 	Burst_size   int64             `json:"burst_size,omitempty"`

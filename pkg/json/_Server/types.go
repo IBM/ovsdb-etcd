@@ -1,6 +1,6 @@
 package _Server
 
-import "github.com/roytman/ovsdb-etcd/pkg/json"
+import "github.com/ibm/ovsdb-etcd/pkg/json"
 
 type Database struct {
 	Model     string    `json:"model,omitempty"`

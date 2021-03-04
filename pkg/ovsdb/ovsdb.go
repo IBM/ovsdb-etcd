@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	ovsjson "github.com/roytman/ovsdb-etcd/pkg/json"
+	ovsjson "github.com/ibm/ovsdb-etcd/pkg/json"
 )
 
 type ServOVSDB struct {
