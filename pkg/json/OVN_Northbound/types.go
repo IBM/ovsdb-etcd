@@ -24,6 +24,19 @@ type Address_Set struct {
 	Uuid         json.Uuid         `json:"uuid,omitempty"`
 }
 
+type BFD struct {
+	Detect_mult  int64             `json:"detect_mult,omitempty"`
+	Dst_ip       string            `json:"dst_ip,omitempty"`
+	External_ids map[string]string `json:"external_ids,omitempty"`
+	Logical_port string            `json:"logical_port,omitempty"`
+	Min_rx       int64             `json:"min_rx,omitempty"`
+	Min_tx       int64             `json:"min_tx,omitempty"`
+	Options      map[string]string `json:"options,omitempty"`
+	Status       string            `json:"status,omitempty"`
+	Version      json.Uuid         `json:"_version,omitempty"`
+	Uuid         json.Uuid         `json:"uuid,omitempty"`
+}
+
 type Connection struct {
 	External_ids     map[string]string `json:"external_ids,omitempty"`
 	Inactivity_probe int64             `json:"inactivity_probe,omitempty"`
@@ -152,6 +165,7 @@ type Logical_Router_Port struct {
 }
 
 type Logical_Router_Static_Route struct {
+	Bfd          json.Uuid         `json:"bfd,omitempty"`
 	External_ids map[string]string `json:"external_ids,omitempty"`
 	Ip_prefix    string            `json:"ip_prefix,omitempty"`
 	Nexthop      string            `json:"nexthop,omitempty"`

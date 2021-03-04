@@ -9,6 +9,21 @@ type Address_Set struct {
 	Uuid      json.Uuid `json:"uuid,omitempty"`
 }
 
+type BFD struct {
+	Detect_mult  int64             `json:"detect_mult,omitempty"`
+	Disc         int64             `json:"disc,omitempty"`
+	Dst_ip       string            `json:"dst_ip,omitempty"`
+	External_ids map[string]string `json:"external_ids,omitempty"`
+	Logical_port string            `json:"logical_port,omitempty"`
+	Min_rx       int64             `json:"min_rx,omitempty"`
+	Min_tx       int64             `json:"min_tx,omitempty"`
+	Options      map[string]string `json:"options,omitempty"`
+	Src_port     int64             `json:"src_port,omitempty"`
+	Status       string            `json:"status,omitempty"`
+	Version      json.Uuid         `json:"_version,omitempty"`
+	Uuid         json.Uuid         `json:"uuid,omitempty"`
+}
+
 type Chassis struct {
 	Encaps                []json.Uuid       `json:"encaps,omitempty"`
 	External_ids          map[string]string `json:"external_ids,omitempty"`
@@ -96,6 +111,14 @@ type Encap struct {
 	Uuid         json.Uuid         `json:"uuid,omitempty"`
 }
 
+type FDB struct {
+	Dp_key   int64     `json:"dp_key,omitempty"`
+	Mac      string    `json:"mac,omitempty"`
+	Port_key int64     `json:"port_key,omitempty"`
+	Version  json.Uuid `json:"_version,omitempty"`
+	Uuid     json.Uuid `json:"uuid,omitempty"`
+}
+
 type Gateway_Chassis struct {
 	Chassis      json.Uuid         `json:"chassis,omitempty"`
 	External_ids map[string]string `json:"external_ids,omitempty"`
@@ -152,6 +175,7 @@ type Load_Balancer struct {
 	Datapaths    []json.Uuid       `json:"datapaths,omitempty"`
 	External_ids map[string]string `json:"external_ids,omitempty"`
 	Name         string            `json:"name,omitempty"`
+	Options      map[string]string `json:"options,omitempty"`
 	Protocol     string            `json:"protocol,omitempty"`
 	Vips         map[string]string `json:"vips,omitempty"`
 	Version      json.Uuid         `json:"_version,omitempty"`
@@ -226,6 +250,7 @@ type Port_Binding struct {
 	Tag              int64             `json:"tag,omitempty"`
 	Tunnel_key       int64             `json:"tunnel_key,omitempty"`
 	Type             string            `json:"type,omitempty"`
+	Up               bool              `json:"up,omitempty"`
 	Virtual_parent   string            `json:"virtual_parent,omitempty"`
 	Version          json.Uuid         `json:"_version,omitempty"`
 	Uuid             json.Uuid         `json:"uuid,omitempty"`
