@@ -120,7 +120,7 @@ type Meter struct {
 	Name         string            `json:"name"`
 	Unit         string            `json:"unit"`
 	Bands        []string          `json:"bands"`
-	fair         []bool            `json:"fair"`
+	Fair         []bool            `json:"fair"`
 	External_ids map[string]string `json:"external_ids"`
 }
 

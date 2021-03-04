@@ -15,26 +15,26 @@ generate:
 VERIFY += fmt
 .PHONY: fmt
 fmt:
-	go fmt ./... || true
+	go fmt ./...
 
 VERIFY += vet
 .PHONY: vet
 vet:
-	go vet ./... || true
+	go vet ./...
 
 VERIFY += fix
 .PHONY: fix
 fix:
-	go fix ./... || true
+	go fix ./...
 
 VERIFY += tidy
 .PHONY: tidy
 tidy:
-	go mod tidy || true
+	go mod tidy
 
 .PHONY: verify
 verify: $(VERIFY)
-	git diff --exit-code || true
+	git diff --exit-code
 
 .PHONY: tests
 tests:
