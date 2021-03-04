@@ -1,0 +1,42 @@
+language: go
+
+services:
+- docker
+
+os:
+- linux
+
+go:
+- "1.16"
+
+git:
+  depth: 3
+
+cache:
+  directories:
+  - $GOPATH/pkg/mod
+
+# Install must be set to prevent default `go get` to run.
+# The dependencies have already been vendored by `dep` so
+# we don't need to fetch them.
+install:
+-
+
+jobs:
+  include: 
+  - stage: Verify
+    name: "Verify code"
+    install:
+    - make install-tools
+    script:
+    - make verify
+
+  - stage: Test
+    name: "Run tests"
+    install:
+    - make install-tools
+    script:
+    - make tests
+
+notifications:
+  email: false
