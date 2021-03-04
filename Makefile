@@ -7,12 +7,12 @@ install-tools:
 
 VERIFY += generate
 .PHONY: generate
-generate: CODE_GEN_DIR = pkg/json
-generate: GEN = pkg/cmd/codegenerator/generator.go
+generate: CODE_GEN_DIR = pkg/types
+generate: GEN = pkg/cmd/generator/generator.go
 generate:
-	go run $(GEN) -s ./json/ovn-nb.ovsschema -d $(CODE_GEN_DIR)
-	go run $(GEN) -s ./json/ovn-sb.ovsschema -d $(CODE_GEN_DIR)
-	go run $(GEN) -s ./json/_server.ovsschema -d $(CODE_GEN_DIR)
+	go run $(GEN) -s ./schemas/ovn-nb.ovsschema -d $(CODE_GEN_DIR)
+	go run $(GEN) -s ./schemas/ovn-sb.ovsschema -d $(CODE_GEN_DIR)
+	go run $(GEN) -s ./schemas/_server.ovsschema -d $(CODE_GEN_DIR)
 	gofmt -s -w $(CODE_GEN_DIR)
 
 VERIFY += fmt
