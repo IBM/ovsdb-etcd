@@ -1,6 +1,10 @@
 CODE_GEN_DIR = pkg/json
 GEN = pkg/cmd/codegenerator/generator.go
 
+TCP_ADDRESS = 127.0.0.1:12345
+UNIX_Address = /tmp/unix.soc 
+
+
 #.PHONY: build
 #build:
 #	go build
@@ -14,4 +18,4 @@ generate:
 
 .PHONY: run_server
 run_server: 
-	go run pkg/cmd/server/server.go
+	go run pkg/cmd/server/server.go -tcp-address $(TCP_ADDRESS)  -unix-address $(UNIX_Address)
