@@ -100,6 +100,14 @@ func printStruct(w io.Writer, tableName string, columns []string) error {
 			return err
 		}
 	}
+	// Add UUID and _version
+	if _, err := fmt.Fprintf(w, "\t Version json.Uuid `json:\"_version,omitempty\"`\n"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "\t Uuid json.Uuid `json:\"uuid,omitempty\"`"); err != nil {
+		return err
+	}
+
 	_, err := fmt.Fprintln(w, "}\n")
 	return err
 }

@@ -65,13 +65,13 @@ func main() {
 	ctx := context.Background()
 
 	log.Print("\n-- Sending some individual requests...")
-/*
+
 	if dbs, err := list_dbs(ctx, cli); err != nil {
 		log.Fatalln("Ovsdb.List_dbs:", err)
 	} else {
 		log.Printf("Ovsdb.List_dbs result=%v", dbs)
 	}
-*/
+
 	if echo, err := echo(ctx, cli); err != nil {
 		log.Fatalln("Ovsdb.Echo:", err)
 	} else {

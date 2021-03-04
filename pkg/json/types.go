@@ -31,3 +31,7 @@ type Delete struct {
 type Modify struct {
 	Modify interface{} `json:"modify"`
 }
+
+func (uuid Uuid) String() string {
+	return string(uuid)
+}
