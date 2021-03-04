@@ -238,7 +238,7 @@ func (con *DBServer) GetMarshaled(prefix string, columns []interface{}) (*[]map[
 			valsmap = map[string]string{}
 		}
 		valsmap[keys[len-1]] = string(v.Value)
-		fmt.Printf("GetMarshaled $v=%v\n", keys[len-1], string(v.Value))
+		fmt.Printf("GetMarshaled %v=%v\n", keys[len-1], string(v.Value))
 
 		// TODO
 		retMaps[keys[len-3]] = valsmap

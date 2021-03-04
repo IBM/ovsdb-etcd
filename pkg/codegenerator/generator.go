@@ -108,7 +108,7 @@ func printStruct(w io.Writer, tableName string, columns []string) error {
 		return err
 	}
 
-	_, err := fmt.Fprintln(w, "}\n")
+	_, err := fmt.Fprint(w, "}\n\n")
 	return err
 }
 

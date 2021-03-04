@@ -37,7 +37,7 @@ verify: $(VERIFY)
 
 .PHONY: tests
 tests:
-	go test ./... || true
+	go test ./...
 
 .PHONY: server
 server: TCP_ADDRESS = 127.0.0.1:12345

@@ -39,7 +39,7 @@ func main() {
 	}
 
 	if len(*etcdMembers) == 0 {
-		klog.Fatal("Wrong ETCD members list '%s'", etcdMembers )
+		klog.Fatal("Wrong ETCD members list", etcdMembers)
 	}
 	etcdServers := strings.Split(*etcdMembers, ",")
 	dbServ, err := ovsdb.NewDBServer(etcdServers)

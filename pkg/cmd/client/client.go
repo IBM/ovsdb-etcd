@@ -85,7 +85,7 @@ func main() {
 	}
 
 	if lock, err := lock(ctx, cli, "test1"); err != nil {
-		log.Fatalln("lock: %v", err)
+		log.Fatalln("lock:", err)
 	} else {
 		log.Printf("lock result=%v", lock)
 	}
