@@ -9,14 +9,12 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
-
-	ovsjson "github.com/ibm/ovsdb-etcd/pkg/json"
 )
 
 var serverAddr = flag.String("server", "", "Server address")
 
 func list_dbs(ctx context.Context, cli *jrpc2.Client) (result []string, err error) {
-	err = cli.CallResult(ctx, "list_dbs", ovsjson.EmptyStruct{}, &result)
+	err = cli.CallResult(ctx, "list_dbs", nil, &result)
 	return
 }
 
@@ -26,7 +24,7 @@ func echo(ctx context.Context, cli *jrpc2.Client) (result []interface{}, err err
 }
 
 func get_server_id(ctx context.Context, cli *jrpc2.Client) (result interface{}, err error) {
-	err = cli.CallResult(ctx, "get_server_id", []string{}, &result)
+	err = cli.CallResult(ctx, "get_server_id", nil, &result)
 	return
 }
 
