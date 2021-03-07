@@ -248,7 +248,13 @@ func createFiledLine(fieldName string, filedType interface{}, field string, max 
 	if isSet {
 		maxStr := fmt.Sprintf("%v", max)
 		if maxStr != "1" {
-			return fmt.Sprintf(" %s \t[]%s `json:\"%s,omitempty\"`\n", fieldName, typeConvert(filedType), field)
+			var convertedType string
+			if filedType == "string" {
+				convertedType = "json.Set"
+			} else {
+				convertedType = "[]" + typeConvert(filedType)
+			}
+			return fmt.Sprintf(" %s \t%s `json:\"%s,omitempty\"`\n", fieldName, convertedType, field)
 		}
 	}
 	return fmt.Sprintf(" %s \t%s `json:\"%s,omitempty\"`\n", fieldName, typeConvert(filedType), field)

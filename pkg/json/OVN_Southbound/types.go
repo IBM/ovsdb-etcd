@@ -3,7 +3,7 @@ package OVN_Southbound
 import "github.com/ibm/ovsdb-etcd/pkg/json"
 
 type Address_Set struct {
-	Addresses []string  `json:"addresses,omitempty"`
+	Addresses json.Set  `json:"addresses,omitempty"`
 	Name      string    `json:"name,omitempty"`
 	Version   json.Uuid `json:"_version,omitempty"`
 	Uuid      json.Uuid `json:"uuid,omitempty"`
@@ -31,8 +31,8 @@ type Chassis struct {
 	Name                  string            `json:"name,omitempty"`
 	Nb_cfg                int64             `json:"nb_cfg,omitempty"`
 	Other_config          map[string]string `json:"other_config,omitempty"`
-	Transport_zones       []string          `json:"transport_zones,omitempty"`
-	Vtep_logical_switches []string          `json:"vtep_logical_switches,omitempty"`
+	Transport_zones       json.Set          `json:"transport_zones,omitempty"`
+	Vtep_logical_switches json.Set          `json:"vtep_logical_switches,omitempty"`
 	Version               json.Uuid         `json:"_version,omitempty"`
 	Uuid                  json.Uuid         `json:"uuid,omitempty"`
 }
@@ -243,8 +243,8 @@ type Port_Binding struct {
 	Gateway_chassis  []json.Uuid       `json:"gateway_chassis,omitempty"`
 	Ha_chassis_group json.Uuid         `json:"ha_chassis_group,omitempty"`
 	Logical_port     string            `json:"logical_port,omitempty"`
-	Mac              []string          `json:"mac,omitempty"`
-	Nat_addresses    []string          `json:"nat_addresses,omitempty"`
+	Mac              json.Set          `json:"mac,omitempty"`
+	Nat_addresses    json.Set          `json:"nat_addresses,omitempty"`
 	Options          map[string]string `json:"options,omitempty"`
 	Parent_port      string            `json:"parent_port,omitempty"`
 	Tag              int64             `json:"tag,omitempty"`
@@ -258,16 +258,16 @@ type Port_Binding struct {
 
 type Port_Group struct {
 	Name    string    `json:"name,omitempty"`
-	Ports   []string  `json:"ports,omitempty"`
+	Ports   json.Set  `json:"ports,omitempty"`
 	Version json.Uuid `json:"_version,omitempty"`
 	Uuid    json.Uuid `json:"uuid,omitempty"`
 }
 
 type RBAC_Permission struct {
-	Authorization []string  `json:"authorization,omitempty"`
+	Authorization json.Set  `json:"authorization,omitempty"`
 	Insert_delete bool      `json:"insert_delete,omitempty"`
 	Table         string    `json:"table,omitempty"`
-	Update        []string  `json:"update,omitempty"`
+	Update        json.Set  `json:"update,omitempty"`
 	Version       json.Uuid `json:"_version,omitempty"`
 	Uuid          json.Uuid `json:"uuid,omitempty"`
 }

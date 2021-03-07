@@ -17,7 +17,7 @@ type ACL struct {
 }
 
 type Address_Set struct {
-	Addresses    []string          `json:"addresses,omitempty"`
+	Addresses    json.Set          `json:"addresses,omitempty"`
 	External_ids map[string]string `json:"external_ids,omitempty"`
 	Name         string            `json:"name,omitempty"`
 	Version      json.Uuid         `json:"_version,omitempty"`
@@ -65,7 +65,7 @@ type DNS struct {
 }
 
 type Forwarding_Group struct {
-	Child_port   []string          `json:"child_port,omitempty"`
+	Child_port   json.Set          `json:"child_port,omitempty"`
 	External_ids map[string]string `json:"external_ids,omitempty"`
 	Liveness     bool              `json:"liveness,omitempty"`
 	Name         string            `json:"name,omitempty"`
@@ -108,7 +108,7 @@ type Load_Balancer struct {
 	Name             string            `json:"name,omitempty"`
 	Options          map[string]string `json:"options,omitempty"`
 	Protocol         string            `json:"protocol,omitempty"`
-	Selection_fields []string          `json:"selection_fields,omitempty"`
+	Selection_fields json.Set          `json:"selection_fields,omitempty"`
 	Vips             map[string]string `json:"vips,omitempty"`
 	Version          json.Uuid         `json:"_version,omitempty"`
 	Uuid             json.Uuid         `json:"uuid,omitempty"`
@@ -141,7 +141,7 @@ type Logical_Router_Policy struct {
 	External_ids map[string]string `json:"external_ids,omitempty"`
 	Match        string            `json:"match,omitempty"`
 	Nexthop      string            `json:"nexthop,omitempty"`
-	Nexthops     []string          `json:"nexthops,omitempty"`
+	Nexthops     json.Set          `json:"nexthops,omitempty"`
 	Options      map[string]string `json:"options,omitempty"`
 	Priority     int64             `json:"priority,omitempty"`
 	Version      json.Uuid         `json:"_version,omitempty"`
@@ -153,11 +153,11 @@ type Logical_Router_Port struct {
 	External_ids     map[string]string `json:"external_ids,omitempty"`
 	Gateway_chassis  []json.Uuid       `json:"gateway_chassis,omitempty"`
 	Ha_chassis_group json.Uuid         `json:"ha_chassis_group,omitempty"`
-	Ipv6_prefix      []string          `json:"ipv6_prefix,omitempty"`
+	Ipv6_prefix      json.Set          `json:"ipv6_prefix,omitempty"`
 	Ipv6_ra_configs  map[string]string `json:"ipv6_ra_configs,omitempty"`
 	Mac              string            `json:"mac,omitempty"`
 	Name             string            `json:"name,omitempty"`
-	Networks         []string          `json:"networks,omitempty"`
+	Networks         json.Set          `json:"networks,omitempty"`
 	Options          map[string]string `json:"options,omitempty"`
 	Peer             string            `json:"peer,omitempty"`
 	Version          json.Uuid         `json:"_version,omitempty"`
@@ -191,7 +191,7 @@ type Logical_Switch struct {
 }
 
 type Logical_Switch_Port struct {
-	Addresses         []string          `json:"addresses,omitempty"`
+	Addresses         json.Set          `json:"addresses,omitempty"`
 	Dhcpv4_options    json.Uuid         `json:"dhcpv4_options,omitempty"`
 	Dhcpv6_options    json.Uuid         `json:"dhcpv6_options,omitempty"`
 	Dynamic_addresses string            `json:"dynamic_addresses,omitempty"`
@@ -201,7 +201,7 @@ type Logical_Switch_Port struct {
 	Name              string            `json:"name,omitempty"`
 	Options           map[string]string `json:"options,omitempty"`
 	Parent_name       string            `json:"parent_name,omitempty"`
-	Port_security     []string          `json:"port_security,omitempty"`
+	Port_security     json.Set          `json:"port_security,omitempty"`
 	Tag               int64             `json:"tag,omitempty"`
 	Tag_request       int64             `json:"tag_request,omitempty"`
 	Type              string            `json:"type,omitempty"`
