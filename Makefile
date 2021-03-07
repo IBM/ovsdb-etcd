@@ -41,7 +41,7 @@ verify: $(VERIFY)
 
 .PHONY: tests
 tests:
-	go test ./...
+	go test -v ./...
 
 .PHONY: server
 server: 
