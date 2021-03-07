@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/ebay/libovsdb"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -120,7 +121,7 @@ func TestCondMonitorParameters(t *testing.T) {
 	actualCMP := CondMonitorParameters{}
 	err := json.Unmarshal(s, &actualCMP)
 	assert.Nil(t, err)
-	expectedSelect := &Select{Modify: true, Initial: true, Insert: false, Delete: true}
+	expectedSelect := &libovsdb.MonitorSelect{Modify: true, Initial: true, Insert: false, Delete: true}
 	mcr := MonitorCondRequest{Columns: []interface{}{"model"},
 		Select: expectedSelect}
 

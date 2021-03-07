@@ -1,5 +1,9 @@
 package json
 
+import (
+	"github.com/ebay/libovsdb"
+)
+
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000"
 
 type Uuid string
@@ -39,32 +43,10 @@ type Modify struct {
 	Modify interface{} `json:"modify,omitempty"`
 }
 
-// base struct for Monitor notifications
-type RowUpdate struct {
-	New New `json:"new,omitempty"`
-	Old Old `json:"old,omitempty"`
-}
-
-// presents for "initial", "insert", and "modify" updates of Monitor
-type New struct {
-	New interface{} `json:"new,omitempty"`
-}
-
-type Old struct {
-	Old interface{} `json:"old,omitempty"`
-}
-
-type Select struct {
-	Modify  bool `json:"modify"`
-	Initial bool `json:"initial"`
-	Insert  bool `json:"insert"`
-	Delete  bool `json:"delete"`
-}
-
 type MonitorCondRequest struct {
-	Columns []interface{} `json:"columns,omitempty"`
-	Where   [][]string    `json:"where,omitempty"`
-	Select  *Select       `json:"select,omitempty"`
+	Columns []interface{}           `json:"columns,omitempty"`
+	Where   [][]string              `json:"where,omitempty"`
+	Select  *libovsdb.MonitorSelect `json:"select,omitempty"`
 }
 
 type CondMonitorParameters struct {

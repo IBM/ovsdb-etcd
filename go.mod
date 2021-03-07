@@ -3,7 +3,9 @@ module github.com/ibm/ovsdb-etcd
 go 1.15
 
 require (
+	github.com/cenk/hub v1.0.1 // indirect
 	github.com/creachadair/jrpc2 v0.12.0
+	github.com/ebay/libovsdb v0.0.0-20190718202342-e49b8c4e1142
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/golang/protobuf v1.4.2 // indirect
 	github.com/google/uuid v1.2.0
