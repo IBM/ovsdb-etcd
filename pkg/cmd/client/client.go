@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"log"
 	"net"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
+	"k8s.io/klog/v2"
 )
 
 var serverAddr = flag.String("server", "", "Server address")
@@ -39,58 +39,59 @@ func unlock(ctx context.Context, cli *jrpc2.Client, id string) (result interface
 }
 
 func main() {
+	klog.InitFlags(nil)
 	flag.Parse()
 	if *serverAddr == "" {
-		log.Fatal("You must provide -server address to connect to")
+		klog.Fatal("You must provide -server address to connect to")
 	}
 
 	conn, err := net.Dial(jrpc2.Network(*serverAddr), *serverAddr)
 	if err != nil {
-		log.Fatalf("Dial %q: %v", *serverAddr, err)
+		klog.Fatalf("Dial %q: %v", *serverAddr, err)
 	}
-	log.Printf("Connected to %v", conn.RemoteAddr())
+	klog.Infof("Connected to %v", conn.RemoteAddr())
 
 	// Start up the client, and enable logging to stderr.
 	cli := jrpc2.NewClient(channel.RawJSON(conn, conn), &jrpc2.ClientOptions{
 		OnNotify: func(req *jrpc2.Request) {
 			var params json.RawMessage
 			req.UnmarshalParams(&params)
-			log.Printf("[server push] Method %q params %#q", req.Method(), string(params))
+			klog.Infof("[server push] Method %q params %#q", req.Method(), string(params))
 		},
 		AllowV1: true,
 	})
 	defer cli.Close()
 	ctx := context.Background()
 
-	log.Print("\n-- Sending some individual requests...")
+	klog.Info("\n-- Sending some individual requests...")
 
 	if dbs, err := list_dbs(ctx, cli); err != nil {
-		log.Fatalln("Ovsdb.List_dbs:", err)
+		klog.Fatalln("Ovsdb.List_dbs:", err)
 	} else {
-		log.Printf("Ovsdb.List_dbs result=%v", dbs)
+		klog.Info("Ovsdb.List_dbs result=%v", dbs)
 	}
 
 	if echo, err := echo(ctx, cli); err != nil {
-		log.Fatalln("Ovsdb.Echo:", err)
+		klog.Fatalln("Ovsdb.Echo:", err)
 	} else {
-		log.Printf("Ovsdb.Echo result=%v", echo)
+		klog.Info("Ovsdb.Echo result=%v", echo)
 	}
 
 	if uuid, err := get_server_id(ctx, cli); err != nil {
-		log.Fatalln("Get_server_id:", err)
+		klog.Fatalln("Get_server_id:", err)
 	} else {
-		log.Printf("Get_server_id result=%v", uuid)
+		klog.Info("Get_server_id result=%v", uuid)
 	}
 
 	if lock, err := lock(ctx, cli, "test1"); err != nil {
-		log.Fatalln("lock:", err)
+		klog.Fatalln("lock:", err)
 	} else {
-		log.Printf("lock result=%v", lock)
+		klog.Info("lock result=%v", lock)
 	}
 	if lock, err := unlock(ctx, cli, "test1"); err != nil {
-		log.Fatalf("unlock: %v", err)
+		klog.Fatalf("unlock: %v", err)
 	} else {
-		log.Printf("unlock result=%v", lock)
+		klog.Info("unlock result=%v", lock)
 	}
 
 }

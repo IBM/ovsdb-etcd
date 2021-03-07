@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/creachadair/jrpc2"
+	"k8s.io/klog/v2"
 
 	ovsjson "github.com/ibm/ovsdb-etcd/pkg/json"
 )
@@ -25,7 +26,7 @@ type ServOVSDB struct {
 //   	"error": null
 //   	"id": same "id" as request
 func (s *ServOVSDB) List_dbs(ctx context.Context) ([]string, error) {
-	// fmt.Printf("List_dbs param %T %v\n", param, param)
+	klog.V(5).Infof("List_dbs request")
 	resp, err := s.dbServer.GetData("ovsdb/_Server/Database/", true)
 	if err != nil {
 		return nil, err
@@ -50,7 +51,8 @@ func (s *ServOVSDB) List_dbs(ctx context.Context) ([]string, error) {
 //      "error": "unknown database"
 //      "id": same "id" as request
 func (s *ServOVSDB) Get_schema(ctx context.Context, param interface{}) (interface{}, error) {
-	fmt.Printf("Get_schema prame %T %v\n", param, param)
+	klog.V(5).Infof("Get_schema request, parameters %v", param)
+
 	var schemaName string
 	switch param.(type) {
 	case string:
@@ -85,20 +87,17 @@ func (s *ServOVSDB) Get_schema(ctx context.Context, param interface{}) (interfac
 // "error" and a "result" member that is an array with the same number of elements as "params".  Each element of the
 // "result" array corresponds to the same element of the "params" array.
 func (s *ServOVSDB) Transact(ctx context.Context, param []interface{}) (interface{}, error) {
+	klog.V(5).Infof("Transact request, parameters %v", param)
 	for k, v := range param {
-		fmt.Printf("Transact k = %d v= %#v\n", k, v)
+		klog.V(6).Infof("Transact k = %d v= %v\n", k, v)
 		valuesMap, ok := v.(map[string]interface{})
 		if ok {
-			for km, vm := range valuesMap {
-				fmt.Printf("\t  k = %v v= %+v\n", km, vm)
-			}
 			if valuesMap["op"] == "select" {
 				tabel, okt := valuesMap["table"]
 				if !okt {
 					return nil, fmt.Errorf("Table is not specified")
 				}
 				colomns, _ := valuesMap["columns"]
-				fmt.Printf("Columns type %T\n", colomns)
 				resp, err := s.dbServer.GetMarshaled("ovsdb/"+tabel.(string), colomns.([]interface{}))
 				if err != nil {
 					return nil, err
@@ -113,7 +112,7 @@ func (s *ServOVSDB) Transact(ctx context.Context, param []interface{}) (interfac
 }
 
 func (s *ServOVSDB) Cancel(ctx context.Context, param interface{}) (interface{}, error) {
-	fmt.Printf("Cancel %T, %+v\n", param, param)
+	klog.V(5).Infof("Cancel request, parameters %v", param)
 
 	return "{Cancel}", nil
 }
@@ -127,13 +126,13 @@ func (s *ServOVSDB) Cancel(ctx context.Context, param interface{}) (interface{},
 //   "error": null
 //   "id": same "id" as request
 func (s *ServOVSDB) Monitor(ctx context.Context, param interface{}) (interface{}, error) {
-	fmt.Printf("Monitor %T, %+v\n", param, param)
+	klog.V(5).Infof("Monitor request, parameters %v", param)
 
 	return ovsjson.EmptyStruct{}, nil
 }
 
 func (s *ServOVSDB) Monitor_cancel(ctx context.Context, param interface{}) (interface{}, error) {
-	fmt.Printf("Monitor_cancel %T, %+v\n", param, param)
+	klog.V(5).Infof("Monitor_cancel request, parameters %v", param)
 
 	return "{Monitor_cancel}", nil
 }
@@ -146,7 +145,7 @@ func (s *ServOVSDB) Monitor_cancel(ctx context.Context, param interface{}) (inte
 // "params": [<id>]
 // Returns "result": {"locked": boolean}
 func (s *ServOVSDB) Lock(ctx context.Context, param interface{}) (interface{}, error) {
-	fmt.Printf("Lock %T, %+v\n", param, param)
+	klog.V(5).Infof("Lock request, parameters %v", param)
 	//defer notification(ctx)
 	var id string
 	// param is []interface{}, but just in case ...
@@ -155,7 +154,7 @@ func (s *ServOVSDB) Lock(ctx context.Context, param interface{}) (interface{}, e
 		intArray := param.([]interface{})
 		if len(intArray) == 0 {
 			// Error
-			fmt.Printf("Empty params")
+			klog.Warningf("Empty params")
 			return []interface{}{"locked", false}, nil
 		} else {
 			id = fmt.Sprintf("%s", intArray[0])
@@ -168,7 +167,7 @@ func (s *ServOVSDB) Lock(ctx context.Context, param interface{}) (interface{}, e
 	locked, err := s.dbServer.Lock(ctx, id)
 	if err != nil {
 		// TODO should we return error ?
-		fmt.Printf("Lock returned error %v\n", err)
+		klog.Warningf("Lock returned error %v\n", err)
 	}
 	return []interface{}{"locked", locked}, nil
 }
@@ -178,7 +177,7 @@ func notification(ctx context.Context) {
 		for {
 			time.Sleep(3 * time.Second)
 			if err := jrpc2.PushNotify(ctx, "pushback", []string{"hello, friend"}); err != nil {
-				fmt.Printf("notification %v\n", err)
+				klog.Errorf("notification %v\n", err)
 				return
 
 			}
@@ -187,7 +186,7 @@ func notification(ctx context.Context) {
 }
 
 func (s *ServOVSDB) Unlock(ctx context.Context, param interface{}) (interface{}, error) {
-	fmt.Printf("Unlock %T, %+v\n", param, param)
+	klog.V(5).Infof("Unlock request, parameters %v", param)
 	var id string
 	// param is []interface{}, but just in case ...
 	switch param.(type) {
@@ -195,7 +194,7 @@ func (s *ServOVSDB) Unlock(ctx context.Context, param interface{}) (interface{},
 		intArray := param.([]interface{})
 		if len(intArray) == 0 {
 			// Error
-			fmt.Printf("Empty params")
+			klog.Warningf("Empty params")
 			return []interface{}{"locked", false}, nil
 		} else {
 			id = fmt.Sprintf("%s", intArray[0])
@@ -240,17 +239,15 @@ func (s *ServOVSDB) Unlock(ctx context.Context, param interface{}) (interface{},
 //  "error": null
 //  "id": same "id" as request
 func (s *ServOVSDB) Monitor_cond(ctx context.Context, param ovsjson.CondMonitorParameters) (interface{}, error) {
-	fmt.Printf("Monitor_cond %T %+v\n", param, param)
+	klog.V(5).Infof("Monitor_cond request, parameters %v", param)
 
 	return s.getMonitoredData(param.DatabaseName, param.MonitorCondRequests)
 
 }
 
 func (s *ServOVSDB) Monitor_cond_change(ctx context.Context, param []interface{}) (interface{}, error) {
-	fmt.Printf("Monitor_cond_change %T, %+v\n", param, param)
-	for i, pr := range param {
-		fmt.Printf("Monitor_cond_change par %d => %s\n", i, pr)
-	}
+	klog.V(5).Infof("Monitor_cond_change request, parameters %v", param)
+
 	return "{Monitor_cond_change}", nil
 }
 
@@ -278,7 +275,7 @@ func (s *ServOVSDB) Monitor_cond_change(ctx context.Context, param []interface{}
 // response, it is the same as the <last-txn-id> in the request if <found> is true, or zero uuid if <found> is false.
 // If the server does not support transaction uuid, it will be zero uuid as well.
 func (s *ServOVSDB) Monitor_cond_since(ctx context.Context, param ovsjson.CondMonitorParameters) (interface{}, error) {
-	fmt.Printf("Monitor_cond_since %T, %+v\n", param, param)
+	klog.V(5).Infof("Monitor_cond_since request, parameters %v", param)
 
 	data, err := s.getMonitoredData(param.DatabaseName, param.MonitorCondRequests)
 	if err != nil {
@@ -293,7 +290,7 @@ func (s *ServOVSDB) Monitor_cond_since(ctx context.Context, param ovsjson.CondMo
 // <server_id> is JSON string that contains a UUID that uniquely identifies the running OVSDB server process.
 // A fresh UUID is generated when the process restarts.
 func (s *ServOVSDB) Get_server_id(ctx context.Context) string {
-	fmt.Println("Get_server_id")
+	klog.V(5).Infof("Get_server_id request")
 	return s.dbServer.uuid
 }
 
@@ -310,12 +307,12 @@ func (s *ServOVSDB) Get_server_id(ctx context.Context) string {
 // and false restores the default behavior. The reply is always the same:
 // "result": {}
 func (s *ServOVSDB) Set_db_change_aware(ctx context.Context, param interface{}) interface{} {
-	fmt.Printf("Set_db_change_aware %+v\n", param)
+	klog.V(5).Infof("Set_db_change_aware request, parameters %v", param)
 	return ovsjson.EmptyStruct{}
 }
 
 func (s *ServOVSDB) Convert(ctx context.Context, param interface{}) (interface{}, error) {
-	fmt.Printf("Convert %+v\n", param)
+	klog.V(5).Infof("Convert request, parameters %v", param)
 	return "{Convert}", nil
 }
 
@@ -326,7 +323,7 @@ func (s *ServOVSDB) Convert(ctx context.Context, param interface{}) (interface{}
 //     	"error": null
 //		"id": the request "id" member
 func (s *ServOVSDB) Echo(ctx context.Context, param interface{}) interface{} {
-	fmt.Printf("Echo param %T %v\n", param, param)
+	klog.V(5).Infof("Echo request, parameters %v", param)
 	return param
 }
 
@@ -353,11 +350,10 @@ func (s *ServOVSDB) getMonitoredData(dataBase string, conditions map[string][]ov
 		}
 		if dataBase == "_Server" && tableName == "Database" {
 			if len(mcrs) > 1 {
-				fmt.Printf("!!!!! MCR is not a singe %v\n", mcrs)
+				klog.Warningf("MCR is not a singe %v", mcrs)
 			}
 			d1 := map[string]ovsjson.RowUpdate2{}
 			for _, v := range resp.Kvs {
-				fmt.Printf("key = %v \n", string(v.Key))
 				data := map[string]interface{}{}
 				json.Unmarshal(v.Value, &data)
 				uuidSet := data["uuid"]
@@ -377,7 +373,7 @@ func (s *ServOVSDB) getMonitoredData(dataBase string, conditions map[string][]ov
 			}
 			returnData[tableName] = d1
 		} else {
-			// TODO we have to finalize the data store schema for NB and SB databases.
+			// TODO
 		}
 	}
 	return returnData, nil

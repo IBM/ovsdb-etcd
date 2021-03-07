@@ -16,7 +16,7 @@ import (
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/metrics"
 	"github.com/creachadair/jrpc2/server"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"github.com/ibm/ovsdb-etcd/pkg/ovsdb"
 )
@@ -32,7 +32,7 @@ var (
 )
 
 func main() {
-
+	klog.InitFlags(nil)
 	flag.Parse()
 	if len(*tcpAddress) == 0 && len(*unixAddress) == 0 {
 		klog.Fatal("You must provide a network-address (TCP and/or UNIX) to listen on")

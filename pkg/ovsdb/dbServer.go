@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
+	"k8s.io/klog/v2"
 
 	ovsdbjson "github.com/ibm/ovsdb-etcd/pkg/json"
 	"github.com/ibm/ovsdb-etcd/pkg/json/_Server"
@@ -30,12 +31,12 @@ func NewDBServer(endpoints []string) (*DBServer, error) {
 		DialTimeout: 5 * time.Second,
 	})
 	if err != nil {
-		fmt.Println("NewETCDConenctor , error: ", err)
+		klog.Errorf("NewETCDConenctor , error: ", err)
 		return nil, err
 	}
 	// TODO
 	//defer cli.Close()
-	fmt.Println("etcd client is connected")
+	klog.Info("etcd client is connected")
 	return &DBServer{cli: cli,
 		uuid:        uuid.NewString(),
 		schemas:     make(map[string]string),
@@ -53,12 +54,12 @@ func (con *DBServer) Lock(ctx context.Context, id string) (bool, error) {
 	unlock := func() {
 		server := jrpc2.ServerFromContext(ctx)
 		server.Wait()
-		fmt.Println("UNLOCK")
+		klog.V(5).Infoln("UNLOCK")
 		err = mutex.Unlock(cnx)
 		if err != nil {
 			err = fmt.Errorf("Unlock returned %v\n", err)
 		} else {
-			fmt.Printf("UNLOCKED done\n")
+			klog.V(5).Infoln("UNLOCKED done\n")
 		}
 	}
 	if err == nil {
@@ -69,15 +70,15 @@ func (con *DBServer) Lock(ctx context.Context, id string) (bool, error) {
 		err = mutex.Lock(cnx)
 		if err == nil {
 			// Send notification
-			fmt.Println("Locked")
+			klog.V(5).Infoln("Locked")
 			go unlock()
 			if err := jrpc2.PushNotify(ctx, "locked", []string{id}); err != nil {
-				fmt.Printf("notification %v\n", err)
+				klog.Errorf("notification %v\n", err)
 				return
 
 			}
 		} else {
-			fmt.Printf("Lock error %v\n", err)
+			klog.Errorf("Lock error %v\n", err)
 		}
 	}()
 	return false, nil
@@ -91,7 +92,7 @@ func (con *DBServer) Unlock(ctx context.Context, id string) error {
 	}
 	mutex := concurrency.NewMutex(session, "locks/"+id)
 	// TODO
-	fmt.Printf("is owner %+v\n", mutex.IsOwner())
+	klog.V(5).Infof("is owner %+v\n", mutex.IsOwner())
 	mutex.Unlock(ctx)
 	return nil
 }
@@ -205,13 +206,18 @@ func (con *DBServer) GetData(prefix string, keysOnly bool) (*clientv3.GetRespons
 	if err != nil {
 		return nil, err
 	}
-	/*fmt.Printf(" GetDatatype %T \n", resp.Kvs)
-	for k, v := range resp.Kvs {
-		fmt.Printf("GetData k %v, v %v\n", k, v)
-	}*/
+	if klog.V(6).Enabled() {
+		klog.Infof(" GetDatatype %T \n", resp.Kvs)
+	}
+	if klog.V(7).Enabled() {
+		for k, v := range resp.Kvs {
+			klog.V(7).Infof("GetData k %v, v %v\n", k, v)
+		}
+	}
 	return resp, err
 }
 
+// TODO replace
 func (con *DBServer) GetMarshaled(prefix string, columns []interface{}) (*[]map[string]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	resp, err := con.cli.Get(ctx, prefix, clientv3.WithFromKey())
@@ -224,22 +230,17 @@ func (con *DBServer) GetMarshaled(prefix string, columns []interface{}) (*[]map[
 	for _, col := range columns {
 		columnsMap[col.(string)] = true
 	}
-	fmt.Printf("GetMarshaled columnsMap = %+v\n", columnsMap)
 	for _, v := range resp.Kvs {
 		keys := strings.Split(string(v.Key), "/")
 		len := len(keys)
-		fmt.Printf("GetMarshaled col name = %s %s\n", keys[len-1], string(v.Key))
 		if _, ok := columnsMap[keys[len-1]]; !ok {
-			fmt.Printf("GetMarshaled NO\n")
 			continue
 		}
 		valsmap, ok := retMaps[keys[len-3]]
-		fmt.Printf("GetMarshaled valsmap=%v\n", valsmap)
 		if !ok {
 			valsmap = map[string]string{}
 		}
 		valsmap[keys[len-1]] = string(v.Value)
-		fmt.Printf("GetMarshaled %v=%v\n", keys[len-1], string(v.Value))
 
 		// TODO
 		retMaps[keys[len-3]] = valsmap
@@ -250,23 +251,3 @@ func (con *DBServer) GetMarshaled(prefix string, columns []interface{}) (*[]map[
 	}
 	return &values, nil
 }
-
-/*func Marshal(kv []*mvccpb.KeyValue) (*[]map[string]string, error) {
-	retMaps := map[string]map[string]string{}
-	for _, v := range kv {
-		keys := strings.Split(string(v.Key), "/")
-		len := len(keys)
-		valsmap, ok := retMaps[keys[len-2]]
-		if !ok {
-			valsmap = map[string]string{}
-		}
-		valsmap[keys[len-1]] = string(v.Value)
-		// TODO
-		retMaps[keys[len-2]] = valsmap
-	}
-	values := []map[string]string{}
-	for _, value := range retMaps {
-		values = append(values, value)
-	}
-	return &values, nil
-}*/

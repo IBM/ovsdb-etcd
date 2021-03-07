@@ -18,6 +18,7 @@ require (
 	golang.org/x/tools v0.0.0-20201224043029-2b0845dc783e // indirect
 	google.golang.org/genproto v0.0.0-20201210142538-e3217bee35cc // indirect
 	k8s.io/klog v1.0.0
+	k8s.io/klog/v2 v2.6.0
 )
 
 replace (
