@@ -40,3 +40,25 @@ func (s Set) MarshalJSON() ([]byte, error) {
 	buf.WriteString(`]]`)
 	return buf.Bytes(), nil
 }
+
+func (cmr *CondMonitorParameters) UnmarshalJSON(p []byte) error {
+	var tmp []json.RawMessage
+	if err := json.Unmarshal(p, &tmp); err != nil {
+		return fmt.Errorf("Unmarshal json message: %s", err)
+	}
+	if err := json.Unmarshal(tmp[0], &cmr.DatabaseName); err != nil {
+		return fmt.Errorf("Unmarshal database_name: %s", err)
+	}
+	if err := json.Unmarshal(tmp[1], &cmr.JsonValue); err != nil {
+		return fmt.Errorf("Unmarshal json value: %s", err)
+	}
+	if err := json.Unmarshal(tmp[2], &cmr.MonitorCondRequests); err != nil {
+		return fmt.Errorf("Unmarshal monitor conditions: %s", err)
+	}
+	if len(tmp) > 4 {
+		if err := json.Unmarshal(tmp[3], &cmr.LastTxnID); err != nil {
+			return fmt.Errorf("Unmarshal last transaction ID: %s", err)
+		}
+	}
+	return nil
+}

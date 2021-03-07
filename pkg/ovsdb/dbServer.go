@@ -193,7 +193,6 @@ func (con *DBServer) LoadServerData() error {
 }
 
 func (con *DBServer) GetData(prefix string, keysOnly bool) (*clientv3.GetResponse, error) {
-	fmt.Printf("GetData " + prefix)
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	var resp *clientv3.GetResponse
 	var err error
@@ -206,10 +205,10 @@ func (con *DBServer) GetData(prefix string, keysOnly bool) (*clientv3.GetRespons
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf(" GetDatatype %T \n", resp.Kvs)
+	/*fmt.Printf(" GetDatatype %T \n", resp.Kvs)
 	for k, v := range resp.Kvs {
 		fmt.Printf("GetData k %v, v %v\n", k, v)
-	}
+	}*/
 	return resp, err
 }
 

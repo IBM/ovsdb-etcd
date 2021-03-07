@@ -108,3 +108,25 @@ func TestLength(t *testing.T) {
 		fmt.Sprintf("expected: %s\n", expected)+
 		fmt.Sprintf("actual  : %s\n", actual))
 }
+
+// TODO
+func TestCondMonitorParameters(t *testing.T) {
+	// TODO add more tess
+	// several databases; different select watch, columns and the last transaction options options
+	// ["_Server",null,{"Database":[{"where":[["model","==","standalone"],true],"select":{"modify":false,"initial":true,"insert":true,"delete":true},"columns":["model","connected"]}]}]
+	// ["_Server",null,{"Database":[{"where":[["model","==","standalone"],true],"columns":["cid","connected","index","leader","model","name","schema","sid","_version"]}]},"00000000-0000-0000-0000-000000000000"]
+	// ["_Server",null,{"Database":[{"where":[true],"columns":["cid","connected","index","leader","model","name","schema","sid","_version"]}]},"00000000-0000-0000-0000-000000000000"]
+	var s = []byte(`["_Server",null,{"Database":[{"select":{"modify":true,"initial":true,"insert":false,"delete":true},"columns":["model"]}]}]`)
+	actualCMP := CondMonitorParameters{}
+	err := json.Unmarshal(s, &actualCMP)
+	assert.Nil(t, err)
+	expectedSelect := &Select{Modify: true, Initial: true, Insert: false, Delete: true}
+	mcr := MonitorCondRequest{Columns: []interface{}{"model"},
+		Select: expectedSelect}
+
+	expectedCMP := CondMonitorParameters{DatabaseName: "_Server", MonitorCondRequests: map[string][]MonitorCondRequest{"Database": {mcr}}}
+	assert.Equal(t, expectedCMP, actualCMP, "they should be equal\n"+
+		fmt.Sprintf("expected: %v\n", expectedCMP)+
+		fmt.Sprintf("actual  : %v\n", actualCMP))
+
+}

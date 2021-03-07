@@ -4,32 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/creachadair/jrpc2"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/creachadair/jrpc2"
 
 	ovsjson "github.com/ibm/ovsdb-etcd/pkg/json"
 )
 
 type ServOVSDB struct {
 	dbServer *DBServer
-}
-
-type InitialData struct {
-	Name      string `json:"name"`
-	Model     string `json:"model"`
-	Connected bool   `json:"connected"`
-	Schema    string `json:"schema"`
-	Leader    bool   `json:"leader"`
-}
-
-type Databases struct {
-	Database map[string]ovsjson.Initial `json:"Database"`
-}
-
-type TransactionResponse struct {
-	Rows []map[string]string
 }
 
 // This operation retrieves an array whose elements are the names of the
@@ -40,7 +24,7 @@ type TransactionResponse struct {
 //  	"result": [<db-name>,...]
 //   	"error": null
 //   	"id": same "id" as request
-func (s *ServOVSDB) List_dbs(ctx context.Context, param interface{}) ([]string, error) {
+func (s *ServOVSDB) List_dbs(ctx context.Context) ([]string, error) {
 	// fmt.Printf("List_dbs param %T %v\n", param, param)
 	resp, err := s.dbServer.GetData("ovsdb/_Server/Database/", true)
 	if err != nil {
@@ -119,7 +103,7 @@ func (s *ServOVSDB) Transact(ctx context.Context, param []interface{}) (interfac
 				if err != nil {
 					return nil, err
 				}
-				tr := TransactionResponse{Rows: *resp}
+				tr := ovsjson.TransactionResponse{Rows: *resp}
 				return tr, nil
 			}
 		}
@@ -146,12 +130,6 @@ func (s *ServOVSDB) Monitor(ctx context.Context, param interface{}) (interface{}
 	fmt.Printf("Monitor %T, %+v\n", param, param)
 
 	return ovsjson.EmptyStruct{}, nil
-}
-
-func (s *ServOVSDB) Update(ctx context.Context, param interface{}) (interface{}, error) {
-	fmt.Printf("Update %T, %+v\n", param, param)
-
-	return "{Update}", nil
 }
 
 func (s *ServOVSDB) Monitor_cancel(ctx context.Context, param interface{}) (interface{}, error) {
@@ -261,47 +239,18 @@ func (s *ServOVSDB) Unlock(ctx context.Context, param interface{}) (interface{},
 //  "result": <table-updates2>
 //  "error": null
 //  "id": same "id" as request
-func (s *ServOVSDB) Monitor_cond(ctx context.Context, param []interface{}) (interface{}, error) {
+func (s *ServOVSDB) Monitor_cond(ctx context.Context, param ovsjson.CondMonitorParameters) (interface{}, error) {
 	fmt.Printf("Monitor_cond %T %+v\n", param, param)
 
-	resp, err := s.dbServer.GetData("ovsdb/"+param[0].(string), false)
-	if err != nil {
-		return nil, err
-	}
+	return s.getMonitoredData(param.DatabaseName, param.MonitorCondRequests)
 
-	databases := Databases{Database: map[string]ovsjson.Initial{}}
-	for _, v := range resp.Kvs {
-		keys := strings.Split(string(v.Key), "/")
-		in, ok := databases.Database[keys[3]]
-		var id InitialData
-		if !ok {
-			in = ovsjson.Initial{}
-			databases.Database[keys[3]] = in
-		}
-		if in.Initial == nil {
-			in.Initial = InitialData{}
-		}
-		id = in.Initial.(InitialData)
-		switch keys[5] {
-		case "name":
-			id.Name = string(v.Value)
-		case "connected":
-			id.Connected, _ = strconv.ParseBool(string(v.Value))
-		case "leader":
-			id.Leader, _ = strconv.ParseBool(string(v.Value))
-		case "model":
-			id.Model = string(v.Value)
-		case "schema":
-			id.Schema = string(v.Value)
-		}
-		databases.Database[keys[3]] = ovsjson.Initial{Initial: id}
-	}
-	return databases, nil
 }
 
-func (s *ServOVSDB) Monitor_cond_change(ctx context.Context, param interface{}) (interface{}, error) {
+func (s *ServOVSDB) Monitor_cond_change(ctx context.Context, param []interface{}) (interface{}, error) {
 	fmt.Printf("Monitor_cond_change %T, %+v\n", param, param)
-
+	for i, pr := range param {
+		fmt.Printf("Monitor_cond_change par %d => %s\n", i, pr)
+	}
 	return "{Monitor_cond_change}", nil
 }
 
@@ -328,11 +277,14 @@ func (s *ServOVSDB) Monitor_cond_change(ctx context.Context, param interface{}) 
 //  <table-updates2> of this response, so that client can keep tracking. If there is no change involved in this
 // response, it is the same as the <last-txn-id> in the request if <found> is true, or zero uuid if <found> is false.
 // If the server does not support transaction uuid, it will be zero uuid as well.
-func (s *ServOVSDB) Monitor_cond_since(ctx context.Context, param interface{}) (interface{}, error) {
+func (s *ServOVSDB) Monitor_cond_since(ctx context.Context, param ovsjson.CondMonitorParameters) (interface{}, error) {
 	fmt.Printf("Monitor_cond_since %T, %+v\n", param, param)
 
-	// TODO implement
-	return []interface{}{false, ovsjson.ZERO_UUID, ovsjson.EmptyStruct{}}, nil
+	data, err := s.getMonitoredData(param.DatabaseName, param.MonitorCondRequests)
+	if err != nil {
+		return nil, err
+	}
+	return []interface{}{false, ovsjson.ZERO_UUID, data}, nil
 }
 
 // A new RPC method added in Open vSwitch version 2.7.
@@ -340,8 +292,8 @@ func (s *ServOVSDB) Monitor_cond_since(ctx context.Context, param interface{}) (
 // "result": "<server_id>"
 // <server_id> is JSON string that contains a UUID that uniquely identifies the running OVSDB server process.
 // A fresh UUID is generated when the process restarts.
-func (s *ServOVSDB) Get_server_id(ctx context.Context, param interface{}) string {
-	fmt.Printf("Get_server_id %+v\n", param)
+func (s *ServOVSDB) Get_server_id(ctx context.Context) string {
+	fmt.Println("Get_server_id")
 	return s.dbServer.uuid
 }
 
@@ -380,4 +332,53 @@ func (s *ServOVSDB) Echo(ctx context.Context, param interface{}) interface{} {
 
 func NewService(dbServer *DBServer) *ServOVSDB {
 	return &ServOVSDB{dbServer: dbServer}
+}
+
+// TODO move to utilities
+func arrayToMap(input []interface{}) map[interface{}]bool {
+	ret := map[interface{}]bool{}
+	for _, str := range input {
+		ret[str] = true
+	}
+	return ret
+}
+
+func (s *ServOVSDB) getMonitoredData(dataBase string, conditions map[string][]ovsjson.MonitorCondRequest) (map[string]map[string]ovsjson.RowUpdate2, error) {
+
+	returnData := map[string]map[string]ovsjson.RowUpdate2{}
+	for tableName, mcrs := range conditions {
+		resp, err := s.dbServer.GetData("ovsdb/"+dataBase+"/"+tableName, false)
+		if err != nil {
+			return nil, err
+		}
+		if dataBase == "_Server" && tableName == "Database" {
+			if len(mcrs) > 1 {
+				fmt.Printf("!!!!! MCR is not a singe %v\n", mcrs)
+			}
+			d1 := map[string]ovsjson.RowUpdate2{}
+			for _, v := range resp.Kvs {
+				fmt.Printf("key = %v \n", string(v.Key))
+				data := map[string]interface{}{}
+				json.Unmarshal(v.Value, &data)
+				uuidSet := data["uuid"]
+				uuid := uuidSet.([]interface{})[1]
+				if len(mcrs[0].Columns) == 0 {
+					delete(data, "uuid")
+					delete(data, "version")
+				} else {
+					columnsMap := arrayToMap(mcrs[0].Columns)
+					for column, _ := range data {
+						if _, ok := columnsMap[column]; !ok {
+							delete(data, column)
+						}
+					}
+				}
+				d1[uuid.(string)] = ovsjson.Initial{Initial: data}
+			}
+			returnData[tableName] = d1
+		} else {
+			// TODO we have to finalize the data store schema for NB and SB databases.
+		}
+	}
+	return returnData, nil
 }
