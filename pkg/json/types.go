@@ -8,7 +8,7 @@ type NamedUuid string
 
 type Map map[string]string
 
-type Set []interface{}
+type Set []string
 
 type EmptyStruct struct{}
 
