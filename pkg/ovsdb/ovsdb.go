@@ -14,7 +14,7 @@ import (
 )
 
 type ServOVSDB struct {
-	dbServer *DBServer
+	dbServer DBServerInterface
 }
 
 // This operation retrieves an array whose elements are the names of the
@@ -65,7 +65,7 @@ func (s *ServOVSDB) Get_schema(ctx context.Context, param interface{}) (interfac
 		// probably is a bad idea
 		schemaName = fmt.Sprintf("%s", param)
 	}
-	schema, ok := s.dbServer.schemas[schemaName]
+	schema, ok := s.dbServer.GetSchema(schemaName)
 	if !ok {
 		return nil, fmt.Errorf("unknown database")
 	}
@@ -291,7 +291,7 @@ func (s *ServOVSDB) Monitor_cond_since(ctx context.Context, param ovsjson.CondMo
 // A fresh UUID is generated when the process restarts.
 func (s *ServOVSDB) Get_server_id(ctx context.Context) string {
 	klog.V(5).Infof("Get_server_id request")
-	return s.dbServer.uuid
+	return s.dbServer.GetUUID()
 }
 
 // RFC 7047 does not provide a way for a client to find out about some kinds of configuration changes, such as
@@ -327,7 +327,7 @@ func (s *ServOVSDB) Echo(ctx context.Context, param interface{}) interface{} {
 	return param
 }
 
-func NewService(dbServer *DBServer) *ServOVSDB {
+func NewService(dbServer DBServerInterface) *ServOVSDB {
 	return &ServOVSDB{dbServer: dbServer}
 }
 
