@@ -1,6 +1,7 @@
 package ovsdb
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -102,7 +103,9 @@ func (con *DBServer) AddSchema(schemaName, schemaFile string) error {
 	if err != nil {
 		return err
 	}
-	con.schemas[schemaName] = string(data)
+	buffer := new(bytes.Buffer)
+	json.Compact(buffer, data)
+	con.schemas[schemaName] = buffer.String()
 	return nil
 }
 
