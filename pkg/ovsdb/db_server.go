@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"github.com/creachadair/jrpc2"
+	ovsdbjson "github.com/ebay/libovsdb"
 	"github.com/google/uuid"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"k8s.io/klog/v2"
 
-	ovsdbjson "github.com/ibm/ovsdb-etcd/pkg/json"
 	"github.com/ibm/ovsdb-etcd/pkg/types/_Server"
 )
 
@@ -109,8 +109,13 @@ func (con *DBServer) AddSchema(schemaName, schemaFile string) error {
 func (con *DBServer) LoadServerData() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	for schemaName, schema := range con.schemas {
-		srv := _Server.Database{Model: "standalone", Name: schemaName, Uuid: ovsdbjson.Uuid(uuid.NewString()),
-			Connected: true, Leader: true, Schema: schema, Version: ovsdbjson.Uuid(uuid.NewString())}
+		schemaSet, err := ovsdbjson.NewOvsSet([]string{schema})
+		if err != nil {
+			cancel = nil
+			return err
+		}
+		srv := _Server.Database{Model: "standalone", Name: schemaName, Uuid: ovsdbjson.UUID{GoUUID: uuid.NewString()},
+			Connected: true, Leader: true, Schema: *schemaSet, Version: ovsdbjson.UUID{GoUUID: uuid.NewString()}}
 		data, err := json.Marshal(srv)
 		if err != nil {
 			cancel = nil
