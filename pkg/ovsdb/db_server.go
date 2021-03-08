@@ -15,7 +15,7 @@ import (
 	"k8s.io/klog/v2"
 
 	ovsdbjson "github.com/ibm/ovsdb-etcd/pkg/json"
-	"github.com/ibm/ovsdb-etcd/pkg/json/_Server"
+	"github.com/ibm/ovsdb-etcd/pkg/types/_Server"
 )
 
 type DBServer struct {

@@ -1,4 +1,4 @@
-package codegenerator
+package generator
 
 import (
 	"bufio"
