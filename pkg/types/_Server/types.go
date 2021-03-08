@@ -1,16 +1,16 @@
 package _Server
 
-import "github.com/ibm/ovsdb-etcd/pkg/json"
+import "github.com/ebay/libovsdb"
 
 type Database struct {
-	Cid       json.Uuid `json:"cid,omitempty"`
-	Connected bool      `json:"connected,omitempty"`
-	Index     int64     `json:"index,omitempty"`
-	Leader    bool      `json:"leader,omitempty"`
-	Model     string    `json:"model,omitempty"`
-	Name      string    `json:"name,omitempty"`
-	Schema    string    `json:"schema,omitempty"`
-	Sid       json.Uuid `json:"sid,omitempty"`
-	Version   json.Uuid `json:"_version,omitempty"`
-	Uuid      json.Uuid `json:"uuid,omitempty"`
+	Cid       libovsdb.OvsSet `json:"cid,omitempty"`
+	Connected bool            `json:"connected,omitempty"`
+	Index     libovsdb.OvsSet `json:"index,omitempty"`
+	Leader    bool            `json:"leader,omitempty"`
+	Model     string          `json:"model,omitempty"`
+	Name      string          `json:"name,omitempty"`
+	Schema    libovsdb.OvsSet `json:"schema,omitempty"`
+	Sid       libovsdb.OvsSet `json:"sid,omitempty"`
+	Version   libovsdb.UUID   `json:"_version,omitempty"`
+	Uuid      libovsdb.UUID   `json:"uuid,omitempty"`
 }

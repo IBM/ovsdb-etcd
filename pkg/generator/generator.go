@@ -20,7 +20,6 @@ var (
 	BasePackage    string
 	OutputFile     string
 	DestinationDir string
-	needsInclude   = false
 )
 
 func Run() {
@@ -108,10 +107,10 @@ func printStruct(w io.Writer, tableName string, columns []string) error {
 		}
 	}
 	// Add UUID and _version
-	if _, err := fmt.Fprintf(w, "\t Version json.Uuid `json:\"_version,omitempty\"`\n"); err != nil {
+	if _, err := fmt.Fprintf(w, "\t Version libovsdb.UUID `json:\"_version,omitempty\"`\n"); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "\t Uuid json.Uuid `json:\"uuid,omitempty\"`"); err != nil {
+	if _, err := fmt.Fprintf(w, "\t Uuid libovsdb.UUID `json:\"uuid,omitempty\"`"); err != nil {
 		return err
 	}
 
@@ -127,10 +126,8 @@ func writeToFile(w io.Writer, structs map[string][]string) error {
 	if _, err := fmt.Fprintf(w, "package %s\n\n", PkgName); err != nil {
 		return err
 	}
-	if needsInclude {
-		if _, err := fmt.Fprintf(w, "import \"%s\"\n\n", BasePackage); err != nil {
-			return nil
-		}
+	if _, err := fmt.Fprintf(w, "import \"%s\"\n\n", BasePackage); err != nil {
+		return nil
 	}
 	keys := make([]string, 0, len(structs))
 	for k := range structs {
@@ -241,15 +238,12 @@ func parseColumns(tableName string, columns interface{}) ([]string, error) {
 }
 
 func createMapFiled(fieldName string, keyType interface{}, valueType interface{}, field string) string {
-	return fmt.Sprintf(" %s \tmap[%s]%s `json:\"%s,omitempty\"`\n", fieldName, typeConvert(keyType), typeConvert(valueType), field)
+	return fmt.Sprintf(" %s \t%s `json:\"%s,omitempty\"`\n", fieldName, "libovsdb.OvsMap", field)
 }
 
 func createFiledLine(fieldName string, filedType interface{}, field string, max interface{}, isSet bool) string {
 	if isSet {
-		maxStr := fmt.Sprintf("%v", max)
-		if maxStr != "1" {
-			return fmt.Sprintf(" %s \t[]%s `json:\"%s,omitempty\"`\n", fieldName, typeConvert(filedType), field)
-		}
+		return fmt.Sprintf(" %s \t%s `json:\"%s,omitempty\"`\n", fieldName, "libovsdb.OvsSet", field)
 	}
 	return fmt.Sprintf(" %s \t%s `json:\"%s,omitempty\"`\n", fieldName, typeConvert(filedType), field)
 }
@@ -266,8 +260,7 @@ func typeConvert(typeName interface{}) string {
 	case "real":
 		return "float64"
 	case "uuid":
-		needsInclude = true
-		return "json.Uuid"
+		return "libovsdb.UUID"
 	}
 	// TODO
 	return ""
@@ -295,8 +288,5 @@ func Package() string {
 }
 
 func getBasePackage() string {
-	thisPackage := Package()
-	indx := strings.LastIndex(thisPackage, "/")
-	// TODO if indx == -1
-	return thisPackage[:indx] + "/json"
+	return "github.com/ebay/libovsdb"
 }
