@@ -48,11 +48,11 @@ func main() {
 	}
 
 	// For development only
-	err = dbServ.AddSchema("_Server", "./json/_server.ovsschema")
+	err = dbServ.AddSchema("_Server", "./schemas/_server.ovsschema")
 	if err != nil {
 		klog.Fatal(err)
 	}
-	err = dbServ.AddSchema("OVN_Northbound", "./json/ovn-nb.ovsschema")
+	err = dbServ.AddSchema("OVN_Northbound", "./schemas/ovn-nb.ovsschema")
 	if err != nil {
 		klog.Fatal(err)
 	}
