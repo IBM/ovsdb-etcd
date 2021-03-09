@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -30,6 +31,25 @@ var (
 	etcdMembers = flag.String("etcd-members", ETCD_LOCALHOST, "ETCD service addresses, separated by ',' ")
 	maxTasks    = flag.Int("max", 1, "Maximum concurrent tasks")
 )
+
+var methodsMap = map[string]string{
+	"ListDbs":           "list_dbs",
+	"GetSchema":         "get_schema",
+	"Transact":          "transact",
+	"Cancel":            "cancel",
+	"Monitor":           "monitor",
+	"MonitorCancel":     "monitor_cancel",
+	"Lock":              "lock",
+	"Steal":             "steal",
+	"Unlock":            "unlock",
+	"Echo":              "echo",
+	"MonitorCond":       "monitor_cond",
+	"MonitorCondChange": "monitor_cond_change",
+	"MonitorCondSince":  "monitor_cond_since",
+	"GetServerId":       "get_server_id",
+	"SetDbChangeAware":  "set_db_change_aware",
+	"Convert":           "convert",
+}
 
 func main() {
 	klog.InitFlags(nil)
@@ -81,9 +101,7 @@ func main() {
 		AllowV1:     true,
 	}
 	ovsdbServ := ovsdb.NewService(dbServ)
-	mux := handler.ServiceMap{
-		"Ovsdb": handler.NewService(ovsdbServ),
-	}
+	mux := methodsToService(ovsdbServ)
 	srvFunc := server.NewStatic(mux)
 
 	// a WaitGroup for the goroutines to tell us they've stopped
@@ -119,6 +137,23 @@ func main() {
 	case <-ctx.Done():
 	}
 
+}
+
+// the method is similar to the handler.NewService, but adopted to the ovsdb implementation.
+func methodsToService(ovsdb ovsdb.OVSDB) handler.Map {
+	out := make(handler.Map)
+	val := reflect.ValueOf(ovsdb)
+	// This considers only exported methods, as desired.
+	for method, ovsdbMethod := range methodsMap {
+		fn := val.MethodByName(method)
+		if !fn.IsValid() {
+			klog.Errorf(" OVSDB doesn't contain method %s", method)
+			continue
+		}
+		v := handler.New(fn.Interface())
+		out[ovsdbMethod] = v
+	}
+	return out
 }
 
 func serverLoop(ctx context.Context, lst net.Listener, newService func() server.Service, serverOpts *jrpc2.ServerOptions, wg *sync.WaitGroup) error {

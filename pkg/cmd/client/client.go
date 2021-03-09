@@ -13,7 +13,7 @@ import (
 
 var serverAddr = flag.String("server", "", "Server address")
 
-func list_dbs(ctx context.Context, cli *jrpc2.Client) (result []string, err error) {
+func listDbs(ctx context.Context, cli *jrpc2.Client) (result []string, err error) {
 	err = cli.CallResult(ctx, "list_dbs", nil, &result)
 	return
 }
@@ -23,7 +23,7 @@ func echo(ctx context.Context, cli *jrpc2.Client) (result []interface{}, err err
 	return
 }
 
-func get_server_id(ctx context.Context, cli *jrpc2.Client) (result interface{}, err error) {
+func getServerId(ctx context.Context, cli *jrpc2.Client) (result interface{}, err error) {
 	err = cli.CallResult(ctx, "get_server_id", nil, &result)
 	return
 }
@@ -65,33 +65,33 @@ func main() {
 
 	klog.Info("\n-- Sending some individual requests...")
 
-	if dbs, err := list_dbs(ctx, cli); err != nil {
-		klog.Fatalln("Ovsdb.List_dbs:", err)
+	if dbs, err := listDbs(ctx, cli); err != nil {
+		klog.Fatalln("listDbs:", err)
 	} else {
-		klog.Info("Ovsdb.List_dbs result=%v", dbs)
+		klog.Infof("listDbs result=%v", dbs)
 	}
 
 	if echo, err := echo(ctx, cli); err != nil {
-		klog.Fatalln("Ovsdb.Echo:", err)
+		klog.Fatalln("echo:", err)
 	} else {
-		klog.Info("Ovsdb.Echo result=%v", echo)
+		klog.Infof("echo result=%v", echo)
 	}
 
-	if uuid, err := get_server_id(ctx, cli); err != nil {
-		klog.Fatalln("Get_server_id:", err)
+	if uuid, err := getServerId(ctx, cli); err != nil {
+		klog.Fatalln("getServerId:", err)
 	} else {
-		klog.Info("Get_server_id result=%v", uuid)
+		klog.Infof("getServerId result=%v", uuid)
 	}
 
 	if lock, err := lock(ctx, cli, "test1"); err != nil {
 		klog.Fatalln("lock:", err)
 	} else {
-		klog.Info("lock result=%v", lock)
+		klog.Infof("lock result=%v", lock)
 	}
 	if lock, err := unlock(ctx, cli, "test1"); err != nil {
 		klog.Fatalf("unlock: %v", err)
 	} else {
-		klog.Info("unlock result=%v", lock)
+		klog.Infof("unlock result=%v", lock)
 	}
 
 }
