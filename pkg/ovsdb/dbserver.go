@@ -19,6 +19,17 @@ import (
 	"github.com/ibm/ovsdb-etcd/pkg/types/_Server"
 )
 
+type DBServerInterface interface {
+	Lock(ctx context.Context, id string) (bool, error)
+	Unlock(ctx context.Context, id string) error
+	AddSchema(schemaName, schemaFile string) error
+	LoadServerData() error
+	GetData(prefix string, keysOnly bool) (*clientv3.GetResponse, error)
+	GetMarshaled(prefix string, columns []interface{}) (*[]map[string]string, error)
+	GetSchema(name string) (string, bool)
+	GetUUID() string
+}
+
 type DBServer struct {
 	cli         *clientv3.Client
 	uuid        string
@@ -26,7 +37,7 @@ type DBServer struct {
 	schemaTypes map[string]map[string]map[string]string
 }
 
-func NewDBServer(endpoints []string) (*DBServer, error) {
+func NewDBServer(endpoints []string) (DBServerInterface, error) {
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   endpoints,
 		DialTimeout: 5 * time.Second,
@@ -258,4 +269,52 @@ func (con *DBServer) GetMarshaled(prefix string, columns []interface{}) (*[]map[
 		values = append(values, value)
 	}
 	return &values, nil
+}
+
+func (con *DBServer) GetSchema(name string) (string, bool) {
+	return con.schemas[name], true
+}
+
+func (con *DBServer) GetUUID() string {
+	return con.uuid
+}
+
+type DBServerMock struct {
+}
+
+func NewDBServerMock() (DBServerInterface, error) {
+	return &DBServerMock{}, nil
+}
+
+func (con *DBServerMock) Lock(ctx context.Context, id string) (bool, error) {
+	return true, nil
+}
+
+func (con *DBServerMock) Unlock(ctx context.Context, id string) error {
+	return nil
+}
+
+func (con *DBServerMock) AddSchema(schemaName, schemaFile string) error {
+	return nil
+}
+
+func (con *DBServerMock) LoadServerData() error {
+	return nil
+}
+
+func (con *DBServerMock) GetData(prefix string, keysOnly bool) (*clientv3.GetResponse, error) {
+	var resp *clientv3.GetResponse
+	return resp, nil
+}
+
+func (con *DBServerMock) GetMarshaled(prefix string, columns []interface{}) (*[]map[string]string, error) {
+	return &[]map[string]string{}, nil
+}
+
+func (con *DBServerMock) GetSchema(name string) (string, bool) {
+	return "", true
+}
+
+func (con *DBServerMock) GetUUID() string {
+	return ""
 }
