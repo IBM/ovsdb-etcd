@@ -12,9 +12,7 @@ func NewServOVSDBMock() *ServOVSDB {
 }
 
 func TestOVSDBTransact(t *testing.T) {
-	expected := "{Transact}"
 	srv := NewServOVSDBMock()
-	actual, err := srv.Transact(nil, []interface{}{})
+	_, err := srv.Transact(nil, []interface{}{})
 	assert.Nil(t, err)
-	assert.Equal(t, expected, actual)
 }

@@ -1,0 +1,20 @@
+[
+  "OVN_Northbound",
+  {
+    "where": [],
+    "columns": [
+      "name",
+      "priority",
+      "log",
+      "external_ids",
+      "direction",
+      "meter",
+      "action",
+      "match",
+      "severity",
+      "_uuid"
+    ],
+    "op": "select",
+    "table": "ACL"
+  }
+]
