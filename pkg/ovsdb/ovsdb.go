@@ -27,7 +27,7 @@ type OVSDB interface {
 	//  	"result": [<db-name>,...]
 	//   	"error": null
 	//   	"id": same "id" as request
-	ListDbs(ctx context.Context) ([]string, error)
+	ListDbs(ctx context.Context, param interface{}) ([]string, error)
 
 	// RFC 7047 section 4.1.2
 	// This operation retrieves a <database-schema> that describes hosted database <db-name>.
@@ -72,7 +72,7 @@ type OVSDB interface {
 	//   "result": <table-updates>  If no tables' initial contents are requested, then "result" is an empty object
 	//   "error": null
 	//   "id": same "id" as request
-	Monitor(ctx context.Context, param interface{}) (interface{}, error)
+	Monitor(ctx context.Context, param ovsjson.CondMonitorParameters) (interface{}, error)
 
 	// RFC 7047 section 4.1.7
 	// The "monitor_cancel" request cancels a previously issued monitor request.
@@ -219,7 +219,7 @@ type ServOVSDB struct {
 	dbServer DBServerInterface
 }
 
-func (s *ServOVSDB) ListDbs(ctx context.Context) ([]string, error) {
+func (s *ServOVSDB) ListDbs(ctx context.Context, param interface{}) ([]string, error) {
 	klog.V(5).Infof("ListDbs request")
 	resp, err := s.dbServer.GetData("ovsdb/_Server/Database/", true)
 	if err != nil {
@@ -326,10 +326,10 @@ func (s *ServOVSDB) Cancel(ctx context.Context, param interface{}) (interface{},
 	return "{Cancel}", nil
 }
 
-func (s *ServOVSDB) Monitor(ctx context.Context, param interface{}) (interface{}, error) {
+func (s *ServOVSDB) Monitor(ctx context.Context, param ovsjson.CondMonitorParameters) (interface{}, error) {
 	klog.V(5).Infof("Monitor request, parameters %v", param)
 
-	return ovsjson.EmptyStruct{}, nil
+	return s.getMonitoredData(param.DatabaseName, param.MonitorCondRequests, false)
 }
 
 func (s *ServOVSDB) MonitorCancel(ctx context.Context, param interface{}) (interface{}, error) {
@@ -411,7 +411,7 @@ func (s *ServOVSDB) Steal(ctx context.Context, param interface{}) (interface{}, 
 func (s *ServOVSDB) MonitorCond(ctx context.Context, param ovsjson.CondMonitorParameters) (interface{}, error) {
 	klog.V(5).Infof("MonitorCond request, parameters %v", param)
 
-	return s.getMonitoredData(param.DatabaseName, param.MonitorCondRequests)
+	return s.getMonitoredData(param.DatabaseName, param.MonitorCondRequests, true)
 }
 
 func (s *ServOVSDB) MonitorCondChange(ctx context.Context, param []interface{}) (interface{}, error) {
@@ -423,7 +423,7 @@ func (s *ServOVSDB) MonitorCondChange(ctx context.Context, param []interface{}) 
 func (s *ServOVSDB) MonitorCondSince(ctx context.Context, param ovsjson.CondMonitorParameters) (interface{}, error) {
 	klog.V(5).Infof("MonitorCondSince request, parameters %v", param)
 
-	data, err := s.getMonitoredData(param.DatabaseName, param.MonitorCondRequests)
+	data, err := s.getMonitoredData(param.DatabaseName, param.MonitorCondRequests, true)
 	if err != nil {
 		return nil, err
 	}
@@ -463,7 +463,7 @@ func arrayToMap(input []interface{}) map[interface{}]bool {
 	return ret
 }
 
-func (s *ServOVSDB) getMonitoredData(dataBase string, conditions map[string][]ovsjson.MonitorCondRequest) (ovsjson.TableUpdates, error) {
+func (s *ServOVSDB) getMonitoredData(dataBase string, conditions map[string][]ovsjson.MonitorCondRequest, isV2 bool) (ovsjson.TableUpdates, error) {
 
 	returnData := ovsjson.TableUpdates{}
 	for tableName, mcrs := range conditions {
@@ -492,7 +492,11 @@ func (s *ServOVSDB) getMonitoredData(dataBase string, conditions map[string][]ov
 						}
 					}
 				}
-				d1[uuid.(string)] = ovsjson.RowUpdate{Initial: &data}
+				if isV2 {
+					d1[uuid.(string)] = ovsjson.RowUpdate{Initial: &data}
+				} else {
+					d1[uuid.(string)] = ovsjson.RowUpdate{New: &data}
+				}
 			}
 			returnData[tableName] = d1
 		} else {
