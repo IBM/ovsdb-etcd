@@ -34,10 +34,10 @@ type RowUpdate struct {
 	Modify  *map[string]interface{} `json:"modify,omitempty"`
 }
 
-// RowUpdate can contains or the `New` and `Old` values according to RFC7047, or one of the `Initial`, `Insert`, `Delete`
-// or `Modify` objects.
-// Id the RowUpdate object is not valid, the method returns <false> and an explanation message
-func (ru *RowUpdate) Validate() (bool, string) {
+// Validate that the RowUpdate is valid as RowUpdate according to the RFC 7047
+// Only `New` and `Old` fields can contain data
+// If the RowUpdate object is not valid, the method returns <false> and an explanation message
+func (ru *RowUpdate) ValidateRowUpdate() (bool, string) {
 	i := 0
 	if ru.Initial != nil {
 		i++
@@ -51,15 +51,35 @@ func (ru *RowUpdate) Validate() (bool, string) {
 	if ru.Modify != nil {
 		i++
 	}
-	if i > 1 {
-		return false, "Multiple RowUpdate2 entries"
-	} else if i == 1 {
-		if ru.New != nil || ru.Old != nil {
-			return false, "Combination of RowUpdate and RowUpdate2"
-		}
-		return true, ""
+	if i != 0 {
+		return false, "Contains RowUpdate2 entries"
 	}
-	// i ==0
+	if (ru.New == nil) && (ru.Old == nil) {
+		return false, "Empty RowUpdate"
+	}
+	return true, ""
+}
+
+// Validate that the RowUpdate is valid as RowUpdate2 according to https://docs.openvswitch.org/en/latest/ref/ovsdb-server.7/
+// Only one of the `Initial`, `Insert`, `Delete` or `Modify` fields can contain data
+// If the RowUpdate object is not valid, the method returns <false> and an explanation message
+func (ru *RowUpdate) ValidateRowUpdate2() (bool, string) {
+	i := 0
+	if ru.Initial != nil {
+		i++
+	}
+	if ru.Insert != nil {
+		i++
+	}
+	if ru.Delete != nil {
+		i++
+	}
+	if ru.Modify != nil {
+		i++
+	}
+	if i != 0 {
+		return false, "Contains RowUpdate2 entries"
+	}
 	if (ru.New == nil) && (ru.Old == nil) {
 		return false, "Empty RowUpdate"
 	}
