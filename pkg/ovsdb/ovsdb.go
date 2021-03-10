@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/creachadair/jrpc2"
+	"github.com/ebay/libovsdb"
 	"k8s.io/klog/v2"
 
 	ovsjson "github.com/ibm/ovsdb-etcd/pkg/json"
@@ -261,27 +262,62 @@ func (s *ServOVSDB) GetSchema(ctx context.Context, param interface{}) (interface
 
 func (s *ServOVSDB) Transact(ctx context.Context, param []interface{}) (interface{}, error) {
 	klog.V(5).Infof("Transact request, parameters %v", param)
-	for k, v := range param {
-		klog.V(6).Infof("Transact k = %d v= %v\n", k, v)
-		valuesMap, ok := v.(map[string]interface{})
-		if ok {
-			if valuesMap["op"] == "select" {
-				tabel, okt := valuesMap["table"]
-				if !okt {
-					return nil, fmt.Errorf("Table is not specified")
-				}
-				colomns, _ := valuesMap["columns"]
-				resp, err := s.dbServer.GetMarshaled("ovsdb/"+tabel.(string), colomns.([]interface{}))
-				if err != nil {
-					return nil, err
-				}
-				tr := ovsjson.TransactionResponse{Rows: *resp}
-				return tr, nil
+	transResponse := libovsdb.TransactResponse{}
+	aborting := false
+	for i, v := range param {
+		klog.V(6).Infof("Transact i=%d v=%v\n", i, v)
+		opErr := fmt.Errorf("aborting: did not run operation")
+		opResult := &libovsdb.OperationResult{}
+
+		if !aborting {
+			m, ok := v.(map[string]interface{})
+			if !ok {
+				continue
 			}
+
+			op := &libovsdb.Operation{}
+			b, _ := json.Marshal(m)    // FIXME: handle error
+			_ = json.Unmarshal(b, &op) // FIXME: handle error
+
+			doOp := doOperation{dbServer: s.dbServer}
+
+			switch op.Op { // FIXME: handle error
+			case "insert":
+				opResult, opErr = doOp.Insert(op)
+			case "select":
+				opResult, opErr = doOp.Select(op)
+			case "update":
+				opResult, opErr = doOp.Update(op)
+			case "mutate":
+				opResult, opErr = doOp.Mutate(op)
+			case "delete":
+				opResult, opErr = doOp.Delete(op)
+			case "wait":
+				opResult, opErr = doOp.Wait(op)
+			case "commit":
+				opResult, opErr = doOp.Commit(op)
+			case "abort":
+				opResult, opErr = doOp.Abort(op)
+			case "comment":
+				opResult, opErr = doOp.Comment(op)
+			case "assert":
+				opResult, opErr = doOp.Assert(op)
+			default:
+				opErr = fmt.Errorf("bad operation: %s", op.Op)
+				aborting = true
+			}
+		}
+		transResponse.Result = append(transResponse.Result, *opResult)
+		if opErr != nil {
+			transResponse.Error = "aborting transaction: " + opErr.Error()
+			aborting = true
 		}
 	}
 
-	return "{Transact}", nil
+	b, _ := json.Marshal(transResponse) // FIXME: handle error
+	respMap := map[string]interface{}{}
+	_ = json.Unmarshal(b, &respMap) // FIXME: handle error
+	return respMap, nil
 }
 
 func (s *ServOVSDB) Cancel(ctx context.Context, param interface{}) (interface{}, error) {
@@ -450,7 +486,7 @@ func (s *ServOVSDB) getMonitoredData(dataBase string, conditions map[string][]ov
 					delete(data, "version")
 				} else {
 					columnsMap := arrayToMap(mcrs[0].Columns)
-					for column, _ := range data {
+					for column := range data {
 						if _, ok := columnsMap[column]; !ok {
 							delete(data, column)
 						}
