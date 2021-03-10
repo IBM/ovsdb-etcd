@@ -62,3 +62,13 @@ func (cmr *CondMonitorParameters) UnmarshalJSON(p []byte) error {
 	}
 	return nil
 }
+
+func (un UpdateNotification) MarshalJSON() ([]byte, error) {
+	var oSet []interface{}
+	oSet = append(oSet, un.JasonValue)
+	oSet = append(oSet, un.TableUpdates)
+	if un.Uuid != nil {
+		oSet = append(oSet, un.Uuid.GoUUID)
+	}
+	return json.Marshal(oSet)
+}

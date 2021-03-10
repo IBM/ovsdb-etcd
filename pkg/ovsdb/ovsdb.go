@@ -463,9 +463,9 @@ func arrayToMap(input []interface{}) map[interface{}]bool {
 	return ret
 }
 
-func (s *ServOVSDB) getMonitoredData(dataBase string, conditions map[string][]ovsjson.MonitorCondRequest) (map[string]map[string]ovsjson.RowUpdate2, error) {
+func (s *ServOVSDB) getMonitoredData(dataBase string, conditions map[string][]ovsjson.MonitorCondRequest) (ovsjson.TableUpdates, error) {
 
-	returnData := map[string]map[string]ovsjson.RowUpdate2{}
+	returnData := ovsjson.TableUpdates{}
 	for tableName, mcrs := range conditions {
 		resp, err := s.dbServer.GetData("ovsdb/"+dataBase+"/"+tableName, false)
 		if err != nil {
@@ -475,7 +475,7 @@ func (s *ServOVSDB) getMonitoredData(dataBase string, conditions map[string][]ov
 			if len(mcrs) > 1 {
 				klog.Warningf("MCR is not a singe %v", mcrs)
 			}
-			d1 := map[string]ovsjson.RowUpdate2{}
+			d1 := ovsjson.TableUpdate{}
 			for _, v := range resp.Kvs {
 				data := map[string]interface{}{}
 				json.Unmarshal(v.Value, &data)
@@ -492,11 +492,11 @@ func (s *ServOVSDB) getMonitoredData(dataBase string, conditions map[string][]ov
 						}
 					}
 				}
-				d1[uuid.(string)] = ovsjson.Initial{Initial: data}
+				d1[uuid.(string)] = ovsjson.RowUpdate{Initial: &data}
 			}
 			returnData[tableName] = d1
 		} else {
-			// TODO
+			// TODO work with other DBs
 		}
 	}
 	return returnData, nil
