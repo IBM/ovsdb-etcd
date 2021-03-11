@@ -7,16 +7,18 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func NewOperationMock() *doOperation {
-	doOp := &doOperation{}
-	doOp.dbServer, _ = NewDBServerMock()
-	return doOp
-}
-
 func TestOperationSelect(t *testing.T) {
-	doOp := NewOperationMock()
+	expectedResponse := &[]map[string]string{}
+	var expectedError error
+	mock := &DBServerMock{
+		Response: expectedResponse,
+		Error:    expectedError,
+	}
+	doOp := &doOperation{
+		dbServer: mock,
+	}
 	op := &libovsdb.Operation{}
 	op.Op = "select"
 	_, err := doOp.Select(op)
-	assert.Nil(t, err)
+	assert.Equal(t, expectedError, err)
 }

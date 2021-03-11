@@ -185,6 +185,9 @@ func (con *DBServer) GetUUID() string {
 }
 
 type DBServerMock struct {
+	Response interface{}
+	Error    error
+	Ok       bool
 }
 
 func NewDBServerMock() (DBServerInterface, error) {
@@ -192,34 +195,33 @@ func NewDBServerMock() (DBServerInterface, error) {
 }
 
 func (con *DBServerMock) Lock(ctx context.Context, id string) (bool, error) {
-	return true, nil
+	return con.Response.(bool), nil
 }
 
 func (con *DBServerMock) Unlock(ctx context.Context, id string) error {
-	return nil
+	return con.Error
 }
 
 func (con *DBServerMock) AddSchema(schemaName, schemaFile string) error {
-	return nil
+	return con.Error
 }
 
 func (con *DBServerMock) LoadServerData() error {
-	return nil
+	return con.Error
 }
 
 func (con *DBServerMock) GetData(prefix string, keysOnly bool) (*clientv3.GetResponse, error) {
-	var resp *clientv3.GetResponse
-	return resp, nil
+	return con.Response.(*clientv3.GetResponse), con.Error
 }
 
 func (con *DBServerMock) GetMarshaled(prefix string, columns []interface{}) (*[]map[string]string, error) {
-	return &[]map[string]string{}, nil
+	return con.Response.(*[]map[string]string), con.Error
 }
 
 func (con *DBServerMock) GetSchema(name string) (string, bool) {
-	return "", true
+	return con.Response.(string), con.Ok
 }
 
 func (con *DBServerMock) GetUUID() string {
-	return ""
+	return con.Response.(string)
 }
