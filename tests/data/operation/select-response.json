@@ -1,0 +1,85 @@
+{
+  "rows": [
+    {
+      "name": [
+	"set",
+	[]
+      ],
+      "priority": 1001,
+      "log": false,
+      "external_ids": [
+	"map",
+	[]
+      ],
+      "direction": "to-lport",
+      "meter": [
+	"set",
+	[]
+      ],
+      "action": "allow-related",
+      "match": "ip4.src==10.244.2.2",
+      "severity": [
+	"set",
+	[]
+      ],
+      "_uuid": [
+	"uuid",
+	"e7ec5c50-fa27-4917-850f-e63973504365"
+      ]
+    },
+    {
+      "name": [
+	"set",
+	[]
+      ],
+      "priority": 1001,
+      "log": false,
+      "external_ids": [
+	"map",
+	[]
+      ],
+      "direction": "to-lport",
+      "meter": [
+	"set",
+	[]
+      ],
+      "action": "allow-related",
+      "match": "ip4.src==10.244.1.2",
+      "severity": [
+	"set",
+	[]
+      ],
+      "_uuid": [
+	"uuid",
+	"5043a139-0da7-493f-902d-49009def3c0b"
+      ]
+    },
+    {
+      "name": [
+	"set",
+	[]
+      ],
+      "priority": 1001,
+      "log": false,
+      "external_ids": [
+	"map",
+	[]
+      ],
+      "direction": "to-lport",
+      "meter": [
+	"set",
+	[]
+      ],
+      "action": "allow-related",
+      "match": "ip4.src==10.244.0.2",
+      "severity": [
+	"set",
+	[]
+      ],
+      "_uuid": [
+	"uuid",
+	"75ebbedc-bd96-4a97-9cad-3882525f3475"
+      ]
+    }
+  ]
+}
