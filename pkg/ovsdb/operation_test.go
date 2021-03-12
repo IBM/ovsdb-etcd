@@ -10,7 +10,7 @@ const base = "../../tests/data/operation/"
 
 func TestOperationSelect(t *testing.T) {
 	byteValue := readJson(t, base+"select-response.json")
-	expectedResponse := toArrayMapString(byteValue)
+	expectedResponse := bytesToArrayMapString(byteValue)
 	var expectedError error
 	mock := &DBServerMock{
 		Response: expectedResponse,
@@ -20,7 +20,7 @@ func TestOperationSelect(t *testing.T) {
 		dbServer: mock,
 	}
 	byteValue = readJson(t, base+"select-request.json")
-	op := toOperation(byteValue)
+	op := bytesToOperation(byteValue)
 	_, err := doOp.Select(op)
 	assert.Equal(t, expectedError, err)
 }
