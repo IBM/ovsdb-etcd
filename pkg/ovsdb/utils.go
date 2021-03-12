@@ -19,20 +19,51 @@ func readJson(t *testing.T, filename string) []byte {
 	return byteValue
 }
 
-func toMapInterface(byteValue []byte) *map[string]interface{} {
+func bytesToInterface(byteValue []byte) *interface{} {
+	var result interface{}
+	json.Unmarshal([]byte(byteValue), &result)
+	return &result
+}
+
+func bytesToMapInterface(byteValue []byte) *map[string]interface{} {
 	var result map[string]interface{}
 	json.Unmarshal([]byte(byteValue), &result)
 	return &result
 }
 
-func toArrayMapString(byteValue []byte) *[]map[string]string {
+func bytesToArrayMapInterface(byteValue []byte) *map[string]interface{} {
+	var result map[string]interface{}
+	json.Unmarshal([]byte(byteValue), &result)
+	return &result
+}
+
+func bytesToMapString(byteValue []byte) *map[string]string {
+	var result map[string]string
+	json.Unmarshal([]byte(byteValue), &result)
+	return &result
+}
+
+func bytesToArrayMapString(byteValue []byte) *[]map[string]string {
 	var result []map[string]string
 	json.Unmarshal([]byte(byteValue), &result)
 	return &result
 }
 
-func toOperation(byteValue []byte) *libovsdb.Operation {
+func bytesToArrayInterface(byteValue []byte) *[]interface{} {
+	var result []interface{}
+	json.Unmarshal([]byte(byteValue), &result)
+	return &result
+}
+
+func bytesToOperation(byteValue []byte) *libovsdb.Operation {
 	var result libovsdb.Operation
 	json.Unmarshal([]byte(byteValue), &result)
 	return &result
+}
+
+func arrayMapStringToArrayInterface(in []map[string]string) (out []interface{}) {
+	for _, v := range in {
+		out = append(out, v)
+	}
+	return
 }
