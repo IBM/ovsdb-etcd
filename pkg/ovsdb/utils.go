@@ -61,6 +61,14 @@ func bytesToOperation(byteValue []byte) *libovsdb.Operation {
 	return &result
 }
 
+func arrayToMap(input []interface{}) map[interface{}]bool {
+	ret := map[interface{}]bool{}
+	for _, str := range input {
+		ret[str] = true
+	}
+	return ret
+}
+
 func arrayMapStringToArrayInterface(in []map[string]string) (out []interface{}) {
 	for _, v := range in {
 		out = append(out, v)

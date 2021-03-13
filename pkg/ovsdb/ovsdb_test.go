@@ -10,6 +10,11 @@ import (
 
 const baseTransact string = "../../tests/data/transact/"
 
+func NewClienthandlerMock() *ClientHandler {
+	dbserver, _ := NewDBServerMock()
+	return NewClientHandler(dbserver)
+}
+
 func TestTransactSelect(t *testing.T) {
 	byteValue := readJson(t, baseTransact+"select-response.json")
 	expectedResponse := bytesToInterface(byteValue)
@@ -21,8 +26,8 @@ func TestTransactSelect(t *testing.T) {
 	byteValue = readJson(t, baseTransact+"select-request.json")
 	requestArrayMapString := bytesToArrayMapString(byteValue)
 	requestArrayInterface := arrayMapStringToArrayInterface(*requestArrayMapString)
-	servOVSDB := &ServOVSDB{dbServer}
-	actualResponse, actualError := servOVSDB.Transact(nil, requestArrayInterface)
+	ch := NewClientHandler(dbServer)
+	actualResponse, actualError := ch.Transact(nil, requestArrayInterface)
 	assert.Equal(t, expectedError, actualError)
 	actualResponseString, err := json.Marshal(actualResponse)
 	assert.Nil(t, err)
