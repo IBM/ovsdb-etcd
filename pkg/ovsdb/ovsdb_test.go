@@ -5,27 +5,26 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/ibm/ovsdb-etcd/pkg/common"
+
 	"github.com/stretchr/testify/assert"
 )
 
 const baseTransact string = "../../tests/data/transact/"
 
-func NewClienthandlerMock() *ClientHandler {
-	dbserver, _ := NewDBServerMock()
-	return NewClientHandler(dbserver)
-}
-
 func TestTransactSelect(t *testing.T) {
-	byteValue := readJson(t, baseTransact+"select-response.json")
-	expectedResponse := bytesToInterface(byteValue)
+	byteValue, err := common.ReadFile(baseTransact + "select-response.json")
+	assert.Nil(t, err)
+	expectedResponse := common.BytesToInterface(byteValue)
 	var expectedError error
 	dbServer := &DBServerMock{
 		Response: expectedResponse,
 		Error:    expectedError,
 	}
-	byteValue = readJson(t, baseTransact+"select-request.json")
-	requestArrayMapString := bytesToArrayMapString(byteValue)
-	requestArrayInterface := arrayMapStringToArrayInterface(*requestArrayMapString)
+	byteValue, err = common.ReadFile(baseTransact + "select-request.json")
+	assert.Nil(t, err)
+	requestArrayMapString := common.BytesToArrayMapString(byteValue)
+	requestArrayInterface := common.ArrayMapStringToArrayInterface(*requestArrayMapString)
 	ch := NewClientHandler(dbServer)
 	actualResponse, actualError := ch.Transact(nil, requestArrayInterface)
 	assert.Equal(t, expectedError, actualError)

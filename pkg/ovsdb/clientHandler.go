@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/ebay/libovsdb"
 
+	"github.com/ibm/ovsdb-etcd/pkg/common"
 	ovsjson "github.com/ibm/ovsdb-etcd/pkg/json"
 	"k8s.io/klog/v2"
 )
@@ -232,7 +233,7 @@ func (ch *ClientHandler) getMonitoredData(dataBase string, conditions map[string
 					delete(data, "uuid")
 					delete(data, "version")
 				} else {
-					columnsMap := arrayToMap(mcrs[0].Columns)
+					columnsMap := common.ArrayToMap(mcrs[0].Columns)
 					for column := range data {
 						if _, ok := columnsMap[column]; !ok {
 							delete(data, column)
