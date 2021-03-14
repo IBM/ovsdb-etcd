@@ -2,6 +2,8 @@ package common
 
 import (
 	"encoding/json"
+	"go.etcd.io/etcd/api/mvccpb"
+	clientv3 "go.etcd.io/etcd/client/v3"
 
 	"github.com/ebay/libovsdb"
 )
@@ -40,6 +42,18 @@ func BytesToArrayInterface(in []byte) *[]interface{} {
 	var result []interface{}
 	json.Unmarshal([]byte(in), &result)
 	return &result
+}
+
+func MapToEtcdResponse(in *map[string]interface{}) (*clientv3.GetResponse, error) {
+	kvs := []*mvccpb.KeyValue{}
+	for k, v := range *in {
+		value, err := json.Marshal(v)
+		if err!= nil {
+			return nil, err
+		}
+		kvs = append(kvs, &mvccpb.KeyValue{Key: []byte(k), Value: value})
+	}
+	return &clientv3.GetResponse{ Kvs: kvs}, nil
 }
 
 func BytesToOperation(in []byte) *libovsdb.Operation {

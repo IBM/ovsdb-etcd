@@ -252,6 +252,7 @@ github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5/go.mod h1
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 go.etcd.io/bbolt v1.3.2/go.mod h1:IbVyRI1SCnLcuJnV2u8VeU0CEYM7e686BmAb1XKL+uU=
+go.etcd.io/etcd v0.0.0-20200520232829-54ba9589114f h1:uj/Xzadu0dyweesgOo+HghLYs0ssb9IRDvMp1UbAwJU=
 go.etcd.io/etcd/api/v3 v3.0.0-20201103155942-6e800b9b0161 h1:/vbrgvNBKXKYPs0skhNgdKMQrs9SQJJv1p6WbFNlGXw=
 go.etcd.io/etcd/api/v3 v3.0.0-20201103155942-6e800b9b0161/go.mod h1:QoreG2Bh1wBonBLcd9T7jHjTEfqCYi9KtQZuQhiRfFM=
 go.etcd.io/etcd/client/v3 v3.0.0-20210127081512-a4fac14353e7 h1:SDtW2Rj6R4u8ULL24Y2y+KapthKfsjJtpeYR0XFQpxM=
