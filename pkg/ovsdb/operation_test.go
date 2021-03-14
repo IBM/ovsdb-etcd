@@ -15,12 +15,12 @@ func TestOperationSelect(t *testing.T) {
 	assert.Nil(t, err)
 	expectedResponse := common.BytesToArrayMapString(byteValue)
 	var expectedError error
-	mock := &DBServerMock{
+	db := &DatabaseMock{
 		Response: expectedResponse,
 		Error:    expectedError,
 	}
 	doOp := &doOperation{
-		dbServer: mock,
+		db: db,
 	}
 	byteValue, err = common.ReadFile(base + "select-request.json")
 	assert.Nil(t, err)

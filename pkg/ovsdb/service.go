@@ -2,12 +2,18 @@ package ovsdb
 
 import (
 	"context"
-	ovsjson "github.com/ibm/ovsdb-etcd/pkg/json"
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
+
+	"k8s.io/klog/v2"
 )
 
 // The interface that provides OVSDB jrpc methods defined by RFC 7047 and later extended by the OVN/OVS community,
 // see https://tools.ietf.org/html/rfc7047 and https://docs.openvswitch.org/en/latest/ref/ovsdb-server.7
-type OVSDBService interface {
+type Servicer interface {
 
 	// RFC 7047 section 4.1.1
 	// This operation retrieves an array whose elements are the names of the
@@ -204,4 +210,70 @@ type OVSDBService interface {
 	// "params": JSON array with any contents
 	// Returns : "result": same as "params"
 	Echo(ctx context.Context, param interface{}) interface{}
+}
+
+type Service struct {
+	db Databaser
+}
+
+func (s *Service) ListDbs(ctx context.Context, param interface{}) ([]string, error) {
+	klog.V(5).Infof("ListDbs request")
+	resp, err := s.db.GetData("ovsdb/_Server/Database/", true)
+	if err != nil {
+		return nil, err
+	}
+	dbs := []string{}
+	for _, kv := range resp.Kvs {
+		slices := strings.Split(string(kv.Key), "/")
+		dbs = append(dbs, slices[len(slices)-1])
+	}
+	return dbs, nil
+}
+
+func (s *Service) GetSchema(ctx context.Context, param interface{}) (interface{}, error) {
+	klog.V(5).Infof("GetSchema request, parameters %v", param)
+
+	var schemaName string
+	switch param.(type) {
+	case string:
+		schemaName = param.(string)
+	case []string:
+		schemaName = param.([]string)[0]
+	case []interface{}:
+		schemaName = fmt.Sprintf("%s", param.([]interface{})[0])
+	default:
+		// probably is a bad idea
+		schemaName = fmt.Sprintf("%s", param)
+	}
+	schema, ok := s.db.GetSchema(schemaName)
+	if !ok {
+		return nil, fmt.Errorf("unknown database")
+	}
+	var f interface{}
+	err := json.Unmarshal([]byte(schema), &f)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+
+func (s *Service) GetServerId(ctx context.Context) string {
+	klog.V(5).Infof("GetServerId request")
+	return s.db.GetUUID()
+}
+
+func (s *Service) Convert(ctx context.Context, param interface{}) (interface{}, error) {
+	klog.V(5).Infof("Convert request, parameters %v", param)
+	return "{Convert}", nil
+}
+
+func (s *Service) Echo(ctx context.Context, param interface{}) interface{} {
+	klog.V(5).Infof("Echo request, parameters %v", param)
+	return param
+}
+
+func NewService(db Databaser) *Service {
+	return &Service{
+		db: db,
+	}
 }

@@ -17,7 +17,7 @@ func TestTransactSelect(t *testing.T) {
 	assert.Nil(t, err)
 	expectedResponse := common.BytesToInterface(byteValue)
 	var expectedError error
-	dbServer := &DBServerMock{
+	db := &DatabaseMock{
 		Response: expectedResponse,
 		Error:    expectedError,
 	}
@@ -25,7 +25,7 @@ func TestTransactSelect(t *testing.T) {
 	assert.Nil(t, err)
 	requestArrayMapString := common.BytesToArrayMapString(byteValue)
 	requestArrayInterface := common.ArrayMapStringToArrayInterface(*requestArrayMapString)
-	ch := NewClientHandler(dbServer)
+	ch := NewHandler(db)
 	actualResponse, actualError := ch.Transact(nil, requestArrayInterface)
 	assert.Equal(t, expectedError, actualError)
 	actualResponseString, err := json.Marshal(actualResponse)
