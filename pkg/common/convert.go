@@ -20,12 +20,6 @@ func BytesToMapInterface(in []byte) *map[string]interface{} {
 	return &result
 }
 
-func BytesToArrayMapInterface(in []byte) *map[string]interface{} {
-	var result map[string]interface{}
-	json.Unmarshal([]byte(in), &result)
-	return &result
-}
-
 func BytesToMapString(in []byte) *map[string]string {
 	var result map[string]string
 	json.Unmarshal([]byte(in), &result)
