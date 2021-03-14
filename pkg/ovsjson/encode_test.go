@@ -1,4 +1,4 @@
-package json
+package ovsjson
 
 import (
 	"encoding/json"

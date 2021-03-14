@@ -7,7 +7,7 @@ import (
 )
 
 type doOperation struct {
-	dbServer DBServerInterface
+	db Databaser
 }
 
 func (doOp *doOperation) Insert(op *libovsdb.Operation) (*libovsdb.OperationResult, error) {
@@ -20,7 +20,7 @@ func (doOp *doOperation) Select(op *libovsdb.Operation) (*libovsdb.OperationResu
 		columns = append(columns, val)
 	}
 
-	mapResults, err := doOp.dbServer.GetMarshaled("ovsdb/"+op.Table, columns)
+	mapResults, err := doOp.db.GetMarshaled("ovsdb/"+op.Table, columns)
 	if err != nil {
 		return nil, err
 	}

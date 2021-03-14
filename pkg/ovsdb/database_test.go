@@ -10,7 +10,7 @@ import (
 func TestMockLock(t *testing.T) {
 	expectedResponse := true
 	var expectedError error
-	mock := DBServerMock{
+	mock := DatabaseMock{
 		Response: expectedResponse,
 		Error:    expectedError,
 	}
@@ -21,7 +21,7 @@ func TestMockLock(t *testing.T) {
 
 func TestMockUnlock(t *testing.T) {
 	var expectedError error
-	mock := DBServerMock{
+	mock := DatabaseMock{
 		Error: expectedError,
 	}
 	actualError := mock.Unlock(nil, "")
@@ -30,7 +30,7 @@ func TestMockUnlock(t *testing.T) {
 
 func TestMockAddSchema(t *testing.T) {
 	var expectedError error
-	mock := DBServerMock{
+	mock := DatabaseMock{
 		Error: expectedError,
 	}
 	actualError := mock.AddSchema("", "")
@@ -39,7 +39,7 @@ func TestMockAddSchema(t *testing.T) {
 
 func TestMockLoadServerData(t *testing.T) {
 	var expectedError error
-	mock := DBServerMock{
+	mock := DatabaseMock{
 		Error: expectedError,
 	}
 	actualError := mock.LoadServerData()
@@ -49,7 +49,7 @@ func TestMockLoadServerData(t *testing.T) {
 func TestMockGetData(t *testing.T) {
 	var expectedResponse *clientv3.GetResponse
 	var expectedError error
-	mock := DBServerMock{
+	mock := DatabaseMock{
 		Error:    expectedError,
 		Response: expectedResponse,
 	}
@@ -66,7 +66,7 @@ func TestMockGetMarshaled(t *testing.T) {
 		},
 	}
 	var expectedError error
-	mock := DBServerMock{
+	mock := DatabaseMock{
 		Response: expectedResponse,
 		Error:    expectedError,
 	}
@@ -78,7 +78,7 @@ func TestMockGetMarshaled(t *testing.T) {
 func TestMockGetSchema(t *testing.T) {
 	expectedResponse := "val1"
 	expectedOk := true
-	mock := DBServerMock{
+	mock := DatabaseMock{
 		Response: expectedResponse,
 		Ok:       expectedOk,
 	}
@@ -89,7 +89,7 @@ func TestMockGetSchema(t *testing.T) {
 
 func TestMockGetUUID(t *testing.T) {
 	expectedResponse := "val1"
-	mock := DBServerMock{
+	mock := DatabaseMock{
 		Response: expectedResponse,
 	}
 	actualResponse := mock.GetUUID()

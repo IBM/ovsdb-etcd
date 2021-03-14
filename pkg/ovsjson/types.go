@@ -1,4 +1,4 @@
-package json
+package ovsjson
 
 import (
 	"github.com/ebay/libovsdb"

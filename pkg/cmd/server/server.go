@@ -41,7 +41,7 @@ func main() {
 		klog.Fatal("Wrong ETCD members list", etcdMembers)
 	}
 	etcdServers := strings.Split(*etcdMembers, ",")
-	dbServ, err := ovsdb.NewDBServer(etcdServers)
+	dbServ, err := ovsdb.NewDatabase(etcdServers)
 	if err != nil {
 		klog.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func main() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				clientHandler := ovsdb.NewClientHandler(dbServ)
+				clientHandler := ovsdb.NewHandler(dbServ)
 				assigner := addClientHandlers(*globServiceMap, clientHandler)
 				srv := jrpc2.NewServer(assigner, servOptions)
 				clientHandler.SetConnection(srv)
@@ -142,7 +142,7 @@ func main() {
 
 }
 
-func createServiceMap(ovsdb *ovsdb.ServOVSDB) *handler.Map {
+func createServiceMap(ovsdb *ovsdb.Service) *handler.Map {
 	out := make(handler.Map)
 	out["list_dbs"] = handler.New(ovsdb.ListDbs)
 	out["get_schema"] = handler.New(ovsdb.GetSchema)
@@ -153,7 +153,7 @@ func createServiceMap(ovsdb *ovsdb.ServOVSDB) *handler.Map {
 }
 
 // we pass handlerMap by value, so the function gets a proprietary copy of it.
-func addClientHandlers(handlerMap handler.Map, ch *ovsdb.ClientHandler) *handler.Map {
+func addClientHandlers(handlerMap handler.Map, ch *ovsdb.Handler) *handler.Map {
 	handlerMap["transact"] = handler.New(ch.Transact)
 	handlerMap["cancel"] = handler.New(ch.Cancel)
 	handlerMap["monitor"] = handler.New(ch.Monitor)
@@ -166,7 +166,7 @@ func addClientHandlers(handlerMap handler.Map, ch *ovsdb.ClientHandler) *handler
 	return &handlerMap
 }
 
-func serverLoop(ctx context.Context, lst net.Listener, dbInterface ovsdb.DBServerInterface, serviceMap *handler.Map, serverOpts *jrpc2.ServerOptions, wg *sync.WaitGroup) error {
+func serverLoop(ctx context.Context, lst net.Listener, dbInterface ovsdb.Databaser, serviceMap *handler.Map, serverOpts *jrpc2.ServerOptions, wg *sync.WaitGroup) error {
 	for {
 		conn, err := lst.Accept()
 		if err != nil {
@@ -182,7 +182,7 @@ func serverLoop(ctx context.Context, lst net.Listener, dbInterface ovsdb.DBServe
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			clientHandler := ovsdb.NewClientHandler(dbInterface)
+			clientHandler := ovsdb.NewHandler(dbInterface)
 			assigner := addClientHandlers(*serviceMap, clientHandler)
 			srv := jrpc2.NewServer(assigner, serverOpts)
 			clientHandler.SetConnection(srv)
