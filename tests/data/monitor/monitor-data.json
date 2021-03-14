@@ -1,0 +1,457 @@
+{
+  "41d48742-8cd0-4876-b82f-4a7667a87f77": {
+      "uuid": [
+        "uuid",
+        "41d48742-8cd0-4876-b82f-4a7667a87f77"
+      ],
+      "_version": [
+        "uuid",
+        "7415c7ad-d014-4018-bdce-c02efbf6d083"
+      ],
+      "name": "ovn_cluster_router",
+      "policies": [
+        "set",
+        [
+          [
+            "uuid",
+            "1c30c837-88f5-4030-a21f-3f704f22a41a"
+          ],
+          [
+            "uuid",
+            "2eb1d344-ac06-4889-b0f9-937490643d4f"
+          ],
+          [
+            "uuid",
+            "304ac962-cb4c-4826-890f-2c652fca65b2"
+          ],
+          [
+            "uuid",
+            "377ba7b7-061c-4e2f-a72c-7ef9bb176b38"
+          ],
+          [
+            "uuid",
+            "3dd5e622-a979-4940-bb94-2a312145c72c"
+          ],
+          [
+            "uuid",
+            "890a0866-0b83-4b48-a225-f3729fd065fb"
+          ],
+          [
+            "uuid",
+            "98f776fd-447e-4738-b226-f616f4709a93"
+          ],
+          [
+            "uuid",
+            "a5d1a5b5-37d7-480a-8ed0-fb7ee73e5960"
+          ],
+          [
+            "uuid",
+            "af249e45-3cab-4e27-b49b-b50d3fea8070"
+          ],
+          [
+            "uuid",
+            "b2ff202e-7bfa-4b15-81e4-4cc9bf92b5f3"
+          ],
+          [
+            "uuid",
+            "bbeee40b-3c8d-412b-8c14-3ab83e98cb69"
+          ],
+          [
+            "uuid",
+            "fe151301-d60d-4e99-9f40-7637e46d8615"
+          ],
+          [
+            "uuid",
+            "ffb69b95-f755-4af5-8a97-e8b8c60a5c12"
+          ]
+        ]
+      ],
+      "external_ids": [
+        "map",
+        [
+          [
+            "k8s-cluster-router",
+            "yes"
+          ],
+          [
+            "k8s-ovn-topo-version",
+            "2"
+          ]
+        ]
+      ],
+      "options": [
+        "map",
+        [
+
+        ]
+      ],
+      "enabled": [
+        "set",
+        [
+
+        ]
+      ],
+      "nat": [
+        "set",
+        [
+          [
+            "uuid",
+            "ba4437cd-34fc-4faf-871a-77ae39631a73"
+          ],
+          [
+            "uuid",
+            "c77812dd-5530-4f98-85a6-2bbdb49a3dba"
+          ],
+          [
+            "uuid",
+            "f57847bb-257e-4019-967d-78b13ae8f715"
+          ]
+        ]
+      ],
+      "static_routes": [
+        "set",
+        [
+          [
+            "uuid",
+            "4ccef26a-8195-4957-96c3-de69e896386b"
+          ],
+          [
+            "uuid",
+            "61c5dcb6-f063-48d7-a4e4-a9ac08eecd73"
+          ],
+          [
+            "uuid",
+            "7c12ec3c-87f5-4307-8423-242829e5ee65"
+          ],
+          [
+            "uuid",
+            "85f4624b-72a6-4d49-a72d-cc58d41b206e"
+          ],
+          [
+            "uuid",
+            "8b14c55a-99a4-4f79-98ad-fc35a124d300"
+          ],
+          [
+            "uuid",
+            "94cc8ad4-cf40-4f0c-b398-7bb82d23ee09"
+          ],
+          [
+            "uuid",
+            "a2fd4232-406d-477b-85d7-b84acce22d91"
+          ],
+          [
+            "uuid",
+            "abeb3419-f81a-41b3-9b3a-c262ba2939b0"
+          ],
+          [
+            "uuid",
+            "f0a14976-7caf-4155-a776-eeb705eeba1c"
+          ]
+        ]
+      ],
+      "ports": [
+        "set",
+        [
+          [
+            "uuid",
+            "599bad05-56ad-43fe-a25f-a03c8dc80e7b"
+          ],
+          [
+            "uuid",
+            "5fa06d03-26e4-422e-82d7-31d2a69e09b7"
+          ],
+          [
+            "uuid",
+            "8257ad58-dd61-4de6-8959-ba87a85b0435"
+          ],
+          [
+            "uuid",
+            "832adec7-82ba-4a00-9ff8-58bdf7718dc4"
+          ],
+          [
+            "uuid",
+            "d7c5edaa-df5e-4592-a0af-4186d5111a17"
+          ]
+        ]
+      ],
+      "load_balancer": [
+        "set",
+        [
+
+        ]
+      ]
+    },
+  "517f3113-9970-46ed-9d7f-68b9398f5b14": {
+    "uuid": [
+      "uuid",
+      "517f3113-9970-46ed-9d7f-68b9398f5b14"
+    ],
+    "_version": [
+        "uuid",
+        "236943c5-2db9-4162-bde9-64b3379a355e"
+      ],
+      "name": "GR_ovn-worker",
+      "policies": [
+        "set",
+        [
+
+        ]
+      ],
+      "external_ids": [
+        "map",
+        [
+          [
+            "physical_ip",
+            "172.18.0.3"
+          ],
+          [
+            "physical_ips",
+            "172.18.0.3"
+          ]
+        ]
+      ],
+      "options": [
+        "map",
+        [
+          [
+            "always_learn_from_arp_request",
+            "false"
+          ],
+          [
+            "chassis",
+            "59b1bc21-5b6e-48fa-bbf5-11652ea8316b"
+          ],
+          [
+            "dynamic_neigh_routers",
+            "true"
+          ]
+        ]
+      ],
+      "enabled": [
+        "set",
+        [
+
+        ]
+      ],
+      "nat": [
+        "set",
+        [
+
+        ]
+      ],
+      "static_routes": [
+        "set",
+        [
+          [
+            "uuid",
+            "5618380c-f542-4c13-910a-a3242964d102"
+          ],
+          [
+            "uuid",
+            "839e484d-bea0-423a-b973-bfc054ebde9c"
+          ]
+        ]
+      ],
+      "ports": [
+        "set",
+        [
+          [
+            "uuid",
+            "80b83b2f-e166-4510-9f8e-c7b66236919d"
+          ],
+          [
+            "uuid",
+            "a56ea492-67a6-4e0c-8b87-9a4ef87a9321"
+          ]
+        ]
+      ],
+      "load_balancer": [
+        "set",
+        [
+
+        ]
+      ]
+    },
+  "22ea6bd3-5f63-4378-ac0e-b036b4d480e8": {
+    "uuid": [
+      "uuid",
+      "22ea6bd3-5f63-4378-ac0e-b036b4d480e8"
+    ],
+    "_version": [
+        "uuid",
+        "915179a2-b2bd-4cd3-b55a-2b3590aca231"
+      ],
+      "name": "GR_ovn-control-plane",
+      "policies": [
+        "set",
+        [
+
+        ]
+      ],
+      "external_ids": [
+        "map",
+        [
+          [
+            "physical_ip",
+            "172.18.0.4"
+          ],
+          [
+            "physical_ips",
+            "172.18.0.4"
+          ]
+        ]
+      ],
+      "options": [
+        "map",
+        [
+          [
+            "always_learn_from_arp_request",
+            "false"
+          ],
+          [
+            "chassis",
+            "0ccb1d6f-7d6f-490c-88d5-5c19bfc5ab26"
+          ],
+          [
+            "dynamic_neigh_routers",
+            "true"
+          ]
+        ]
+      ],
+      "enabled": [
+        "set",
+        [
+
+        ]
+      ],
+      "nat": [
+        "set",
+        [
+
+        ]
+      ],
+      "static_routes": [
+        "set",
+        [
+          [
+            "uuid",
+            "1a5ae6ba-c9f8-49c7-a3f2-f0254dfc71b0"
+          ],
+          [
+            "uuid",
+            "55941f7d-ccbb-4eac-ad9f-2896e933eb9e"
+          ]
+        ]
+      ],
+      "ports": [
+        "set",
+        [
+          [
+            "uuid",
+            "90c49553-5ba8-4a57-94a5-9977b253d05d"
+          ],
+          [
+            "uuid",
+            "9aed125e-0b2b-4b9e-9eaf-f17126dc6d01"
+          ]
+        ]
+      ],
+      "load_balancer": [
+        "set",
+        [
+
+        ]
+      ]
+    },
+  "ed62f6ca-19ed-47df-8863-aed7ced26cf4": {
+    "uuid": [
+      "uuid",
+      "ed62f6ca-19ed-47df-8863-aed7ced26cf4"
+    ],
+    "_version": [
+        "uuid",
+        "06d140ae-b4e8-492c-a354-b36d2e0cd967"
+      ],
+      "name": "GR_ovn-worker2",
+      "policies": [
+        "set",
+        [
+
+        ]
+      ],
+      "external_ids": [
+        "map",
+        [
+          [
+            "physical_ip",
+            "172.18.0.2"
+          ],
+          [
+            "physical_ips",
+            "172.18.0.2"
+          ]
+        ]
+      ],
+      "options": [
+        "map",
+        [
+          [
+            "always_learn_from_arp_request",
+            "false"
+          ],
+          [
+            "chassis",
+            "043eb4c2-118f-4d4b-8b42-fcb0fa3e5e57"
+          ],
+          [
+            "dynamic_neigh_routers",
+            "true"
+          ]
+        ]
+      ],
+      "enabled": [
+        "set",
+        [
+
+        ]
+      ],
+      "nat": [
+        "set",
+        [
+
+        ]
+      ],
+      "static_routes": [
+        "set",
+        [
+          [
+            "uuid",
+            "5ca9c828-4fdc-4f94-bd7a-58f3952452fa"
+          ],
+          [
+            "uuid",
+            "be3c0da1-88a8-44d1-9a6e-2570463b5cda"
+          ]
+        ]
+      ],
+      "ports": [
+        "set",
+        [
+          [
+            "uuid",
+            "47d6eb85-df81-4865-b47f-a9ee2adc9782"
+          ],
+          [
+            "uuid",
+            "630885bb-e016-4cc3-b0a6-18a137435337"
+          ]
+        ]
+      ],
+      "load_balancer": [
+        "set",
+        [
+
+        ]
+      ]
+    }
+}

@@ -5,14 +5,16 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ibm/ovsdb-etcd/pkg/common"
-
 	"github.com/stretchr/testify/assert"
+
+	"github.com/ibm/ovsdb-etcd/pkg/common"
 )
 
-const baseTransact string = "../../tests/data/transact/"
+const baseData string = "../../tests/data/"
+const baseTransact string = baseData + "/transact/"
 
 func TestTransactSelect(t *testing.T) {
+
 	byteValue, err := common.ReadFile(baseTransact + "select-response.json")
 	assert.Nil(t, err)
 	expectedResponse := common.BytesToInterface(byteValue)

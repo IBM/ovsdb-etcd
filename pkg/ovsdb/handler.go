@@ -216,41 +216,46 @@ func (ch *Handler) getMonitoredData(dataBase string, conditions map[string][]ovs
 
 	returnData := ovsjson.TableUpdates{}
 	for tableName, mcrs := range conditions {
+		if len(mcrs) > 1 {
+			klog.Warningf("MCR is not a singe %v", mcrs)
+		}
+		if mcrs[0].Select != nil && !mcrs[0].Select.Initial {
+			continue
+		}
 		resp, err := ch.db.GetData("ovsdb/"+dataBase+"/"+tableName, false)
 		if err != nil {
 			return nil, err
 		}
-		if dataBase == "_Server" && tableName == "Database" {
-			if len(mcrs) > 1 {
-				klog.Warningf("MCR is not a singe %v", mcrs)
+
+		d1 := ovsjson.TableUpdate{}
+		for _, v := range resp.Kvs {
+			data := map[string]interface{}{}
+			json.Unmarshal(v.Value, &data)
+			uuidSet, ok := data["uuid"]
+			if !ok {
+				err := fmt.Errorf("key %s, wrong formatting, doesn't include UUID %v", v.Key, data)
+				klog.Error(err)
+				return nil, err
 			}
-			d1 := ovsjson.TableUpdate{}
-			for _, v := range resp.Kvs {
-				data := map[string]interface{}{}
-				json.Unmarshal(v.Value, &data)
-				uuidSet := data["uuid"]
-				uuid := uuidSet.([]interface{})[1]
-				if len(mcrs[0].Columns) == 0 {
-					delete(data, "uuid")
-					delete(data, "version")
-				} else {
-					columnsMap := common.ArrayToMap(mcrs[0].Columns)
-					for column := range data {
-						if _, ok := columnsMap[column]; !ok {
-							delete(data, column)
-						}
+			uuid := uuidSet.([]interface{})[1]
+			if len(mcrs[0].Columns) == 0 {
+				delete(data, "uuid")
+				delete(data, "_version")
+			} else {
+				columnsMap := common.ArrayToMap(mcrs[0].Columns)
+				for column := range data {
+					if _, ok := columnsMap[column]; !ok {
+						delete(data, column)
 					}
 				}
-				if isV2 {
-					d1[uuid.(string)] = ovsjson.RowUpdate{Initial: &data}
-				} else {
-					d1[uuid.(string)] = ovsjson.RowUpdate{New: &data}
-				}
 			}
-			returnData[tableName] = d1
-		} else {
-			// TODO work with other DBs
+			if isV2 {
+				d1[uuid.(string)] = ovsjson.RowUpdate{Initial: &data}
+			} else {
+				d1[uuid.(string)] = ovsjson.RowUpdate{New: &data}
+			}
 		}
+		returnData[tableName] = d1
 	}
 	return returnData, nil
 }
