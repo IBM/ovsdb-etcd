@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -16,7 +15,6 @@ import (
 	"github.com/creachadair/jrpc2/channel"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/metrics"
-	"github.com/creachadair/jrpc2/server"
 	"k8s.io/klog/v2"
 
 	"github.com/ibm/ovsdb-etcd/pkg/ovsdb"
@@ -31,25 +29,6 @@ var (
 	etcdMembers = flag.String("etcd-members", ETCD_LOCALHOST, "ETCD service addresses, separated by ',' ")
 	maxTasks    = flag.Int("max", 1, "Maximum concurrent tasks")
 )
-
-var methodsMap = map[string]string{
-	"ListDbs":           "list_dbs",
-	"GetSchema":         "get_schema",
-	"Transact":          "transact",
-	"Cancel":            "cancel",
-	"Monitor":           "monitor",
-	"MonitorCancel":     "monitor_cancel",
-	"Lock":              "lock",
-	"Steal":             "steal",
-	"Unlock":            "unlock",
-	"Echo":              "echo",
-	"MonitorCond":       "monitor_cond",
-	"MonitorCondChange": "monitor_cond_change",
-	"MonitorCondSince":  "monitor_cond_since",
-	"GetServerId":       "get_server_id",
-	"SetDbChangeAware":  "set_db_change_aware",
-	"Convert":           "convert",
-}
 
 func main() {
 	klog.InitFlags(nil)
@@ -101,12 +80,37 @@ func main() {
 		AllowV1:     true,
 	}
 	ovsdbServ := ovsdb.NewService(dbServ)
-	mux := methodsToService(ovsdbServ)
-	srvFunc := server.NewStatic(mux)
-
-	// a WaitGroup for the goroutines to tell us they've stopped
+	globServiceMap := createServiceMap(ovsdbServ)
 	wg := sync.WaitGroup{}
 
+	loop := func(lst net.Listener) error {
+		for {
+			conn, err := lst.Accept()
+			if err != nil {
+				if channel.IsErrClosing(err) {
+					err = nil
+				} else {
+					klog.Infof("Error accepting new connection: %v", err)
+				}
+				wg.Wait()
+				return err
+			}
+			ch := channel.RawJSON(conn, conn)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				clientHandler := ovsdb.NewClientHandler(dbServ)
+				assigner := addClientHandlers(*globServiceMap, clientHandler)
+				srv := jrpc2.NewServer(assigner, servOptions)
+				clientHandler.SetConnection(srv)
+				srv.Start(ch)
+				stat := srv.WaitStatus()
+				if stat.Err != nil {
+					klog.Infof("Server exit: %v", stat.Err)
+				}
+			}()
+		}
+	}
 	if len(*tcpAddress) > 0 {
 		lst, err := net.Listen(jrpc2.Network(*tcpAddress), *tcpAddress)
 		if err != nil {
@@ -115,7 +119,7 @@ func main() {
 		klog.Infof("Listening at %v...", lst.Addr())
 		//servOptions.Logger = log.New(os.Stderr, "[TCP.Server] ", log.LstdFlags|log.Lshortfile)
 
-		go serverLoop(ctx, lst, srvFunc, servOptions, &wg)
+		go loop(lst)
 	}
 	if runtime.GOOS == "linux" && len(*unixAddress) > 0 {
 		if err := os.RemoveAll(*unixAddress); err != nil {
@@ -127,9 +131,8 @@ func main() {
 		}
 		klog.Infof("Listening at %v...", lst.Addr())
 		//servOptions.Logger = log.New(os.Stderr, "[UNIX.Server] ", log.LstdFlags|log.Lshortfile)
-		go serverLoop(ctx, lst, srvFunc, servOptions, &wg)
+		go loop(lst)
 	}
-
 	select {
 	case s := <-exitCh:
 		klog.Infof("Received signal %s. Shutting down", s)
@@ -139,24 +142,31 @@ func main() {
 
 }
 
-// the method is similar to the handler.NewService, but adopted to the ovsdb implementation.
-func methodsToService(ovsdb ovsdb.OVSDB) handler.Map {
+func createServiceMap(ovsdb *ovsdb.ServOVSDB) *handler.Map {
 	out := make(handler.Map)
-	val := reflect.ValueOf(ovsdb)
-	// This considers only exported methods, as desired.
-	for method, ovsdbMethod := range methodsMap {
-		fn := val.MethodByName(method)
-		if !fn.IsValid() {
-			klog.Errorf(" OVSDB doesn't contain method %s", method)
-			continue
-		}
-		v := handler.New(fn.Interface())
-		out[ovsdbMethod] = v
-	}
-	return out
+	out["list_dbs"] = handler.New(ovsdb.ListDbs)
+	out["get_schema"] = handler.New(ovsdb.GetSchema)
+	out["get_server_id"] = handler.New(ovsdb.GetServerId)
+	out["echo"] = handler.New(ovsdb.Echo)
+	out["convert"] = handler.New(ovsdb.Convert)
+	return &out
 }
 
-func serverLoop(ctx context.Context, lst net.Listener, newService func() server.Service, serverOpts *jrpc2.ServerOptions, wg *sync.WaitGroup) error {
+// we pass handlerMap by value, so the function gets a proprietary copy of it.
+func addClientHandlers(handlerMap handler.Map, ch *ovsdb.ClientHandler) *handler.Map {
+	handlerMap["transact"] = handler.New(ch.Transact)
+	handlerMap["cancel"] = handler.New(ch.Cancel)
+	handlerMap["monitor"] = handler.New(ch.Monitor)
+	handlerMap["monitor_cancel"] = handler.New(ch.MonitorCancel)
+	handlerMap["lock"] = handler.New(ch.Lock)
+	handlerMap["steal"] = handler.New(ch.Steal)
+	handlerMap["unlock"] = handler.New(ch.Unlock)
+	handlerMap["monitor_cond"] = handler.New(ch.MonitorCond)
+	handlerMap["set_db_change_aware"] = handler.New(ch.SetDbChangeAware)
+	return &handlerMap
+}
+
+func serverLoop(ctx context.Context, lst net.Listener, dbInterface ovsdb.DBServerInterface, serviceMap *handler.Map, serverOpts *jrpc2.ServerOptions, wg *sync.WaitGroup) error {
 	for {
 		conn, err := lst.Accept()
 		if err != nil {
@@ -172,18 +182,12 @@ func serverLoop(ctx context.Context, lst net.Listener, newService func() server.
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			svc := newService()
-			assigner, err := svc.Assigner()
-			if err != nil {
-				klog.Errorf("Service initialization failed: %v", err)
-				return
-			}
-			srv := jrpc2.NewServer(assigner, serverOpts).Start(ch)
-			// create and init OVSD service
-			// Bind the methods of the math type to an assigner.
-
+			clientHandler := ovsdb.NewClientHandler(dbInterface)
+			assigner := addClientHandlers(*serviceMap, clientHandler)
+			srv := jrpc2.NewServer(assigner, serverOpts)
+			clientHandler.SetConnection(srv)
+			srv.Start(ch)
 			stat := srv.WaitStatus()
-			svc.Finish(stat)
 			if stat.Err != nil {
 				klog.Infof("Server exit: %v", stat.Err)
 			}
