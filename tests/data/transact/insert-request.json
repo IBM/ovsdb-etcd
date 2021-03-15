@@ -1,0 +1,566 @@
+[
+  "OVN_Southbound",
+  {
+    "lock": "ovn_northd",
+    "op": "assert"
+  },
+  {
+    "uuid-name": "rowd89ea1c0_e426_499a_91b5_a4d2ad4129e7",
+    "ta       ble": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "path_prefix",
+      "code": 210,
+      "type": "str"
+    }
+  },
+  {
+    "uuid-name": "row7cf6f0a0_d17d_414b_bdea_f8e304185eb9",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "ms_classless_static_route",
+      "code": 249,
+      "type": "static_routes"
+    }
+  },
+  {
+    "uuid-name": "rowfeb5b7a1_98ab_44d3_af56_9a9adc4e77c8",
+    "table": "RBAC_Permission",
+    "op": "insert",
+    "row": {
+      "authorization": "chassis_name",
+      "insert_delete": true,
+      "update": [
+        "set",
+        [
+          "ip",
+          "options       ",
+          "type"
+        ]
+      ],
+      "table": "Encap"
+    }
+  },
+  {
+    "uuid-name": "rowde437f81_cd70_4123_b451_55513c8979da",
+    "table": "DHCPv6_Options",
+    "op": "insert",
+    "row": {
+      "name": "domain_search",
+      "code": 24,
+      "type": "str"
+    }
+  },
+  {
+    "uuid-name": "row10c79321_5f05_440b_8ac7_78       c32be55d10",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "default_ttl",
+      "code": 23,
+      "type": "uint8"
+    }
+  },
+  {
+    "uuid-name": "row8090e9a2_399f_43fd_b8df_337c377fceac",
+    "table": "RBAC_Permission",
+    "op": "insert",
+    "row": {
+      "authorization": "",
+      "update": "status",
+      "table": "Service_Monitor"
+    }
+  },
+  {
+    "uuid-name": "rowcd0b9b23_315a_48ed_85ba_c27b33f37312",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "router_discovery",
+      "code": 31,
+      "type": "bool"
+    }
+  },
+  {
+    "uuid-name": "row17d       b4ec4_8d25_4c74_ac30_7cd1528b347b",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "classless_static_route",
+      "code": 121,
+      "type": "static_routes"
+    }
+  },
+  {
+    "uuid-name": "row242f9b84_3370_4c3a_a0a4_bf2cdf5729ce",
+    "table": "DHCP_Optio       ns",
+    "op": "insert",
+    "row": {
+      "name": "policy_filter",
+      "code": 21,
+      "type": "ipv4"
+    }
+  },
+  {
+    "uuid-name": "rowfe0cfca5_b4d6_4186_a5f1_be3bfd4c01a8",
+    "table": "RBAC_Permission",
+    "op": "insert",
+    "row": {
+      "authorization": "name",
+      "insert_delete": true,
+      "       update": [
+        "set",
+        [
+          "chassis",
+          "nb_cfg",
+          "nb_cfg_timestamp"
+        ]
+      ],
+      "table": "Chassis_Private"
+    }
+  },
+  {
+    "uuid-name": "row56e83c67_8952_439d_8e5c_a8a228176969",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "server_id",
+      "code": 54,
+      "type": "i       pv4"
+    }
+  },
+  {
+    "uuid-name": "row56a14b28_53c1_4aa5_b7c4_3d168d10b347",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "tcp_keepalive_interval",
+      "code": 38,
+      "type": "uint32"
+    }
+  },
+  {
+    "uuid-name": "row41d5a308_5fc7_442a_ad22_70e351092292",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "log_server",
+      "code": 7,
+      "type": "ipv4"
+    }
+  },
+  {
+    "uuid-name": "row683e32c8_5528_41cd_a7f2_ae73fc7f489a",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "broadcast_address",
+      "code": 28,
+      "type": "ipv4"
+    }
+  },
+  {
+    "uuid-name": "row2d299329_4a25_4f93_a90b_57107c639f26",
+    "table": "RBAC_Role",
+    "op": "insert",
+    "row": {
+      "name": "ovn-controller"
+    }
+  },
+  {
+    "mutations": [
+      [
+        "permissions",
+        "insert",
+        [
+          "map",
+          [
+            [
+              "Encap",
+              [
+                "named-uuid",
+                "rowfeb5b7       a1_98ab_44d3_af56_9a9adc4e77c8"
+              ]
+            ],
+            [
+              "Chassis",
+              [
+                "named-uuid",
+                "row375cce9d_0a1e_47b4_bee9_adbb02e5121e"
+              ]
+            ],
+            [
+              "MAC_Binding",
+              [
+                "named-uuid",
+                "row7938fb1c_d258_4769_a384_1b54d26e3105"
+              ]
+            ],
+            [
+              "Chassis_Private",
+              [
+                "named-uuid",
+                "rowfe0cfca5       _b4d6_4186_a5f1_be3bfd4c01a8"
+              ]
+            ],
+            [
+              "Service_Monitor",
+              [
+                "named-uuid",
+                "row8090e9a2_399f_43fd_b8df_337c377fceac"
+              ]
+            ],
+            [
+              "Port_Binding",
+              [
+                "named-uuid",
+                "row3c9038d7_e879_4979_a99a_a63b8616cac5"
+              ]
+            ]
+          ]
+        ]
+      ]
+    ],
+    "where": [
+      [
+        "_uuid",
+        "==",
+        [
+          "named-uui       d",
+          "row2d299329_4a25_4f93_a90b_57107c639f26"
+        ]
+      ]
+    ],
+    "table": "RBAC_Role",
+    "op": "mutate"
+  },
+  {
+    "uuid-name": "rowd73f8cea_c1fc_4649_ba70_367cc9222fa9",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "ip_forward_enable",
+      "code": 19,
+      "t       ype": "bool"
+    }
+  },
+  {
+    "uuid-name": "row486905ea_eb55_4de8_880c_bc9574dcd140",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "lpr_server",
+      "code": 9,
+      "type": "ipv4"
+    }
+  },
+  {
+    "uuid-name": "rowf56e50ca_0dfb_44b1_b82c_bb25561d3578",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "bootfile_name_alt",
+      "code": 254,
+      "type": "str"
+    }
+  },
+  {
+    "uuid-name": "row0f98288a_e0b3_44f2_b6ed_930931040827",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "wpad",
+      "code": 252,
+      "type": "       str"
+    }
+  },
+  {
+    "uuid-name": "rowd223708b_cdf8_4f2b_b1cc_e45f4fcb6fa7",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "router_solicitation",
+      "code": 32,
+      "type": "ipv4"
+    }
+  },
+  {
+    "uuid-name": "row6f33e06d_fc10_43a8_86a5_7e772d9fcb94",
+    "tabl       e": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "offerip",
+      "type": "ipv4"
+    }
+  },
+  {
+    "uuid-name": "row7b3398ef_59fe_4662_8ba8_df22310cbf78",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "dns_server",
+      "code": 6,
+      "type": "ipv4"
+    }
+  },
+  {
+    "uui       d-name": "row7d3f7e4f_a02d_4f35_ac1d_6e8643a8fcdb",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "netmask",
+      "code": 1,
+      "type": "ipv4"
+    }
+  },
+  {
+    "uuid-name": "row58ae5b50_4f96_46e7_8626_a2f66812c368",
+    "table": "DHCP_Options",
+    "op": "i       nsert",
+    "row": {
+      "name": "tftp_server_address",
+      "code": 150,
+      "type": "ipv4"
+    }
+  },
+  {
+    "uuid-name": "rowdd09a432_3ce4_4b44_9891_61eed703ffcc",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "bootfile_name",
+      "code": 67,
+      "type": "str"
+    }
+  },
+  {
+    "uu       id-name": "row945fc0d3_ef37_4898_8add_004235268c3b",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "tftp_server",
+      "code": 66,
+      "type": "host_id"
+    }
+  },
+  {
+    "uuid-name": "row96786814_3a3b_4cdc_92a6_fb5ec05b1b8f",
+    "table": "DHCPv6_Optio       ns",
+    "op": "insert",
+    "row": {
+      "name": "ia_addr",
+      "code": 5,
+      "type": "ipv6"
+    }
+  },
+  {
+    "uuid-name": "row03f665d4_920e_4cc6_a61e_f2eb8f2d523c",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "ethernet_encap",
+      "code": 36,
+      "type": "bool"
+    }
+  },
+  {
+    "uui       d-name": "row06d3b1b4_958d_445b_8fbb_dad248be466f",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "nis_server",
+      "code": 41,
+      "type": "ipv4"
+    }
+  },
+  {
+    "uuid-name": "rowb9ec9c55_e253_4893_b2d7_12ab40e930ef",
+    "table": "DHCP_Options",
+    "op       ": "insert",
+    "row": {
+      "name": "arp_cache_timeout",
+      "code": 35,
+      "type": "uint32"
+    }
+  },
+  {
+    "uuid-name": "row5365e976_aea5_4042_aa29_54a2bc48f660",
+    "table": "DHCPv6_Options",
+    "op": "insert",
+    "row": {
+      "name": "server_id",
+      "code": 2,
+      "type": "mac"
+    }
+  },
+  {
+    "uu       id-name": "row3c9038d7_e879_4979_a99a_a63b8616cac5",
+    "table": "RBAC_Permission",
+    "op": "insert",
+    "row": {
+      "authorization": "",
+      "update": [
+        "set",
+        [
+          "chassis",
+          "up"
+        ]
+      ],
+      "table": "Port_Binding"
+    }
+  },
+  {
+    "uuid-name": "row47efc697_647d_4a86_95c5_1ac9       1a641098",
+    "table": "DHCPv6_Options",
+    "op": "insert",
+    "row": {
+      "name": "dns_server",
+      "code": 23,
+      "type": "ipv6"
+    }
+  },
+  {
+    "uuid-name": "row88187598_6cac_4653_b1e7_fe5b6c718b62",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "mtu",
+      "code": 26,
+      "type": "uint16"
+    }
+  },
+  {
+    "uuid-name": "row874e2b38_982f_4f4d_ab3e_6b2703e7458a",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "router",
+      "code": 3,
+      "type": "ipv4"
+    }
+  },
+  {
+    "uuid-name": "rowea8a1f58_0c5f_447a_84be_49e46f9106fb",
+    "tabl       e": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "tcp_ttl",
+      "code": 37,
+      "type": "uint8"
+    }
+  },
+  {
+    "uuid-name": "rowae9cc7fa_1b44_43d5_9782_7a530483f707",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "domain_search_list",
+      "code": 119,
+      "type": "domains"
+    }
+  },
+  {
+    "uuid-name": "rowf22336fa_386b_4e32_bdcf_91c7498588f8",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "ntp_server",
+      "code": 42,
+      "type": "ipv4"
+    }
+  },
+  {
+    "uuid-name": "row7938fb1c_d258_4769_a384_1b54d26e3105",
+    "t       able": "RBAC_Permission",
+    "op": "insert",
+    "row": {
+      "authorization": "",
+      "insert_delete": true,
+      "update": [
+        "set",
+        [
+          "datapath",
+          "ip",
+          "logical_port",
+          "mac"
+        ]
+      ],
+      "table": "MAC_Binding"
+    }
+  },
+  {
+    "uuid-name": "row0589893c_8404_45a9_8f6b_4b5c047439f6",
+    "       table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "T1",
+      "code": 58,
+      "type": "uint32"
+    }
+  },
+  {
+    "uuid-name": "row7fdd5dbc_5452_4f6e_b449_7f65cedcadf6",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "lease_time",
+      "code": 51,
+      "type": "u       int32"
+    }
+  },
+  {
+    "uuid-name": "row375cce9d_0a1e_47b4_bee9_adbb02e5121e",
+    "table": "RBAC_Permission",
+    "op": "insert",
+    "row": {
+      "authorization": "name",
+      "insert_delete": true,
+      "update": [
+        "set",
+        [
+          "encaps",
+          "external_ids",
+          "nb_cfg",
+          "other_config",
+          "       vtep_logical_switches"
+        ]
+      ],
+      "table": "Chassis"
+    }
+  },
+  {
+    "uuid-name": "row15084d7d_5a51_42eb_8702_f3dc54e5fedf",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "swap_server",
+      "code": 16,
+      "type": "ipv4"
+    }
+  },
+  {
+    "uuid-name": "rowc56faffe_864f       _482f_a2e9_d5670fc07109",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "domain_name",
+      "code": 15,
+      "type": "str"
+    }
+  },
+  {
+    "uuid-name": "row9f051a1f_5cd6_4a70_9e5b_7434be05d5c3",
+    "table": "DHCP_Options",
+    "op": "insert",
+    "row": {
+      "name": "T2",
+      "code": 59,
+      "type": "uint32"
+    }
+  },
+  {
+    "comment": "ovn-northd",
+    "op": "comment"
+  }
+]

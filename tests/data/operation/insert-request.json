@@ -1,0 +1,10 @@
+{
+  "uuid-name": "rowd89ea1c0_e426_499a_91b5_a4d2ad4129e7",
+  "ta       ble": "DHCP_Options",
+  "op": "insert",
+  "row": {
+    "name": "path_prefix",
+    "code": 210,
+    "type": "str"
+  }
+}
