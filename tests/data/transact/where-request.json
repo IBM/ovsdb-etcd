@@ -1,0 +1,47 @@
+[
+  "OVN_Southbound",
+  {
+    "where": [
+      [
+        "_uuid",
+        "==",
+        [
+          "uuid",
+          "6b35915a-df2c-465d-96ec-85235a03b143"
+        ]
+      ]
+    ],
+    "table": "Port_Bindin       g",
+    "op": "update",
+    "row": {
+      "chassis": [
+        "uuid",
+        "395ca01e-ba15-4a67-a06d-cd631603a74a"
+      ]
+    }
+  },
+  {
+    "where": [
+      [
+        "_uuid",
+        "==",
+        [
+          "uuid",
+          "b101690e-0557-4d34-9836-65f50e075edc"
+        ]
+      ]
+    ],
+    "table": "Port_Binding",
+    "op": "update",
+    "row": {
+      "chassis": [
+        "uuid",
+        "       395ca01e-ba15-4a67-a06d-cd631603a74a"
+      ]
+    }
+  },
+  {
+    "comment": "ovn-controller",
+    "op": "comment"
+  }
+]

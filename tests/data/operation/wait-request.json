@@ -1,0 +1,60 @@
+{
+  "where": [
+    [
+      "_uuid",
+      "==",
+      [
+	"uuid",
+	"99ba17fe-1a80-440d-b4c0-fe57c9ec9624"
+      ]
+    ]
+  ],
+  "rows": [
+    {
+      "other_conf       ig": [
+	"map",
+	[
+	  [
+	    "datapath-type",
+	    ""
+	  ],
+	  [
+	    "iface-types",
+	    "erspan,geneve,gre,gtpu,internal,ip6erspan,ip6gre,lisp,patch,stt,system,tap,vxlan"
+	  ],
+	  [
+	    "is-interconn",
+	    "false"
+	  ],
+	  [
+	    "ovn-bridge-mappings",
+	    ""
+	  ],
+	  [
+	    "ovn-chassis-mac-mappings",
+	    ""
+	  ],
+	  [
+	    "ovn       -cms-options",
+	    ""
+	  ],
+	  [
+	    "ovn-enable-lflow-cache",
+	    "true"
+	  ],
+	  [
+	    "ovn-monitor-all",
+	    "true"
+	  ]
+	]
+      ]
+    }
+  ],
+  "until": "==",
+  "table": "Chassis",
+  "op": "wait",
+  "timeout": 0,
+  "columns": [
+    "other_config"
+  ]
+}
