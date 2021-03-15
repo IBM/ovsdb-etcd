@@ -1,0 +1,67 @@
+{
+  "mutations": [
+    [
+      "permissions",
+      "insert",
+      [
+	"map",
+	[
+	  [
+	    "Encap",
+	    [
+	      "named-uuid",
+	      "rowfeb5b7       a1_98ab_44d3_af56_9a9adc4e77c8"
+	    ]
+	  ],
+	  [
+	    "Chassis",
+	    [
+	      "named-uuid",
+	      "row375cce9d_0a1e_47b4_bee9_adbb02e5121e"
+	    ]
+	  ],
+	  [
+	    "MAC_Binding",
+	    [
+	      "named-uuid",
+	      "row7938fb1c_d258_4769_a384_1b54d26e3105"
+	    ]
+	  ],
+	  [
+	    "Chassis_Private",
+	    [
+	      "named-uuid",
+	      "rowfe0cfca5       _b4d6_4186_a5f1_be3bfd4c01a8"
+	    ]
+	  ],
+	  [
+	    "Service_Monitor",
+	    [
+	      "named-uuid",
+	      "row8090e9a2_399f_43fd_b8df_337c377fceac"
+	    ]
+	  ],
+	  [
+	    "Port_Binding",
+	    [
+	      "named-uuid",
+	      "row3c9038d7_e879_4979_a99a_a63b8616cac5"
+	    ]
+	  ]
+	]
+      ]
+    ]
+  ],
+  "where": [
+    [
+      "_uuid",
+      "==",
+      [
+	"named-uui       d",
+	"row2d299329_4a25_4f93_a90b_57107c639f26"
+      ]
+    ]
+  ],
+  "table": "RBAC_Role",
+  "op": "mutate"
+}

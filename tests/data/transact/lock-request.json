@@ -1,0 +1,460 @@
+[
+  "OVN_Southbound",
+  {
+    "lock": "ovn_northd",
+    "op": "assert"
+  },
+  {
+    "where": [
+      [
+        "_uuid",
+        "==",
+        [
+          "uuid",
+          "73899630-0fae-4a00-a5a2-       a2ef422da3d2"
+        ]
+      ]
+    ],
+    "table": "Port_Binding",
+    "op": "update",
+    "row": {
+      "options": [
+        "map",
+        [
+          [
+            "ipv6_prefix",
+            "false"
+          ],
+          [
+            "ipv6_prefix_delegation",
+            "false"
+          ],
+          [
+            "peer",
+            "stor-ovn-worker2"
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "where": [
+      [
+        "_uuid",
+        "==",
+        [
+          "uuid",
+          "d98b1998-2e6d-42a3       -9d8c-c95abc70f157"
+        ]
+      ]
+    ],
+    "table": "Port_Binding",
+    "op": "update",
+    "row": {
+      "options": [
+        "map",
+        [
+          [
+            "ipv6_prefix",
+            "false"
+          ],
+          [
+            "ipv6_prefix_delegation",
+            "false"
+          ],
+          [
+            "l3gateway-chassis",
+            "b94c76a2-8359-4730-9d30-0a7ea2ba42c6"
+          ],
+          [
+            "peer",
+            "jtor-GR       _ovn-worker2"
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "where": [
+      [
+        "_uuid",
+        "==",
+        [
+          "uuid",
+          "fc215830-89f1-4ee1-b675-50322382b336"
+        ]
+      ]
+    ],
+    "table": "Port_Binding",
+    "op": "update",
+    "row": {
+      "options": [
+        "map",
+        [
+          [
+            "ipv6_prefix",
+            "false"
+          ],
+          [
+            "ipv6_prefix_delegation",
+            "false"
+          ],
+          [
+            "peer",
+            "stor-ovn-worker"
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "where": [
+      [
+        "_uuid",
+        "==",
+        [
+          "uuid",
+          "7e324889-4e52-4c32-9383-42282874b7ac"
+        ]
+      ]
+    ],
+    "table": "Port_Binding",
+    "op": "update",
+    "row": {
+      "options": [
+        "map",
+        [
+          [
+            "ipv6_prefix",
+            "false"
+          ],
+          [
+            "ipv6_prefix_delegation",
+            "false"
+          ],
+          [
+            "       l3gateway-chassis",
+            "2cca4f01-784c-427e-8812-a870d3058313"
+          ],
+          [
+            "peer",
+            "etor-GR_ovn-control-plane"
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "where": [
+      [
+        "_uuid",
+        "==",
+        [
+          "uuid",
+          "bc653312-220f-4502-9835-5174da6b340e"
+        ]
+      ]
+    ],
+    "table": "Meter",
+    "op": "update",
+    "row": {
+      "unit": "pk       tps"
+    }
+  },
+  {
+    "where": [
+      [
+        "_uuid",
+        "==",
+        [
+          "uuid",
+          "40a5eb4a-d7dc-4406-a117-def6cca39e2a"
+        ]
+      ]
+    ],
+    "table": "Port_Binding",
+    "op": "update",
+    "row": {
+      "options": [
+        "map",
+        [
+          [
+            "ipv6_prefix",
+            "false"
+          ],
+          [
+            "ipv6_prefix_delegation",
+            "false"
+          ],
+          [
+            "l3gateway-chassis       ",
+            "7934ab29-6c31-40a9-8ceb-ae617abb14f3"
+          ],
+          [
+            "peer",
+            "etor-GR_ovn-worker"
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "where": [
+      [
+        "_uuid",
+        "==",
+        [
+          "uuid",
+          "2671b772-12e1-4619-ac06-0ba97a4a6561"
+        ]
+      ]
+    ],
+    "table": "Port_Binding",
+    "op": "update",
+    "row": {
+      "options": [
+        "map",
+        [
+          [
+            "ipv6_pr       efix",
+            "false"
+          ],
+          [
+            "ipv6_prefix_delegation",
+            "false"
+          ],
+          [
+            "peer",
+            "stor-ovn-control-plane"
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "where": [
+      [
+        "_uuid",
+        "==",
+        [
+          "uuid",
+          "83319c9b-bc69-44b8-bd2c-7cb8b5ed86cb"
+        ]
+      ]
+    ],
+    "table": "Port_Binding",
+    "op": "update",
+    "row": {
+      "options": [
+        "map       ",
+        [
+          [
+            "ipv6_prefix",
+            "false"
+          ],
+          [
+            "ipv6_prefix_delegation",
+            "false"
+          ],
+          [
+            "peer",
+            "jtor-ovn_cluster_router"
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "where": [
+      [
+        "_uuid",
+        "==",
+        [
+          "uuid",
+          "1cac517b-141e-4c82-b428-6999b7f8f19b"
+        ]
+      ]
+    ],
+    "table": "Port_Binding",
+    "op": "update",
+    "row": {
+      "o       ptions": [
+        "map",
+        [
+          [
+            "ipv6_prefix",
+            "false"
+          ],
+          [
+            "ipv6_prefix_delegation",
+            "false"
+          ],
+          [
+            "l3gateway-chassis",
+            "b94c76a2-8359-4730-9d30-0a7ea2ba42c6"
+          ],
+          [
+            "peer",
+            "etor-GR_ovn-worker2"
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "where": [
+      [
+        "_uuid",
+        "==",
+        [
+          "uuid",
+          "419c51db-5cd8-4eb       b-961a-3c45c860615f"
+        ]
+      ]
+    ],
+    "table": "Port_Binding",
+    "op": "update",
+    "row": {
+      "options": [
+        "map",
+        [
+          [
+            "ipv6_prefix",
+            "false"
+          ],
+          [
+            "ipv6_prefix_delegation",
+            "false"
+          ],
+          [
+            "peer",
+            "stor-node_local_switch"
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "where": [
+      [
+        "_uuid",
+        "==",
+        [
+          "uuid",
+          "da78c       93d-c897-42fd-816e-b7f88992e166"
+        ]
+      ]
+    ],
+    "table": "Port_Binding",
+    "op": "update",
+    "row": {
+      "options": [
+        "map",
+        [
+          [
+            "ipv6_prefix",
+            "false"
+          ],
+          [
+            "ipv6_prefix_delegation",
+            "false"
+          ],
+          [
+            "l3gateway-chassis",
+            "7934ab29-6c31-40a9-8ceb-ae617abb14f3"
+          ],
+          [
+            "p       eer",
+            "jtor-GR_ovn-worker"
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "where": [
+      [
+        "_uuid",
+        "==",
+        [
+          "uuid",
+          "c3d5614d-9c08-4b16-95b6-87bec4fb2f37"
+        ]
+      ]
+    ],
+    "table": "SB_Global",
+    "op": "update",
+    "row": {
+      "options": [
+        "map",
+        [
+          [
+            "e2e_timestamp",
+            "1613375811"
+          ],
+          [
+            "mac_prefix",
+            "2a:c4:34"
+          ],
+          [
+            "max_tunid",
+            "16711680"
+          ],
+          [
+            "northd_internal_version",
+            "20.12.0-20.14.0-52.0"
+          ],
+          [
+            "northd_probe_interval",
+            "5000"
+          ],
+          [
+            "svc_monitor_mac",
+            "5e:c8:7b:21:c5:c8"
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "where": [
+      [
+        "_uuid",
+        "==",
+        [
+          "uuid",
+          "b101690e-0557-4d34-9836-65f50e075ed       c"
+        ]
+      ]
+    ],
+    "table": "Port_Binding",
+    "op": "update",
+    "row": {
+      "options": [
+        "map",
+        [
+          [
+            "ipv6_prefix",
+            "false"
+          ],
+          [
+            "ipv6_prefix_delegation",
+            "false"
+          ],
+          [
+            "l3gateway-chassis",
+            "2cca4f01-784c-427e-8812-a870d3058313"
+          ],
+          [
+            "peer",
+            "jtor-GR_ovn-control-plan       e"
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "comment": "ovn-northd",
+    "op": "comment"
+  }
+]
