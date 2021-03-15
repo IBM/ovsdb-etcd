@@ -127,9 +127,9 @@ func (con *Database) GetData(prefix string, keysOnly bool) (*clientv3.GetRespons
 	var resp *clientv3.GetResponse
 	var err error
 	if keysOnly {
-		resp, err = con.cli.Get(ctx, prefix, clientv3.WithFromKey(), clientv3.WithKeysOnly())
+		resp, err = con.cli.Get(ctx, prefix, clientv3.WithPrefix(), clientv3.WithKeysOnly())
 	} else {
-		resp, err = con.cli.Get(ctx, prefix, clientv3.WithFromKey())
+		resp, err = con.cli.Get(ctx, prefix, clientv3.WithPrefix())
 	}
 	cancel()
 	if err != nil {
