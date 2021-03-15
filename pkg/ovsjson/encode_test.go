@@ -122,7 +122,7 @@ func TestCondMonitorParameters(t *testing.T) {
 	err := json.Unmarshal(s, &actualCMP)
 	assert.Nil(t, err)
 	expectedSelect := &libovsdb.MonitorSelect{Modify: true, Initial: true, Insert: false, Delete: true}
-	mcr := MonitorCondRequest{Columns: []interface{}{"model"},
+	mcr := MonitorCondRequest{Columns: []string{"model"},
 		Select: expectedSelect}
 
 	expectedCMP := CondMonitorParameters{DatabaseName: "_Server", MonitorCondRequests: map[string][]MonitorCondRequest{"Database": {mcr}}}

@@ -77,11 +77,11 @@ func (ru *RowUpdate) ValidateRowUpdate2() (bool, string) {
 	if ru.Modify != nil {
 		i++
 	}
-	if i != 0 {
-		return false, "Contains RowUpdate2 entries"
+	if i > 1 {
+		return false, "Contains several RowUpdate2 entries"
 	}
-	if (ru.New == nil) && (ru.Old == nil) {
-		return false, "Empty RowUpdate"
+	if (ru.New != nil) || (ru.Old != nil) {
+		return false, "Contains RowUpdate entries"
 	}
 	return true, ""
 }
@@ -101,7 +101,7 @@ const (
 )
 
 type MonitorCondRequest struct {
-	Columns []interface{}           `json:"columns,omitempty"`
+	Columns []string                `json:"columns,omitempty"`
 	Where   [][]string              `json:"where,omitempty"`
 	Select  *libovsdb.MonitorSelect `json:"select,omitempty"`
 }
