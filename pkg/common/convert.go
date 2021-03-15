@@ -62,8 +62,8 @@ func BytesToOperation(in []byte) *libovsdb.Operation {
 	return &result
 }
 
-func ArrayToMap(in []string) map[interface{}]bool {
-	ret := map[interface{}]bool{}
+func StringArrayToMap(in []string) map[string]bool {
+	ret := map[string]bool{}
 	for _, str := range in {
 		ret[str] = true
 	}

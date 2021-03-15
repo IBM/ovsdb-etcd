@@ -165,32 +165,3 @@ func addClientHandlers(handlerMap handler.Map, ch *ovsdb.Handler) *handler.Map {
 	handlerMap["set_db_change_aware"] = handler.New(ch.SetDbChangeAware)
 	return &handlerMap
 }
-
-func serverLoop(ctx context.Context, lst net.Listener, dbInterface ovsdb.Databaser, serviceMap *handler.Map, serverOpts *jrpc2.ServerOptions, wg *sync.WaitGroup) error {
-	for {
-		conn, err := lst.Accept()
-		if err != nil {
-			if channel.IsErrClosing(err) {
-				err = nil
-			} else {
-				klog.Infof("Error accepting new connection: %v", err)
-			}
-			wg.Wait()
-			return err
-		}
-		ch := channel.RawJSON(conn, conn)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			clientHandler := ovsdb.NewHandler(dbInterface)
-			assigner := addClientHandlers(*serviceMap, clientHandler)
-			srv := jrpc2.NewServer(assigner, serverOpts)
-			clientHandler.SetConnection(srv)
-			srv.Start(ch)
-			stat := srv.WaitStatus()
-			if stat.Err != nil {
-				klog.Infof("Server exit: %v", stat.Err)
-			}
-		}()
-	}
-}
