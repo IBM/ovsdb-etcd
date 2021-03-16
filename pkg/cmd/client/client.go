@@ -93,5 +93,4 @@ func main() {
 	} else {
 		klog.Infof("unlock result=%v", lock)
 	}
-
 }
