@@ -37,15 +37,6 @@ func TestMockAddSchema(t *testing.T) {
 	assert.Equal(t, expectedError, actualError)
 }
 
-func TestMockLoadServerData(t *testing.T) {
-	var expectedError error
-	mock := DatabaseMock{
-		Error: expectedError,
-	}
-	actualError := mock.LoadServerData()
-	assert.Equal(t, expectedError, actualError)
-}
-
 func TestMockGetData(t *testing.T) {
 	var expectedResponse *clientv3.GetResponse
 	var expectedError error

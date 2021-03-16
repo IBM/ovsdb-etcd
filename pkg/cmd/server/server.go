@@ -42,7 +42,7 @@ func main() {
 		klog.Fatal("Wrong ETCD members list", etcdMembers)
 	}
 	etcdServers := strings.Split(*etcdMembers, ",")
-	db, err := ovsdb.NewDatabase(etcdServers)
+	db, err := ovsdb.NewDatabaseEtcd(etcdServers)
 	if err != nil {
 		klog.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func main() {
 	if err != nil {
 		klog.Fatal(err)
 	}
-	err = db.LoadServerData()
+	err = loadServerData(db.(*ovsdb.DatabaseEtcd))
 	if err != nil {
 		klog.Fatal(err)
 	}
