@@ -108,7 +108,7 @@ type MonitorCondRequest struct {
 
 type CondMonitorParameters struct {
 	DatabaseName string
-	JsonValue    []string // TODO
+	JsonValue    interface{} // can be nil
 	// maps table name to MonitorCondRequests
 	MonitorCondRequests map[string][]MonitorCondRequest
 	LastTxnID           string

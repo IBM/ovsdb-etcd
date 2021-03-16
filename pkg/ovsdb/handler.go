@@ -217,6 +217,7 @@ func (ch *Handler) getMonitoredData(dataBase string, conditions map[string][]ovs
 	returnData := ovsjson.TableUpdates{}
 	for tableName, mcrs := range conditions {
 		if len(mcrs) > 1 {
+			// TODO deal with the array
 			klog.Warningf("MCR is not a singe %v", mcrs)
 		}
 		if mcrs[0].Select != nil && !mcrs[0].Select.Initial {
@@ -226,7 +227,6 @@ func (ch *Handler) getMonitoredData(dataBase string, conditions map[string][]ovs
 		if err != nil {
 			return nil, err
 		}
-
 		d1 := ovsjson.TableUpdate{}
 		for _, v := range resp.Kvs {
 			data := map[string]interface{}{}
@@ -242,7 +242,7 @@ func (ch *Handler) getMonitoredData(dataBase string, conditions map[string][]ovs
 				delete(data, "uuid")
 				delete(data, "_version")
 			} else {
-				columnsMap := common.ArrayToMap(mcrs[0].Columns)
+				columnsMap := common.StringArrayToMap(mcrs[0].Columns)
 				for column := range data {
 					if _, ok := columnsMap[column]; !ok {
 						delete(data, column)
