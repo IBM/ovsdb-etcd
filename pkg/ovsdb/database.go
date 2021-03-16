@@ -7,12 +7,15 @@ import (
 	"fmt"
 	"io/ioutil"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/creachadair/jrpc2"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"k8s.io/klog/v2"
+
+	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
 )
 
 type Databaser interface {
@@ -23,13 +26,17 @@ type Databaser interface {
 	PutData(ctx context.Context, key string, obj interface{}) error
 	GetMarshaled(prefix string, columns []interface{}) (*[]map[string]string, error)
 	GetSchema(name string) (string, bool)
+	AddMonitor(prefix string, mcr ovsjson.MonitorCondRequest, isV1 bool, hand *handlerKey)
+	DelMonitor(prefix string, mcr ovsjson.MonitorCondRequest, isV1 bool, hand *handlerKey)
 	Close()
 }
 
 type DatabaseEtcd struct {
-	cli         *clientv3.Client
-	Schemas     map[string]string
-	SchemaTypes map[string]map[string]map[string]string
+	cli     *clientv3.Client
+	Schemas map[string]string
+	// map from prefix to monitors
+	monitors map[string]monitor
+	mu       sync.Mutex
 }
 
 func NewDatabaseEtcd(endpoints []string) (Databaser, error) {
@@ -41,11 +48,9 @@ func NewDatabaseEtcd(endpoints []string) (Databaser, error) {
 		klog.Errorf("NewETCDConenctor , error: ", err)
 		return nil, err
 	}
-	// TODO
 	klog.Info("etcd client is connected")
 	return &DatabaseEtcd{cli: cli,
-		Schemas:     make(map[string]string),
-		SchemaTypes: make(map[string]map[string]map[string]string)}, nil
+		Schemas: make(map[string]string)}, nil
 }
 
 func (con *DatabaseEtcd) Close() {
@@ -191,6 +196,27 @@ func (con *DatabaseEtcd) PutData(ctx context.Context, key string, obj interface{
 	}
 	return nil
 }
+func (con *DatabaseEtcd) AddMonitor(prefix string, mcr ovsjson.MonitorCondRequest, isV1 bool, hand *handlerKey) {
+	con.mu.Lock()
+	defer con.mu.Unlock()
+	if monitor, ok := con.monitors[prefix]; !ok {
+		con.monitors[prefix] = *newMonitor(con.cli, prefix, mcr, isV1, hand)
+	} else {
+		monitor.addHandler(mcr, isV1, hand)
+	}
+}
+
+func (con *DatabaseEtcd) DelMonitor(prefix string, mcr ovsjson.MonitorCondRequest, isV1 bool, hand *handlerKey) {
+	con.mu.Lock()
+	defer con.mu.Unlock()
+	if monitor, ok := con.monitors[prefix]; !ok {
+		klog.Warningf("Delete unexisting monitor from %s", prefix)
+	} else {
+		if monitor.delHandler(mcr, isV1, hand) {
+			delete(con.monitors, prefix)
+		}
+	}
+}
 
 type DatabaseMock struct {
 	Response interface{}
@@ -231,4 +257,14 @@ func (con *DatabaseMock) GetMarshaled(prefix string, columns []interface{}) (*[]
 
 func (con *DatabaseMock) GetSchema(name string) (string, bool) {
 	return con.Response.(string), con.Ok
+}
+
+func (con *DatabaseMock) GetUUID() string {
+	return con.Response.(string)
+}
+
+func (con *DatabaseMock) AddMonitor(prefix string, mcr ovsjson.MonitorCondRequest, isV1 bool, hand *handlerKey) {
+}
+
+func (con *DatabaseMock) DelMonitor(prefix string, mcr ovsjson.MonitorCondRequest, isV1 bool, hand *handlerKey) {
 }
