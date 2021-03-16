@@ -25,6 +25,7 @@ type Databaser interface {
 	GetMarshaled(prefix string, columns []interface{}) (*[]map[string]string, error)
 	GetSchema(name string) (string, bool)
 	GetUUID() string
+	Close()
 }
 
 type DatabaseEtcd struct {
@@ -44,12 +45,15 @@ func NewDatabaseEtcd(endpoints []string) (Databaser, error) {
 		return nil, err
 	}
 	// TODO
-	//defer cli.Close()
 	klog.Info("etcd client is connected")
 	return &DatabaseEtcd{cli: cli,
 		uuid:        uuid.NewString(),
 		Schemas:     make(map[string]string),
 		SchemaTypes: make(map[string]map[string]map[string]string)}, nil
+}
+
+func (con *DatabaseEtcd) Close() {
+	con.cli.Close()
 }
 
 func (con *DatabaseEtcd) Lock(ctx context.Context, id string) (bool, error) {
@@ -204,6 +208,9 @@ type DatabaseMock struct {
 
 func NewDatabaseMock() (Databaser, error) {
 	return &DatabaseMock{}, nil
+}
+
+func (con *DatabaseMock) Close() {
 }
 
 func (con *DatabaseMock) Lock(ctx context.Context, id string) (bool, error) {

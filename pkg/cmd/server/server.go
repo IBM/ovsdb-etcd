@@ -46,6 +46,7 @@ func main() {
 	if err != nil {
 		klog.Fatal(err)
 	}
+	defer db.Close()
 
 	// For development only
 	err = db.AddSchema("_Server", *schemaBasedir+"/_server.ovsschema")
