@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
-
+	"github.com/google/uuid"
 	"k8s.io/klog/v2"
+
+	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
 )
 
 // The interface that provides OVSDB jrpc methods defined by RFC 7047 and later extended by the OVN/OVS community,
@@ -213,7 +214,8 @@ type Servicer interface {
 }
 
 type Service struct {
-	db Databaser
+	db   Databaser
+	uuid string
 }
 
 func (s *Service) ListDbs(ctx context.Context, param interface{}) ([]string, error) {
@@ -259,7 +261,7 @@ func (s *Service) GetSchema(ctx context.Context, param interface{}) (interface{}
 
 func (s *Service) GetServerId(ctx context.Context) string {
 	klog.V(5).Infof("GetServerId request")
-	return s.db.GetUUID()
+	return s.uuid
 }
 
 func (s *Service) Convert(ctx context.Context, param interface{}) (interface{}, error) {
@@ -274,6 +276,7 @@ func (s *Service) Echo(ctx context.Context, param interface{}) interface{} {
 
 func NewService(db Databaser) *Service {
 	return &Service{
-		db: db,
+		db:   db,
+		uuid: uuid.NewString(),
 	}
 }

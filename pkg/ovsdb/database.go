@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/creachadair/jrpc2"
-	"github.com/google/uuid"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"k8s.io/klog/v2"
@@ -24,12 +23,11 @@ type Databaser interface {
 	PutData(ctx context.Context, key string, obj interface{}) error
 	GetMarshaled(prefix string, columns []interface{}) (*[]map[string]string, error)
 	GetSchema(name string) (string, bool)
-	GetUUID() string
+	Close()
 }
 
 type DatabaseEtcd struct {
 	cli         *clientv3.Client
-	uuid        string
 	Schemas     map[string]string
 	SchemaTypes map[string]map[string]map[string]string
 }
@@ -44,12 +42,14 @@ func NewDatabaseEtcd(endpoints []string) (Databaser, error) {
 		return nil, err
 	}
 	// TODO
-	//defer cli.Close()
 	klog.Info("etcd client is connected")
 	return &DatabaseEtcd{cli: cli,
-		uuid:        uuid.NewString(),
 		Schemas:     make(map[string]string),
 		SchemaTypes: make(map[string]map[string]map[string]string)}, nil
+}
+
+func (con *DatabaseEtcd) Close() {
+	con.cli.Close()
 }
 
 func (con *DatabaseEtcd) Lock(ctx context.Context, id string) (bool, error) {
@@ -180,10 +180,6 @@ func (con *DatabaseEtcd) GetSchema(name string) (string, bool) {
 	return con.Schemas[name], true
 }
 
-func (con *DatabaseEtcd) GetUUID() string {
-	return con.uuid
-}
-
 func (con *DatabaseEtcd) PutData(ctx context.Context, key string, obj interface{}) error {
 	data, err := json.Marshal(obj)
 	if err != nil {
@@ -204,6 +200,9 @@ type DatabaseMock struct {
 
 func NewDatabaseMock() (Databaser, error) {
 	return &DatabaseMock{}, nil
+}
+
+func (con *DatabaseMock) Close() {
 }
 
 func (con *DatabaseMock) Lock(ctx context.Context, id string) (bool, error) {
@@ -232,8 +231,4 @@ func (con *DatabaseMock) GetMarshaled(prefix string, columns []interface{}) (*[]
 
 func (con *DatabaseMock) GetSchema(name string) (string, bool) {
 	return con.Response.(string), con.Ok
-}
-
-func (con *DatabaseMock) GetUUID() string {
-	return con.Response.(string)
 }
