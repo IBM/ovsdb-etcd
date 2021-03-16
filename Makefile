@@ -1,6 +1,3 @@
-TCP_ADDRESS = 127.0.0.1:12345
-UNIX_Address = /tmp/unix.soc
-
 .PHONY: install-tools
 install-tools:
 	@echo "nothing for now"
@@ -42,11 +39,3 @@ verify: $(VERIFY)
 .PHONY: tests
 tests:
 	go test -v ./...
-
-.PHONY: server
-server: 
-	go run pkg/cmd/server/server.go -tcp-address $(TCP_ADDRESS)  -unix-address $(UNIX_Address)
-
-.PHONY: client
-client:
-	go run pkg/cmd/client/client.go -server $(TCP_ADDRESS) 
