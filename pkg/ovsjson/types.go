@@ -112,7 +112,7 @@ type CondMonitorParameters struct {
 	// maps table name to MonitorCondRequests
 	MonitorCondRequests map[string][]MonitorCondRequest
 	LastTxnID           string
-	UpdateType          UpdateNotificationType
+	//	UpdateType          UpdateNotificationType
 }
 
 // TODO to be updated

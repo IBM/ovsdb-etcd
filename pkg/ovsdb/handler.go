@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
-	"github.com/ibm/ovsdb-etcd/pkg/common"
-	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
+	"sync"
 
 	"github.com/ebay/libovsdb"
 	"k8s.io/klog/v2"
+
+	"github.com/ibm/ovsdb-etcd/pkg/common"
+	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
 )
 
 type ClientConnection interface {
@@ -23,14 +24,10 @@ type Handler struct {
 
 	connection ClientConnection
 
-	// map from jason-values to their condition requests.
-	// a single monitor request (jason-value) contains a map from a table name to condition requests
-	jsonValueToMCR map[string]map[string][]ovsjson.MonitorCondRequest
-
-	service *Service
-
-	// map from key [dataBase/table] to jason-value
-	keyToJsonValue map[string]string
+	mu sync.Mutex
+	// map from jason-values to monitors
+	jsonValueToMonitors               map[interface{}][]*monitor
+	jsonValueToUpdateNotificationType map[interface{}]ovsjson.UpdateNotificationType
 }
 
 func (ch *Handler) Transact(ctx context.Context, param []interface{}) (interface{}, error) {
@@ -101,7 +98,11 @@ func (ch *Handler) Cancel(ctx context.Context, param interface{}) (interface{}, 
 
 func (ch *Handler) Monitor(ctx context.Context, param ovsjson.CondMonitorParameters) (interface{}, error) {
 	klog.V(5).Infof("Monitor request, parameters %v", param)
-
+	for tableName, mcr := range param.MonitorCondRequests {
+		// TODO handle Where, if Where contains uuid, it can be a part of the key
+		key := fmt.Sprintf("ovsdb/%s/%s", param.DatabaseName, tableName)
+		ch.db.AddMonitor(key, mcr[0], true, &handlerKey{ch, param.JsonValue})
+	}
 	return ch.getMonitoredData(param.DatabaseName, param.MonitorCondRequests, false)
 }
 
@@ -210,6 +211,24 @@ func (ch *Handler) Cleanup() error {
 
 func (ch *Handler) SetConnection(con ClientConnection) {
 	ch.connection = con
+}
+
+func (ch *Handler) notify(jsonValue interface{}, updates ovsjson.TableUpdates) {
+	var err error
+	ctx := context.Background()
+	nType := ch.jsonValueToUpdateNotificationType[jsonValue]
+	switch nType {
+	case ovsjson.Update:
+		err = ch.connection.Notify(ctx, "update", []interface{}{jsonValue, updates})
+	case ovsjson.Update2:
+		err = ch.connection.Notify(ctx, "update2", []interface{}{jsonValue, updates})
+	case ovsjson.Update3:
+		err = ch.connection.Notify(ctx, "update3", []interface{}{jsonValue, ovsjson.ZERO_UUID, updates})
+	}
+	if err != nil {
+		// TODO should we do something else
+		klog.Error(err)
+	}
 }
 
 func (ch *Handler) getMonitoredData(dataBase string, conditions map[string][]ovsjson.MonitorCondRequest, isV2 bool) (ovsjson.TableUpdates, error) {
