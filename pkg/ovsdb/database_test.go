@@ -77,12 +77,3 @@ func TestMockGetSchema(t *testing.T) {
 	assert.Equal(t, expectedOk, actualOk)
 	assert.Equal(t, expectedResponse, actualResponse)
 }
-
-func TestMockGetUUID(t *testing.T) {
-	expectedResponse := "val1"
-	mock := DatabaseMock{
-		Response: expectedResponse,
-	}
-	actualResponse := mock.GetUUID()
-	assert.Equal(t, expectedResponse, actualResponse)
-}

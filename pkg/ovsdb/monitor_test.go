@@ -19,7 +19,7 @@ func TestMonitorResponse(t *testing.T) {
 	allColumns := []string{"enabled", "external_ids", "load_balancer", "name", "nat", "options", "policies", "ports", "static_routes"}
 	columns := [][]string{{"enabled", "external_ids", "load_balancer", "name", "nat", "options", "policies", "ports", "static_routes", "_version"},
 		{"name"}, {}}
-	selects := []*libovsdb.MonitorSelect{nil, &libovsdb.MonitorSelect{Initial: true}, &libovsdb.MonitorSelect{Initial: false}}
+	selects := []*libovsdb.MonitorSelect{nil, {Initial: true}, {Initial: false}}
 
 	byteValue, err := common.ReadFile(baseMonitor + "monitor-data.json")
 	assert.Nil(t, err)
@@ -39,7 +39,7 @@ func TestMonitorResponse(t *testing.T) {
 		for _, col := range columns {
 			mcr.Columns = col
 			mcr.Select = sel
-			cmp.MonitorCondRequests = map[string][]ovsjson.MonitorCondRequest{tableName: []ovsjson.MonitorCondRequest{mcr}}
+			cmp.MonitorCondRequests = map[string][]ovsjson.MonitorCondRequest{tableName: {mcr}}
 
 			monitorResponse, actualError := ch.Monitor(nil, cmp)
 			assert.Nilf(t, actualError, "handler call should not return error: %v", err)
