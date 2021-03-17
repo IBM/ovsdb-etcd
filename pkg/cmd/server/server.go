@@ -102,11 +102,13 @@ func main() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				handler := ovsdb.NewHandler(db)
+				tctx, cancel := context.WithCancel(context.Background())
+				handler := ovsdb.NewHandler(tctx, db)
 				assigner := addClientHandlers(*globServiceMap, handler)
 				srv := jrpc2.NewServer(assigner, servOptions)
 				handler.SetConnection(srv)
 				srv.Start(ch)
+				go func() { defer cancel(); srv.Wait() }()
 				stat := srv.WaitStatus()
 				if stat.Err != nil {
 					klog.Infof("Server exit: %v", stat.Err)

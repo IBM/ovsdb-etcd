@@ -4,13 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/creachadair/jrpc2"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"k8s.io/klog/v2"
@@ -19,8 +17,7 @@ import (
 )
 
 type Databaser interface {
-	Lock(ctx context.Context, id string) (bool, error)
-	Unlock(ctx context.Context, id string) error
+	GetLock(ctx context.Context, id string) (Locker, error)
 	AddSchema(schemaName, schemaFile string) error
 	GetData(prefix string, keysOnly bool) (*clientv3.GetResponse, error)
 	PutData(ctx context.Context, key string, obj interface{}) error
@@ -38,6 +35,35 @@ type DatabaseEtcd struct {
 	monitors map[string]monitor
 	mu       sync.Mutex
 	prefix   string
+}
+
+type Locker interface {
+	tryLock() error
+	lock() error
+	unlock() error
+	cancel()
+}
+
+type lock struct {
+	mutex    *concurrency.Mutex
+	myCancel context.CancelFunc
+	cntx     context.Context
+}
+
+func (l *lock) tryLock() error {
+	return l.mutex.TryLock(l.cntx)
+}
+
+func (l *lock) lock() error {
+	return l.mutex.Lock(l.cntx)
+}
+
+func (l *lock) unlock() error {
+	return l.mutex.Unlock(l.cntx)
+}
+
+func (l *lock) cancel() {
+	l.myCancel()
 }
 
 var EtcdDialTimeout = 5 * time.Second
@@ -64,59 +90,15 @@ func (con *DatabaseEtcd) Close() {
 	con.cli.Close()
 }
 
-func (con *DatabaseEtcd) Lock(ctx context.Context, id string) (bool, error) {
-	cnx := context.TODO()
-	session, err := concurrency.NewSession(con.cli, concurrency.WithContext(cnx))
+func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error) {
+	ctctx, cancel := context.WithCancel(ctx)
+	session, err := concurrency.NewSession(con.cli, concurrency.WithContext(ctctx))
 	if err != nil {
-		return false, err
+		cancel()
+		return nil, err
 	}
 	mutex := concurrency.NewMutex(session, con.prefix+"locks/"+id)
-	err = mutex.TryLock(cnx)
-	unlock := func() {
-		server := jrpc2.ServerFromContext(ctx)
-		server.Wait()
-		klog.V(5).Infoln("UNLOCK")
-		err = mutex.Unlock(cnx)
-		if err != nil {
-			err = fmt.Errorf("Unlock returned %v\n", err)
-		} else {
-			klog.V(5).Infoln("UNLOCKED done\n")
-		}
-	}
-	if err == nil {
-		go unlock()
-		return true, nil
-	}
-	go func() {
-		err = mutex.Lock(cnx)
-		if err == nil {
-			// Send notification
-			klog.V(5).Infoln("Locked")
-			go unlock()
-			// TODO move from database
-			if err := jrpc2.PushNotify(ctx, "locked", []string{id}); err != nil {
-				klog.Errorf("notification %v\n", err)
-				return
-
-			}
-		} else {
-			klog.Errorf("Lock error %v\n", err)
-		}
-	}()
-	return false, nil
-}
-
-func (con *DatabaseEtcd) Unlock(ctx context.Context, id string) error {
-	cnx := context.TODO()
-	session, err := concurrency.NewSession(con.cli, concurrency.WithContext(cnx))
-	if err != nil {
-		return err
-	}
-	mutex := concurrency.NewMutex(session, con.prefix+"locks/"+id)
-	// TODO
-	klog.V(5).Infof("is owner %+v\n", mutex.IsOwner())
-	mutex.Unlock(ctx)
-	return nil
+	return &lock{mutex: mutex, myCancel: cancel, cntx: ctctx}, nil
 }
 
 func (con *DatabaseEtcd) AddSchema(schemaName, schemaFile string) error {
@@ -232,6 +214,29 @@ type DatabaseMock struct {
 	Ok       bool
 }
 
+type LockerMock struct {
+	Mu    sync.Mutex
+	Error error
+}
+
+func (l *LockerMock) tryLock() error {
+	return l.Error
+}
+
+func (l *LockerMock) lock() error {
+	l.Mu.Lock()
+	return nil
+}
+
+func (l *LockerMock) unlock() error {
+	l.Mu.Unlock()
+	return nil
+}
+
+func (l *LockerMock) cancel() {
+	l.Mu.Unlock()
+}
+
 func NewDatabaseMock() (Databaser, error) {
 	return &DatabaseMock{}, nil
 }
@@ -239,12 +244,9 @@ func NewDatabaseMock() (Databaser, error) {
 func (con *DatabaseMock) Close() {
 }
 
-func (con *DatabaseMock) Lock(ctx context.Context, id string) (bool, error) {
-	return con.Response.(bool), nil
-}
+func (con *DatabaseMock) GetLock(ctx context.Context, id string) (Locker, error) {
 
-func (con *DatabaseMock) Unlock(ctx context.Context, id string) error {
-	return con.Error
+	return &LockerMock{}, nil
 }
 
 func (con *DatabaseMock) AddSchema(schemaName, schemaFile string) error {

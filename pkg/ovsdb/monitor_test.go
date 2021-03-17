@@ -1,6 +1,7 @@
 package ovsdb
 
 import (
+	"context"
 	"fmt"
 	"github.com/ebay/libovsdb"
 	"testing"
@@ -30,7 +31,7 @@ func TestMonitorResponse(t *testing.T) {
 		Response: expectedResponse,
 		Error:    expectedError,
 	}
-	ch := NewHandler(dbServer)
+	ch := NewHandler(context.Background(), dbServer)
 	cmp := ovsjson.CondMonitorParameters{}
 	cmp.DatabaseName = dataBase
 	cmp.JsonValue = nil

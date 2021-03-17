@@ -2,8 +2,10 @@ package common
 
 import (
 	"encoding/json"
+	"fmt"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"k8s.io/klog"
 
 	"github.com/ebay/libovsdb"
 )
@@ -69,4 +71,21 @@ func ArrayMapStringToArrayInterface(in []map[string]string) (out []interface{}) 
 		out = append(out, v)
 	}
 	return
+}
+
+func ParamsToString(param interface{}) (string, error) {
+	switch param.(type) {
+	case []interface{}:
+		intArray := param.([]interface{})
+		if len(intArray) == 0 {
+			klog.Warningf("Empty params")
+			return "", fmt.Errorf("Empty params")
+		} else {
+			return fmt.Sprintf("%s", intArray[0]), nil
+		}
+	case string:
+		return param.(string), nil
+	default:
+		return fmt.Sprintf("%s", param), nil
+	}
 }

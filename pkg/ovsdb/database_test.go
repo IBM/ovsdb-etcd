@@ -1,6 +1,7 @@
 package ovsdb
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,23 +9,15 @@ import (
 )
 
 func TestMockLock(t *testing.T) {
-	expectedResponse := true
+	expectedResponse := &LockerMock{}
 	var expectedError error
 	mock := DatabaseMock{
 		Response: expectedResponse,
 		Error:    expectedError,
 	}
-	actualResponse, actualError := mock.Lock(nil, "")
+	context.Background()
+	actualResponse, actualError := mock.GetLock(context.Background(), "id")
 	assert.Equal(t, expectedResponse, actualResponse)
-	assert.Equal(t, expectedError, actualError)
-}
-
-func TestMockUnlock(t *testing.T) {
-	var expectedError error
-	mock := DatabaseMock{
-		Error: expectedError,
-	}
-	actualError := mock.Unlock(nil, "")
 	assert.Equal(t, expectedError, actualError)
 }
 
