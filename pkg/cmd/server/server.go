@@ -108,7 +108,11 @@ func main() {
 				srv := jrpc2.NewServer(assigner, servOptions)
 				handler.SetConnection(srv)
 				srv.Start(ch)
-				go func() { defer cancel(); srv.Wait() }()
+				go func() {
+					defer cancel()
+					srv.Wait()
+					handler.Cleanup()
+				}()
 				stat := srv.WaitStatus()
 				if stat.Err != nil {
 					klog.Infof("Server exit: %v", stat.Err)
