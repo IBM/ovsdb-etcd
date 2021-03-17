@@ -40,10 +40,13 @@ type DatabaseEtcd struct {
 	prefix   string
 }
 
+var EtcdDialTimeout = 5 * time.Second
+var EtcdClientTimeout = 100 * time.Millisecond
+
 func NewDatabaseEtcd(endpoints []string, prefix string) (Databaser, error) {
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   endpoints,
-		DialTimeout: 5 * time.Second,
+		DialTimeout: EtcdDialTimeout,
 	})
 	if err != nil {
 		klog.Errorf("NewETCDConenctor , error: ", err)
@@ -128,7 +131,7 @@ func (con *DatabaseEtcd) AddSchema(schemaName, schemaFile string) error {
 }
 
 func (con *DatabaseEtcd) GetData(keysPrefix string, keysOnly bool) (*clientv3.GetResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), EtcdClientTimeout)
 	var resp *clientv3.GetResponse
 	var err error
 	if keysOnly {
@@ -153,7 +156,7 @@ func (con *DatabaseEtcd) GetData(keysPrefix string, keysOnly bool) (*clientv3.Ge
 
 // TODO replace
 func (con *DatabaseEtcd) GetMarshaled(keysPrefix string, columns []interface{}) (*[]map[string]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), EtcdClientTimeout)
 	resp, err := con.cli.Get(ctx, con.prefix+keysPrefix, clientv3.WithFromKey())
 	cancel()
 	if err != nil {
