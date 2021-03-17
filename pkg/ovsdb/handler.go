@@ -100,7 +100,7 @@ func (ch *Handler) Monitor(ctx context.Context, param ovsjson.CondMonitorParamet
 	klog.V(5).Infof("Monitor request, parameters %v", param)
 	for tableName, mcr := range param.MonitorCondRequests {
 		// TODO handle Where, if Where contains uuid, it can be a part of the key
-		key := fmt.Sprintf("ovsdb/%s/%s", param.DatabaseName, tableName)
+		key := fmt.Sprintf("%s/%s", param.DatabaseName, tableName)
 		ch.db.AddMonitor(key, mcr[0], true, &handlerKey{ch, param.JsonValue})
 	}
 	return ch.getMonitoredData(param.DatabaseName, param.MonitorCondRequests, false)
@@ -242,7 +242,7 @@ func (ch *Handler) getMonitoredData(dataBase string, conditions map[string][]ovs
 		if mcrs[0].Select != nil && !mcrs[0].Select.Initial {
 			continue
 		}
-		resp, err := ch.db.GetData("ovsdb/"+dataBase+"/"+tableName, false)
+		resp, err := ch.db.GetData(dataBase+"/"+tableName, false)
 		if err != nil {
 			return nil, err
 		}

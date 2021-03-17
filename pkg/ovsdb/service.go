@@ -220,7 +220,7 @@ type Service struct {
 
 func (s *Service) ListDbs(ctx context.Context, param interface{}) ([]string, error) {
 	klog.V(5).Infof("ListDbs request")
-	resp, err := s.db.GetData("ovsdb/_Server/Database/", true)
+	resp, err := s.db.GetData("_Server/Database/", true)
 	if err != nil {
 		return nil, err
 	}

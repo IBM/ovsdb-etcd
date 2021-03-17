@@ -24,11 +24,12 @@ const UNIX_SOCKET = "/tmp/ovsdb-etcd.sock"
 const ETCD_LOCALHOST = "localhost:2379"
 
 var (
-	tcpAddress    = flag.String("tcp-address", "", "TCP service address")
-	unixAddress   = flag.String("unix-address", "", "UNIX service address")
-	etcdMembers   = flag.String("etcd-members", ETCD_LOCALHOST, "ETCD service addresses, separated by ',' ")
-	schemaBasedir = flag.String("schema-basedir", ".", "Schema base dir")
-	maxTasks      = flag.Int("max", 1, "Maximum concurrent tasks")
+	tcpAddress     = flag.String("tcp-address", "", "TCP service address")
+	unixAddress    = flag.String("unix-address", "", "UNIX service address")
+	etcdMembers    = flag.String("etcd-members", ETCD_LOCALHOST, "ETCD service addresses, separated by ',' ")
+	schemaBasedir  = flag.String("schema-basedir", ".", "Schema base dir")
+	maxTasks       = flag.Int("max", 1, "Maximum concurrent tasks")
+	databasePrefix = flag.String("database-prefix", "ovsdb", "Database prefix")
 )
 
 func main() {
@@ -42,7 +43,7 @@ func main() {
 		klog.Fatal("Wrong ETCD members list", etcdMembers)
 	}
 	etcdServers := strings.Split(*etcdMembers, ",")
-	db, err := ovsdb.NewDatabaseEtcd(etcdServers)
+	db, err := ovsdb.NewDatabaseEtcd(etcdServers, *databasePrefix)
 	if err != nil {
 		klog.Fatal(err)
 	}

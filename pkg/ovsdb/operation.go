@@ -20,7 +20,7 @@ func (doOp *doOperation) Select(op *libovsdb.Operation) (*libovsdb.OperationResu
 		columns = append(columns, val)
 	}
 
-	mapResults, err := doOp.db.GetMarshaled("ovsdb/"+op.Table, columns)
+	mapResults, err := doOp.db.GetMarshaled(op.Table, columns)
 	if err != nil {
 		return nil, err
 	}
