@@ -34,6 +34,8 @@ func (ch *Handler) Transact(ctx context.Context, param []interface{}) (interface
 	klog.V(5).Infof("Transact request, parameters %v", param)
 	transResponse := libovsdb.TransactResponse{}
 	aborting := false
+	dbname := "mydbname" // FIXME: this is the correct value param[0].(string)
+	param = param[1 : len(param)-1]
 	for i, v := range param {
 		klog.V(6).Infof("Transact i=%d v=%v\n", i, v)
 		opErr := fmt.Errorf("aborting: did not run operation")
@@ -49,7 +51,10 @@ func (ch *Handler) Transact(ctx context.Context, param []interface{}) (interface
 			b, _ := json.Marshal(m)    // FIXME: handle error
 			_ = json.Unmarshal(b, &op) // FIXME: handle error
 
-			doOp := doOperation{db: ch.db}
+			doOp := doOperation{
+				dbname: dbname,
+				db:     ch.db,
+			}
 
 			switch op.Op { // FIXME: handle error
 			case "insert":

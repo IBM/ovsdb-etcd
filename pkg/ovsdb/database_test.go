@@ -49,23 +49,6 @@ func TestMockGetData(t *testing.T) {
 	assert.Equal(t, expectedResponse, actualResponse)
 }
 
-func TestMockGetMarshaled(t *testing.T) {
-	expectedResponse := &[]map[string]string{
-		{
-			"key1": "val1",
-			"key2": "val2",
-		},
-	}
-	var expectedError error
-	mock := DatabaseMock{
-		Response: expectedResponse,
-		Error:    expectedError,
-	}
-	actualResponse, actualError := mock.GetMarshaled("", []interface{}{})
-	assert.Equal(t, expectedError, actualError)
-	assert.Equal(t, expectedResponse, actualResponse)
-}
-
 func TestMockGetSchema(t *testing.T) {
 	expectedResponse := "val1"
 	expectedOk := true

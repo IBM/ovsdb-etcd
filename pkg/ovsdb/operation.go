@@ -7,7 +7,8 @@ import (
 )
 
 type doOperation struct {
-	db Databaser
+	dbname string
+	db     Databaser
 }
 
 func (doOp *doOperation) Insert(op *libovsdb.Operation) (*libovsdb.OperationResult, error) {
@@ -15,19 +16,22 @@ func (doOp *doOperation) Insert(op *libovsdb.Operation) (*libovsdb.OperationResu
 }
 
 func (doOp *doOperation) Select(op *libovsdb.Operation) (*libovsdb.OperationResult, error) {
-	columns := []interface{}{}
-	for _, val := range op.Columns {
-		columns = append(columns, val)
-	}
-
-	mapResults, err := doOp.db.GetMarshaled(op.Table, columns)
-	if err != nil {
-		return nil, err
-	}
-
-	b, err := json.Marshal(mapResults)   // FIXME: handle err
 	result := libovsdb.OperationResult{} // XXX(alexey): check json representation
-	err = json.Unmarshal(b, &result)     // FIXME: handle err
+
+	// FIXME: reduce number of rows using 'op.Where'
+	// FIXME: reduce size of each row using 'op.Columns'
+	prefix := doOp.dbname + "/" + op.Table
+	resp, err := doOp.db.GetData(prefix, false)
+	if err != nil {
+		return &result, err
+	}
+
+	resultMap := map[string]interface{}{
+		"rows": resp.Kvs,
+	}
+
+	b, err := json.Marshal(resultMap) // FIXME: handle err
+	err = json.Unmarshal(b, &result)  // FIXME: handle err
 	return &result, nil
 }
 
