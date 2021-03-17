@@ -24,7 +24,6 @@ type Databaser interface {
 	AddSchema(schemaName, schemaFile string) error
 	GetData(prefix string, keysOnly bool) (*clientv3.GetResponse, error)
 	PutData(ctx context.Context, key string, obj interface{}) error
-	GetMarshaled(prefix string, columns []interface{}) (*[]map[string]string, error)
 	GetSchema(name string) (string, bool)
 	AddMonitor(prefix string, mcr ovsjson.MonitorCondRequest, isV1 bool, hand *handlerKey)
 	DelMonitor(prefix string, mcr ovsjson.MonitorCondRequest, isV1 bool, hand *handlerKey)
@@ -154,41 +153,6 @@ func (con *DatabaseEtcd) GetData(keysPrefix string, keysOnly bool) (*clientv3.Ge
 	return resp, err
 }
 
-// TODO replace
-func (con *DatabaseEtcd) GetMarshaled(keysPrefix string, columns []interface{}) (*[]map[string]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), EtcdClientTimeout)
-	resp, err := con.cli.Get(ctx, con.prefix+keysPrefix, clientv3.WithFromKey())
-	cancel()
-	if err != nil {
-		return nil, err
-	}
-	retMaps := map[string]map[string]string{}
-	columnsMap := map[string]bool{}
-	for _, col := range columns {
-		columnsMap[col.(string)] = true
-	}
-	for _, v := range resp.Kvs {
-		keys := strings.Split(string(v.Key), "/")
-		len := len(keys)
-		if _, ok := columnsMap[keys[len-1]]; !ok {
-			continue
-		}
-		valsmap, ok := retMaps[keys[len-3]]
-		if !ok {
-			valsmap = map[string]string{}
-		}
-		valsmap[keys[len-1]] = string(v.Value)
-
-		// TODO
-		retMaps[keys[len-3]] = valsmap
-	}
-	values := []map[string]string{}
-	for _, value := range retMaps {
-		values = append(values, value)
-	}
-	return &values, nil
-}
-
 func (con *DatabaseEtcd) GetSchema(name string) (string, bool) {
 	return con.Schemas[name], true
 }
@@ -257,10 +221,6 @@ func (con *DatabaseMock) GetData(keysPrefix string, keysOnly bool) (*clientv3.Ge
 
 func (con *DatabaseMock) PutData(ctx context.Context, key string, obj interface{}) error {
 	return con.Error
-}
-
-func (con *DatabaseMock) GetMarshaled(keysPrefix string, columns []interface{}) (*[]map[string]string, error) {
-	return con.Response.(*[]map[string]string), con.Error
 }
 
 func (con *DatabaseMock) GetSchema(name string) (string, bool) {
