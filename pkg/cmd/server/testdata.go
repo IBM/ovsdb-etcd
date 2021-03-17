@@ -271,6 +271,7 @@ func loadServerData(con *ovsdb.DatabaseEtcd) error {
 			Connected: true, Leader: true, Schema: *schemaSet, Version: ovsdbjson.UUID{GoUUID: uuid.NewString()}}
 		if err := con.PutData(ctx, "_Server/Database/"+schemaName, srv); err != nil {
 			cancel = nil
+			return err
 		}
 	}
 
