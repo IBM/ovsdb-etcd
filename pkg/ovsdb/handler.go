@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go.etcd.io/etcd/client/v3/concurrency"
 	"sync"
 
 	"github.com/ebay/libovsdb"
@@ -22,12 +23,15 @@ type ClientConnection interface {
 type Handler struct {
 	db Databaser
 
-	connection ClientConnection
+	connection     ClientConnection
+	handlerContext context.Context
 
 	mu sync.Mutex
 	// map from jason-values to monitors
 	jsonValueToMonitors               map[interface{}][]*monitor
 	jsonValueToUpdateNotificationType map[interface{}]ovsjson.UpdateNotificationType
+
+	databaseLocks map[string]Locker
 }
 
 func (ch *Handler) Transact(ctx context.Context, param []interface{}) (interface{}, error) {
@@ -119,53 +123,71 @@ func (ch *Handler) MonitorCancel(ctx context.Context, param interface{}) (interf
 
 func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, error) {
 	klog.V(5).Infof("Lock request, parameters %v", param)
-	//defer notification(ctx)
-	var id string
-	// param is []interface{}, but just in case ...
-	switch param.(type) {
-	case []interface{}:
-		intArray := param.([]interface{})
-		if len(intArray) == 0 {
-			// Error
-			klog.Warningf("Empty params")
-			return []interface{}{"locked", false}, nil
-		} else {
-			id = fmt.Sprintf("%s", intArray[0])
-		}
-	case string:
-		id = param.(string)
-	case interface{}:
-		id = fmt.Sprintf("%s", param)
-	}
-	locked, err := ch.db.Lock(ctx, id)
+	id, err := common.ParamsToString(param)
 	if err != nil {
-		// TODO should we return error ?
-		klog.Warningf("Lock returned error %v\n", err)
+		return []interface{}{"locked", false}, err
 	}
-	return []interface{}{"locked", locked}, nil
+	ch.mu.Lock()
+	myLock, ok := ch.databaseLocks[id]
+	ch.mu.Unlock()
+	if !ok {
+		myLock, err := ch.db.GetLock(ch.handlerContext, id)
+		if err != nil {
+			klog.Warningf("Lock returned error %v\n", err)
+			return nil, err
+		}
+		ch.mu.Lock()
+		// validate that no other locks
+		otherLock, ok := ch.databaseLocks[id]
+		if !ok {
+			ch.databaseLocks[id] = myLock
+		} else {
+			// What should we do ?
+			myLock.cancel()
+			myLock = otherLock
+		}
+		ch.mu.Unlock()
+	}
+	err = myLock.tryLock()
+	if err == nil {
+		return []interface{}{"locked", true}, nil
+	} else if err != concurrency.ErrLocked {
+		klog.Errorf("Locked %s got error %v", id, err)
+		// TOD is it correct?
+		return nil, err
+	}
+	go func() {
+		err = myLock.lock()
+		if err == nil {
+			// Send notification
+			klog.V(5).Infoln("%s Locked", id)
+			if err := ch.connection.Notify(ch.handlerContext, "locked", []string{id}); err != nil {
+				klog.Errorf("notification %v\n", err)
+				return
+			}
+		} else {
+			klog.Errorf("Lock %s error %v\n", id, err)
+		}
+	}()
+	return []interface{}{"locked", false}, nil
 }
 
 func (ch *Handler) Unlock(ctx context.Context, param interface{}) (interface{}, error) {
 	klog.V(5).Infof("Unlock request, parameters %v", param)
-	var id string
-	// param is []interface{}, but just in case ...
-	switch param.(type) {
-	case []interface{}:
-		intArray := param.([]interface{})
-		if len(intArray) == 0 {
-			// Error
-			klog.Warningf("Empty params")
-			return []interface{}{"locked", false}, nil
-		} else {
-			id = fmt.Sprintf("%s", intArray[0])
-		}
-	case string:
-		id = param.(string)
-	case interface{}:
-		id = fmt.Sprintf("%s", param)
+	id, err := common.ParamsToString(param)
+	if err != nil {
+		return ovsjson.EmptyStruct{}, err
 	}
-	_ = ch.db.Unlock(ctx, id)
-	return "{Unlock}", nil
+	ch.mu.Lock()
+	myLock, ok := ch.databaseLocks[id]
+	delete(ch.databaseLocks, id)
+	ch.mu.Unlock()
+	if !ok {
+		klog.V(4).Infof("Unlock non existing lock %s", id)
+		return ovsjson.EmptyStruct{}, nil
+	}
+	myLock.cancel()
+	return ovsjson.EmptyStruct{}, nil
 }
 
 func (ch *Handler) Steal(ctx context.Context, param interface{}) (interface{}, error) {
@@ -201,9 +223,9 @@ func (ch *Handler) SetDbChangeAware(ctx context.Context, param interface{}) inte
 	return ovsjson.EmptyStruct{}
 }
 
-func NewHandler(db Databaser) *Handler {
+func NewHandler(tctx context.Context, db Databaser) *Handler {
 	return &Handler{
-		db: db,
+		handlerContext: tctx, db: db,
 	}
 }
 

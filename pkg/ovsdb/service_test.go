@@ -1,6 +1,7 @@
 package ovsdb
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -27,7 +28,7 @@ func TestTransactSelect(t *testing.T) {
 	assert.Nil(t, err)
 	requestArrayMapString := common.BytesToArrayMapString(byteValue)
 	requestArrayInterface := common.ArrayMapStringToArrayInterface(*requestArrayMapString)
-	ch := NewHandler(db)
+	ch := NewHandler(context.Background(), db)
 	actualResponse, actualError := ch.Transact(nil, requestArrayInterface)
 	assert.Equal(t, expectedError, actualError)
 	actualResponseString, err := json.Marshal(actualResponse)
