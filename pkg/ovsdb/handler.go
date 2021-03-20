@@ -125,13 +125,13 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 	klog.V(5).Infof("Lock request, parameters %v", param)
 	id, err := common.ParamsToString(param)
 	if err != nil {
-		return []interface{}{"locked", false}, err
+		return map[string]bool{"locked": false}, err
 	}
 	ch.mu.Lock()
 	myLock, ok := ch.databaseLocks[id]
 	ch.mu.Unlock()
 	if !ok {
-		myLock, err := ch.db.GetLock(ch.handlerContext, id)
+		myLock, err = ch.db.GetLock(ch.handlerContext, id)
 		if err != nil {
 			klog.Warningf("Lock returned error %v\n", err)
 			return nil, err
@@ -150,7 +150,7 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 	}
 	err = myLock.tryLock()
 	if err == nil {
-		return []interface{}{"locked", true}, nil
+		return map[string]bool{"locked": true}, nil
 	} else if err != concurrency.ErrLocked {
 		klog.Errorf("Locked %s got error %v", id, err)
 		// TOD is it correct?
@@ -169,7 +169,7 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 			klog.Errorf("Lock %s error %v\n", id, err)
 		}
 	}()
-	return []interface{}{"locked", false}, nil
+	return map[string]bool{"locked": false}, nil
 }
 
 func (ch *Handler) Unlock(ctx context.Context, param interface{}) (interface{}, error) {
@@ -225,14 +225,17 @@ func (ch *Handler) SetDbChangeAware(ctx context.Context, param interface{}) inte
 
 func NewHandler(tctx context.Context, db Databaser) *Handler {
 	return &Handler{
-		handlerContext: tctx, db: db,
+		handlerContext: tctx, db: db, databaseLocks: map[string]Locker{},
 	}
 }
 
 func (ch *Handler) Cleanup() error {
-	ch.connection.Wait()
 	klog.Info("CLEAN UP do something")
-	// TODO add implementation
+	ch.mu.Lock()
+	defer ch.mu.Unlock()
+	for _, m := range ch.databaseLocks {
+		m.unlock()
+	}
 	return nil
 }
 
