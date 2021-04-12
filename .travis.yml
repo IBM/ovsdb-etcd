@@ -35,6 +35,9 @@ jobs:
     name: "Run tests"
     install:
     - make install-tools
+    before_script:
+    - make etcd
+    - make server
     script:
     - make tests
 

@@ -1,6 +1,6 @@
 .PHONY: install-tools
 install-tools:
-	@echo "nothing for now"
+	./scripts/install_etcd.sh
 
 VERIFY += generate
 .PHONY: generate
@@ -35,6 +35,14 @@ tidy:
 .PHONY: verify
 verify: $(VERIFY)
 	git diff --exit-code
+
+.PHONY: etcd
+etcd:
+	$(MAKE) -C tests/e2e/ etcd &
+
+.PHONY: server
+server:
+	$(MAKE) -C tests/e2e/ server &
 
 .PHONY: tests
 tests:
