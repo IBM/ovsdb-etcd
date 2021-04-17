@@ -1,6 +1,9 @@
 package libovsdb
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"errors"
+)
 
 // Operation represents an operation according to RFC7047 section 5.2
 type Operation struct {
@@ -14,6 +17,8 @@ type Operation struct {
 	Where     []interface{}            `json:"where,omitempty"`
 	Until     string                   `json:"until,omitempty"`
 	UUIDName  string                   `json:"uuid-name,omitempty"`
+	Comment   string                   `json:"comment,omitempty"`
+	Durable   bool                     `json:"durable,omitempty"`
 }
 
 // MarshalJSON marshalls 'Operation' to a byte array
@@ -99,6 +104,43 @@ func NewCondition(column string, function string, value interface{}) []interface
 // NewMutation creates a new mutation as specified in RFC7047
 func NewMutation(column string, mutator string, value interface{}) []interface{} {
 	return []interface{}{column, mutator, value}
+}
+
+// Transact represents the request of a Transact call
+type Transact struct {
+	DBName     string
+	Operations []Operation
+}
+
+func NewTransact(params []interface{}) (*Transact, error) {
+	if len(params) < 2 {
+		return nil, errors.New("malformed transaction")
+	}
+
+	tx := new(Transact)
+	for i, v := range params {
+		switch i {
+		case 0:
+			dbname, ok := v.(string)
+			if !ok {
+				return nil, errors.New("malformed transaction")
+			}
+			tx.DBName = dbname
+		default:
+			b, err := json.Marshal(v)
+			if err != nil {
+				return nil, errors.New("malformed transaction")
+			}
+			var op Operation
+			err = json.Unmarshal(b, &op)
+			if err != nil {
+				return nil, errors.New("malformed transaction")
+			}
+			tx.Operations = append(tx.Operations, op)
+		}
+	}
+
+	return tx, nil
 }
 
 // TransactResponse represents the response to a Transact Operation

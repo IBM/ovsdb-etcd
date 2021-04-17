@@ -24,7 +24,6 @@ type Databaser interface {
 	GetSchema(name string) (string, bool)
 	AddMonitor(prefix string, mcr ovsjson.MonitorCondRequest, isV1 bool, hand *handlerKey)
 	DelMonitor(prefix string, mcr ovsjson.MonitorCondRequest, isV1 bool, hand *handlerKey)
-	Close()
 }
 
 type DatabaseEtcd struct {
@@ -65,28 +64,14 @@ func (l *lock) cancel() {
 	l.myCancel()
 }
 
-var EtcdDialTimeout = 5 * time.Second
 var EtcdClientTimeout = 100 * time.Millisecond
 
-func NewDatabaseEtcd(endpoints []string, prefix string) (Databaser, error) {
-	cli, err := clientv3.New(clientv3.Config{
-		Endpoints:   endpoints,
-		DialTimeout: EtcdDialTimeout,
-	})
-	if err != nil {
-		klog.Errorf("NewETCDConenctor , error: ", err)
-		return nil, err
-	}
-	klog.Info("etcd client is connected")
+func NewDatabaseEtcd(cli *clientv3.Client, prefix string) (Databaser, error) {
 	if !strings.HasSuffix(prefix, "/") {
 		prefix = prefix + "/"
 	}
 	return &DatabaseEtcd{cli: cli,
 		Schemas: make(map[string]string), prefix: prefix}, nil
-}
-
-func (con *DatabaseEtcd) Close() {
-	con.cli.Close()
 }
 
 func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error) {
@@ -203,9 +188,6 @@ func (l *LockerMock) cancel() {
 
 func NewDatabaseMock() (Databaser, error) {
 	return &DatabaseMock{}, nil
-}
-
-func (con *DatabaseMock) Close() {
 }
 
 func (con *DatabaseMock) GetLock(ctx context.Context, id string) (Locker, error) {

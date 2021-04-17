@@ -11,7 +11,7 @@ import (
 	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
 )
 
-const baseMonitor string = baseData + "/monitor/"
+const baseMonitor string = "../../tests/data/monitor/"
 
 func TestTableUpdate(t *testing.T) {
 	tests := map[string]struct {

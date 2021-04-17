@@ -43,11 +43,14 @@ func main() {
 		klog.Fatal("Wrong ETCD members list", etcdMembers)
 	}
 	etcdServers := strings.Split(*etcdMembers, ",")
-	db, err := ovsdb.NewDatabaseEtcd(etcdServers, *databasePrefix)
+
+	cli, err := ovsdb.NewEtcdClient(etcdServers)
 	if err != nil {
 		klog.Fatal(err)
 	}
-	defer db.Close()
+	defer cli.Close()
+
+	db, _ := ovsdb.NewDatabaseEtcd(cli, *databasePrefix)
 
 	// For development only
 	err = db.AddSchema("_Server", *schemaBasedir+"/_server.ovsschema")
@@ -103,7 +106,7 @@ func main() {
 			go func() {
 				defer wg.Done()
 				tctx, cancel := context.WithCancel(context.Background())
-				handler := ovsdb.NewHandler(tctx, db)
+				handler := ovsdb.NewHandler(tctx, db, cli)
 				assigner := addClientHandlers(*globServiceMap, handler)
 				srv := jrpc2.NewServer(assigner, servOptions)
 				handler.SetConnection(srv)
