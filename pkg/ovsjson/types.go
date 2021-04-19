@@ -1,7 +1,7 @@
 package ovsjson
 
 import (
-	"github.com/ebay/libovsdb"
+	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 )
 
 // We probably move most of the types from this file to libovsdb progect

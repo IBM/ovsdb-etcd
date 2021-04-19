@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ebay/libovsdb"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"k8s.io/klog/v2"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
+	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
 )
 

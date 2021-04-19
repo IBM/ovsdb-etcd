@@ -1,6 +1,6 @@
 package OVN_Northbound
 
-import "github.com/ebay/libovsdb"
+import "github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 
 type ACL struct {
 	Action       string          `json:"action,omitempty"`

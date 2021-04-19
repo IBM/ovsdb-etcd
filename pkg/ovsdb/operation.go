@@ -3,7 +3,7 @@ package ovsdb
 import (
 	"encoding/json"
 
-	"github.com/ebay/libovsdb"
+	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 )
 
 type doOperation struct {

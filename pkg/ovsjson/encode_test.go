@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ebay/libovsdb"
+	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 	"github.com/stretchr/testify/assert"
 )
 

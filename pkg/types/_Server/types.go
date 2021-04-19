@@ -1,6 +1,6 @@
 package _Server
 
-import "github.com/ebay/libovsdb"
+import "github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 
 type Database struct {
 	Cid       libovsdb.OvsSet `json:"cid,omitempty"`
