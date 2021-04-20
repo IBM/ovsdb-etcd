@@ -1,6 +1,6 @@
 package OVN_Southbound
 
-import "github.com/ebay/libovsdb"
+import "github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 
 type Address_Set struct {
 	Addresses libovsdb.OvsSet `json:"addresses,omitempty"`

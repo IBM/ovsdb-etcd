@@ -9,24 +9,24 @@ import (
 	"github.com/ibm/ovsdb-etcd/pkg/types/OVN_Northbound"
 	"github.com/ibm/ovsdb-etcd/pkg/types/_Server"
 
-	ovsdbjson "github.com/ebay/libovsdb"
 	"github.com/google/uuid"
+	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 )
 
-func newUUID() ovsdbjson.UUID {
+func newUUID() libovsdb.UUID {
 	return common.ToUUID(uuid.NewString())
 }
 
-func newSet(s interface{}) (*ovsdbjson.OvsSet, error) {
-	set, err := ovsdbjson.NewOvsSet(s)
+func newSet(s interface{}) (*libovsdb.OvsSet, error) {
+	set, err := libovsdb.NewOvsSet(s)
 	if err != nil {
 		return nil, err
 	}
 	return set, nil
 }
 
-func newMap(s interface{}) (*ovsdbjson.OvsMap, error) {
-	set, err := ovsdbjson.NewOvsMap(s)
+func newMap(s interface{}) (*libovsdb.OvsMap, error) {
+	set, err := libovsdb.NewOvsMap(s)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +45,7 @@ func putNbGlobalOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid string
 
 	nbGlobal := OVN_Northbound.NB_Global{
 		Connections:      *connectionsSet,
-		External_ids:     ovsdbjson.OvsMap{},
+		External_ids:     libovsdb.OvsMap{},
 		Hv_cfg:           0,
 		Hv_cfg_timestamp: 0,
 		Ipsec:            false,
@@ -55,9 +55,9 @@ func putNbGlobalOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid string
 		Options:          *optionsMap,
 		Sb_cfg:           0,
 		Sb_cfg_timestamp: 0,
-		Ssl:              ovsdbjson.OvsSet{},
+		Ssl:              libovsdb.OvsSet{},
 		Version:          newUUID(),
-		Uuid:             ovsdbjson.UUID{GoUUID: uuid},
+		Uuid:             libovsdb.UUID{GoUUID: uuid},
 	}
 	con.PutData(ctx, "OVN_Northbound/NB_Global/"+uuid, nbGlobal)
 	return nil
@@ -67,15 +67,15 @@ func putAclOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid string, act
 	acl := OVN_Northbound.ACL{
 		Action:       action,
 		Direction:    direction,
-		External_ids: ovsdbjson.OvsMap{},
+		External_ids: libovsdb.OvsMap{},
 		Log:          false,
 		Match:        match,
-		Meter:        ovsdbjson.OvsSet{},
-		Name:         ovsdbjson.OvsSet{},
+		Meter:        libovsdb.OvsSet{},
+		Name:         libovsdb.OvsSet{},
 		Priority:     priority,
-		Severity:     ovsdbjson.OvsSet{},
+		Severity:     libovsdb.OvsSet{},
 		Version:      newUUID(),
-		Uuid:         ovsdbjson.UUID{GoUUID: uuid},
+		Uuid:         libovsdb.UUID{GoUUID: uuid},
 	}
 	con.PutData(ctx, "OVN_Northbound/NB_Global/"+uuid, acl)
 	return nil
@@ -95,7 +95,7 @@ func putAddressSetOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid stri
 		External_ids: *externalIdsMap,
 		Name:         name,
 		Version:      newUUID(),
-		Uuid:         ovsdbjson.UUID{GoUUID: uuid},
+		Uuid:         libovsdb.UUID{GoUUID: uuid},
 	}
 	con.PutData(ctx, "OVN_Northbound/Address_Set/"+uuid, addressSet)
 	return nil
@@ -107,15 +107,15 @@ func putConnectionOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid stri
 		return err
 	}
 	connection := OVN_Northbound.Connection{
-		External_ids:     ovsdbjson.OvsMap{},
-		Inactivity_probe: ovsdbjson.OvsSet{},
+		External_ids:     libovsdb.OvsMap{},
+		Inactivity_probe: libovsdb.OvsSet{},
 		Is_connected:     false,
-		Max_backoff:      ovsdbjson.OvsSet{},
-		Other_config:     ovsdbjson.OvsMap{},
+		Max_backoff:      libovsdb.OvsSet{},
+		Other_config:     libovsdb.OvsMap{},
 		Status:           *statusMap,
 		Target:           target,
 		Version:          newUUID(),
-		Uuid:             ovsdbjson.UUID{GoUUID: uuid},
+		Uuid:             libovsdb.UUID{GoUUID: uuid},
 	}
 
 	con.PutData(ctx, "OVN_Northbound/Connection/"+uuid, connection)
@@ -140,7 +140,7 @@ func putForwardingGroupOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid
 		Vip:          "",
 		Vmac:         "",
 		Version:      newUUID(),
-		Uuid:         ovsdbjson.UUID{GoUUID: uuid},
+		Uuid:         libovsdb.UUID{GoUUID: uuid},
 	}
 	con.PutData(ctx, "OVN_Northbound/Forwarding_Group/"+uuid, fowardingGroup)
 	return nil
@@ -165,15 +165,15 @@ func putloadBalancerOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid st
 	}
 	loadBalancer := OVN_Northbound.Load_Balancer{
 		External_ids:     *externalIdsMap,
-		Health_check:     ovsdbjson.OvsSet{},
-		Ip_port_mappings: ovsdbjson.OvsMap{},
+		Health_check:     libovsdb.OvsSet{},
+		Ip_port_mappings: libovsdb.OvsMap{},
 		Name:             name,
 		Options:          *optionsMap,
 		Protocol:         *protocolSet,
-		Selection_fields: ovsdbjson.OvsSet{},
+		Selection_fields: libovsdb.OvsSet{},
 		Vips:             *vipsMap,
 		Version:          newUUID(),
-		Uuid:             ovsdbjson.UUID{GoUUID: uuid},
+		Uuid:             libovsdb.UUID{GoUUID: uuid},
 	}
 	con.PutData(ctx, "OVN_Northbound/Load_Balancer/"+uuid, loadBalancer)
 	return nil
@@ -197,13 +197,13 @@ func putlogicalRouterOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid s
 		return err
 	}
 	logicalRouter := OVN_Northbound.Logical_Router{
-		Enabled:       ovsdbjson.OvsSet{},
+		Enabled:       libovsdb.OvsSet{},
 		External_ids:  *externalIdsMap,
-		Load_balancer: ovsdbjson.OvsSet{},
+		Load_balancer: libovsdb.OvsSet{},
 		Name:          name,
-		Nat:           ovsdbjson.OvsSet{},
+		Nat:           libovsdb.OvsSet{},
 		Options:       *optionsMap,
-		Policies:      ovsdbjson.OvsSet{},
+		Policies:      libovsdb.OvsSet{},
 		Ports:         *portsSet,
 		Static_routes: *staticRoutesSet,
 		Version:       newUUID(),
@@ -222,10 +222,10 @@ func putGatewayChassisOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid 
 		Chassis_name: chassis_name,
 		External_ids: *externalIdsMap,
 		Name:         name,
-		Options:      ovsdbjson.OvsMap{},
+		Options:      libovsdb.OvsMap{},
 		Priority:     priority,
 		Version:      newUUID(),
-		Uuid:         ovsdbjson.UUID{GoUUID: uuid},
+		Uuid:         libovsdb.UUID{GoUUID: uuid},
 	}
 	con.PutData(ctx, "OVN_Northbound/Gateway_Chassis/"+uuid, gatewayChassis)
 	return nil
@@ -242,15 +242,15 @@ func putlogicalSwitchOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid s
 	}
 
 	logicalSwitch := OVN_Northbound.Logical_Switch{
-		Acls:              ovsdbjson.OvsSet{},
-		Dns_records:       ovsdbjson.OvsSet{},
+		Acls:              libovsdb.OvsSet{},
+		Dns_records:       libovsdb.OvsSet{},
 		External_ids:      *externalIdsMap,
-		Forwarding_groups: ovsdbjson.OvsSet{},
-		Load_balancer:     ovsdbjson.OvsSet{},
+		Forwarding_groups: libovsdb.OvsSet{},
+		Load_balancer:     libovsdb.OvsSet{},
 		Name:              name,
-		Other_config:      ovsdbjson.OvsMap{},
+		Other_config:      libovsdb.OvsMap{},
 		Ports:             *portsSet,
-		Qos_rules:         ovsdbjson.OvsSet{},
+		Qos_rules:         libovsdb.OvsSet{},
 		Version:           newUUID(),
 		Uuid:              common.ToUUID(uuid),
 	}
@@ -262,13 +262,13 @@ func putlogicalSwitchOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid s
 func loadServerData(con *ovsdb.DatabaseEtcd) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	for schemaName, schema := range con.Schemas {
-		schemaSet, err := ovsdbjson.NewOvsSet([]string{schema})
+		schemaSet, err := libovsdb.NewOvsSet([]string{schema})
 		if err != nil {
 			cancel = nil
 			return err
 		}
-		srv := _Server.Database{Model: "standalone", Name: schemaName, Uuid: ovsdbjson.UUID{GoUUID: uuid.NewString()},
-			Connected: true, Leader: true, Schema: *schemaSet, Version: ovsdbjson.UUID{GoUUID: uuid.NewString()}}
+		srv := _Server.Database{Model: "standalone", Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
+			Connected: true, Leader: true, Schema: *schemaSet, Version: libovsdb.UUID{GoUUID: uuid.NewString()}}
 		if err := con.PutData(ctx, "_Server/Database/"+schemaName, srv); err != nil {
 			cancel = nil
 			return err

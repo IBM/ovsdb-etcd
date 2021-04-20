@@ -7,7 +7,7 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"k8s.io/klog"
 
-	"github.com/ebay/libovsdb"
+	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 )
 
 func BytesToInterface(in []byte) *interface{} {

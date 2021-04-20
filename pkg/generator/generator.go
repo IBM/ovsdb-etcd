@@ -288,5 +288,5 @@ func Package() string {
 }
 
 func getBasePackage() string {
-	return "github.com/ebay/libovsdb"
+	return "github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 }

@@ -3,8 +3,10 @@ module github.com/ibm/ovsdb-etcd
 go 1.15
 
 require (
+	github.com/cenk/hub v1.0.1 // indirect
+	github.com/cenkalti/hub v1.0.1 // indirect
+	github.com/cenkalti/rpc2 v0.0.0-20210220005819-4a29bc83afe1
 	github.com/creachadair/jrpc2 v0.12.0
-	github.com/ebay/libovsdb v0.0.0-20190718202342-e49b8c4e1142
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/golang/protobuf v1.4.2 // indirect
 	github.com/google/uuid v1.2.0
@@ -25,7 +27,6 @@ replace (
 	github.com/coreos/bbolt => github.com/coreos/bbolt v1.3.2
 	github.com/coreos/etcd => github.com/coreos/etcd v3.3.13+incompatible
 	github.com/creachadair/jrpc2 v0.12.0 => github.com/ibm/jrpc2 v1.12.0
-	github.com/ebay/libovsdb v0.0.0-20190718202342-e49b8c4e1142 => github.com/roytman/libovsdb v0.2.0-etcd
 	go.etcd.io/bbolt => go.etcd.io/bbolt v1.3.5
 	google.golang.org/grpc v1.29.1 => google.golang.org/grpc v1.26.0
 	google.golang.org/grpc v1.30.0 => google.golang.org/grpc v1.26.0
