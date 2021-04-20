@@ -126,7 +126,7 @@ func ovsSliceToGoNotation(val interface{}) (interface{}, error) {
 		}
 
 		switch sl[0] {
-		case "uuid":
+		case "uuid", "named-uuid":
 			var uuid UUID
 			err = json.Unmarshal(bsliced, &uuid)
 			return uuid, err
