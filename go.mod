@@ -27,7 +27,6 @@ replace (
 	github.com/creachadair/jrpc2 v0.12.0 => github.com/ibm/jrpc2 v1.12.0
 	github.com/ebay/libovsdb v0.0.0-20190718202342-e49b8c4e1142 => github.com/roytman/libovsdb v0.2.0-etcd
 	go.etcd.io/bbolt => go.etcd.io/bbolt v1.3.5
-	go.etcd.io/etcd => go.etcd.io/etcd v0.5.0-alpha.5.0.20200910180754-dd1b699fc489
 	google.golang.org/grpc v1.29.1 => google.golang.org/grpc v1.26.0
 	google.golang.org/grpc v1.30.0 => google.golang.org/grpc v1.26.0
 )

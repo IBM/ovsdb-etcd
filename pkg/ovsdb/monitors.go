@@ -2,7 +2,10 @@ package ovsdb
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -140,7 +143,6 @@ func newMonitor(cli *clientv3.Client, prefix string, mcr ovsjson.MonitorCondRequ
 
 	ctx := context.Background()
 	ctxt, cancel := context.WithCancel(ctx)
-
 	wch := cli.Watch(clientv3.WithRequireLeader(ctxt), prefix,
 		clientv3.WithPrefix(),
 		clientv3.WithCreatedNotify(),
@@ -162,7 +164,7 @@ func newMonitor(cli *clientv3.Client, prefix string, mcr ovsjson.MonitorCondRequ
 					dest = monitor.delete
 				}
 				monitor.mu.Unlock()
-				// TODO queue or a separate gorutine
+				// TODO queue or a separate goroutine
 				monitor.propagateEvent(ev, dest)
 			}
 		}
@@ -172,4 +174,96 @@ func newMonitor(cli *clientv3.Client, prefix string, mcr ovsjson.MonitorCondRequ
 
 func (m *monitor) propagateEvent(event *clientv3.Event, destinations map[*updater][]*handlerKey) {
 	// for each updater entry create a return data and call each handler
+}
+
+func (u *updater) prepareTableUpdate(event *clientv3.Event) (table string, uuid string, rowUpdate *ovsjson.RowUpdate, err error) {
+	key := string(event.Kv.Key)
+	if table, uuid, err = keyToTableAndUUID(key); err != nil {
+		return
+	}
+	data := map[string]interface{}{}
+	var value []byte
+	if !event.IsModify() { // the create or delete
+		if event.IsCreate() {
+			value = event.Kv.Value
+		} else {
+			if !u.isV1 {
+				rowUpdate = &ovsjson.RowUpdate{Delete: nil}
+				return
+			}
+			value = event.PrevKv.Value
+		}
+		if err = json.Unmarshal(value, &data); err != nil {
+			return
+		}
+		delete(data, "uuid")
+		if len(u.Columns) != 0 {
+			for column := range data {
+				if _, ok := u.Columns[column]; !ok {
+					delete(data, column)
+				}
+			}
+		}
+		if len(data) > 0 {
+			if event.IsCreate() {
+				if !u.isV1 {
+					rowUpdate = &ovsjson.RowUpdate{Insert: &data}
+				} else {
+					rowUpdate = &ovsjson.RowUpdate{New: &data}
+				}
+			} else {
+				// the delete for !u.isV1 we have returned before
+				rowUpdate = &ovsjson.RowUpdate{Old: &data}
+			}
+		}
+	} else { // the event is modify
+		value = event.Kv.Value
+		data := map[string]interface{}{}
+		if err = json.Unmarshal(value, &data); err != nil {
+			return
+		}
+		prevValue := event.PrevKv.Value
+		prevData := map[string]interface{}{}
+		if err = json.Unmarshal(prevValue, &prevData); err != nil {
+			return
+		}
+		delete(data, "uuid")
+		delete(prevData, "uuid")
+		for column, cValue := range data {
+			if len(u.Columns) != 0 {
+				if _, ok := u.Columns[column]; !ok {
+					delete(data, column)
+					delete(prevData, column)
+					continue
+				}
+			}
+			if reflect.DeepEqual(cValue, prevData[column]) {
+				// TODO compare sets and maps
+				if u.isV1 {
+					delete(prevData, column)
+				} else {
+					delete(data, column)
+				}
+			}
+		}
+		if !u.isV1 {
+			if len(data) > 0 {
+				rowUpdate = &ovsjson.RowUpdate{Modify: &data}
+			}
+		} else {
+			if len(prevData) > 0 { // there are monitored updates
+				rowUpdate = &ovsjson.RowUpdate{New: &data, Old: &prevData}
+			}
+		}
+	}
+	return
+}
+
+func keyToTableAndUUID(key string) (table string, uuid string, err error) {
+	slices := strings.Split(key, "/")
+	l := len(slices)
+	if l < 3 {
+		return "", "", fmt.Errorf("wrong formated key: %s", key)
+	}
+	return slices[l-2], slices[l-1], nil
 }
