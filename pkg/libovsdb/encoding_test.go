@@ -115,7 +115,7 @@ func TestMap(t *testing.T) {
 		assert.Nil(t, err)
 		jsonStr, err := json.Marshal(m)
 		assert.Nil(t, err)
-		compareJsonMapSets(t, string(jsonStr), e.jsonExpectedOutput)
+		compareJSONMapSets(t, string(jsonStr), e.jsonExpectedOutput)
 
 		var res OvsMap
 		err = json.Unmarshal(jsonStr, &res)
@@ -130,7 +130,7 @@ func TestSet(t *testing.T) {
 		assert.Nil(t, err)
 		jsonStr, err := json.Marshal(set)
 		assert.Nil(t, err)
-		compareJsonMapSets(t, string(jsonStr), e.jsonExpectedOutput)
+		compareJSONMapSets(t, string(jsonStr), e.jsonExpectedOutput)
 
 		var res OvsSet
 		err = json.Unmarshal(jsonStr, &res)
@@ -139,7 +139,7 @@ func TestSet(t *testing.T) {
 	}
 }
 
-func compareJsonMapSets(t *testing.T, jsonStr string, expected string) {
+func compareJSONMapSets(t *testing.T, jsonStr string, expected string) {
 	var expectedInterface interface{}
 	var jsonInterface interface{}
 	err := json.Unmarshal([]byte(expected), &expectedInterface)
