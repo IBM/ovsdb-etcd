@@ -77,7 +77,7 @@ func putAclOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid string, act
 		Version:      newUUID(),
 		Uuid:         libovsdb.UUID{GoUUID: uuid},
 	}
-	con.PutData(ctx, "OVN_Northbound/NB_Global/"+uuid, acl)
+	con.PutData(ctx, "OVN_Northbound/ACL/"+uuid, acl)
 	return nil
 }
 
