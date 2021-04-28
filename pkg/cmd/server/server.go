@@ -45,6 +45,14 @@ var (
 func main() {
 	klog.InitFlags(nil)
 	flag.Parse()
+	klog.Info("start:")
+	klog.V(0).Info("level 0")
+	klog.V(1).Info("level 1")
+	klog.V(2).Info("level 2")
+	klog.V(3).Info("level 3")
+	klog.V(4).Info("level 4")
+	klog.V(5).Info("level 5")
+	klog.Flush()
 
 	//TODO: for development purposes only. will be remove later
 	fmt.Println("start the ovsdb-etcd server with the following arguments:")

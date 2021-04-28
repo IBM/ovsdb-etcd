@@ -8,8 +8,8 @@ tar xzvf etcd-$ETCD_VERSION-linux-amd64.tar.gz
 rm etcd-$ETCD_VERSION-linux-amd64.tar.gz
 
 cd etcd-$ETCD_VERSION-linux-amd64
-sudo cp etcd /usr/local/bin/
-sudo cp etcdctl /usr/local/bin/
+cp etcd /usr/local/bin/
+cp etcdctl /usr/local/bin/
 
 rm -rf etcd-$ETCD_VERSION-linux-amd64
 

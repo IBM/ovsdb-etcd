@@ -29,13 +29,20 @@ SERVER_ARGS := \
 		-schema-file $(SCHEMA-FILE) \
 		-load-server-data $(LOAD-SERVER-DATA)
 
+SERVER_EXECUTEBLE=$(ROOT_DIR)/pkg/cmd/server/server
+
 .PHONY: dbg-server
 dbg-server: 
 	dlv debug $(SERVER_FILES) -- $(SERVER_ARGS)
 
 .PHONY: server
 server: 
-	go run $(SERVER_FILES) $(SERVER_ARGS)
+	until curl http://127.0.0.1:2379; do sleep 2;done ;
+	$(SERVER_EXECUTEBLE) $(SERVER_ARGS)
+
+.PHONY: server-build
+server-build: 
+	CGO_ENABLED=0 go build -o $(SERVER_EXECUTEBLE) $(SERVER_FILES) 
 
 CLIENT_ARGS := \
 		-server $(TCP_ADDRESS)
@@ -66,3 +73,8 @@ INSTALL_TOOLS += /usr/local/sbin/demo-magic.sh
 .PHONY: demo
 demo: $(INSTALL_TOOLS)
 	./demo.sh
+
+.PHONY: echo
+echo:
+	echo "server args"
+	echo $(SERVER_ARGS)

@@ -1,6 +1,6 @@
 .PHONY: install-tools
 install-tools:
-	./scripts/install_etcd.sh
+	scripts/install_etcd.sh
 	mkdir /tmp/openvswitch/
 
 VERIFY += generate
@@ -41,18 +41,30 @@ verify: $(VERIFY)
 etcd:
 	$(MAKE) -C tests/e2e/ etcd &
 
+.PHONY: build
+build:
+	$(MAKE) -C tests/e2e/ server-build
+
 .PHONY: server
 server:
 	$(MAKE) -C tests/e2e/ server &
 
 .PHONY: north-server
 north-server:
-	$(MAKE) -C tests/e2e/ server -e TCP_ADDRESS=:6641 UNIX_ADDRESS=/tmp/ovnnb_db.db DATABASE-PREFIX=ovsdb SERVICE-NAME=nb SCHEMA-FILE=ovn-nb.ovsschema SCHEMA-NAME=OVN_Northbound LOAD-SERVER-DATA=TRUE &
+	$(MAKE) -C tests/e2e/ server -e TCP_ADDRESS=6641 UNIX_ADDRESS=/tmp/ovnnb_db.db DATABASE-PREFIX=ovsdb SERVICE-NAME=nb SCHEMA-FILE=ovn-nb.ovsschema SCHEMA-NAME=OVN_Northbound LOAD-SERVER-DATA=TRUE &
 
 .PHONY: south-server
 south-server:
-	$(MAKE) -C tests/e2e/ server -e TCP_ADDRESS=:6642 UNIX_ADDRESS=/tmp/ovnsb_db.db DATABASE-PREFIX=ovsdb SERVICE-NAME=sb SCHEMA-FILE=ovn-sb.ovsschema SCHEMA-NAME=OVN_Southbound LOAD-SERVER-DATA=TRUE &
+	$(MAKE) -C tests/e2e/ server -e TCP_ADDRESS=6642 UNIX_ADDRESS=/tmp/ovnsb_db.db DATABASE-PREFIX=ovsdb SERVICE-NAME=sb SCHEMA-FILE=ovn-sb.ovsschema SCHEMA-NAME=OVN_Southbound LOAD-SERVER-DATA=TRUE &
 
 .PHONY: tests
 tests:
 	go test -v ./...
+
+.PHONY: image-etcd
+image-etcd:
+	docker build . -t etcd -f dist/images/etcd/Dockerfile
+
+.PHONY: image-server
+image-server: build
+	docker build . -t server -f dist/images/server/Dockerfile

@@ -27,15 +27,16 @@ jobs:
   - stage: Verify
     name: "Verify code"
     install:
-    - make install-tools
+    - sudo make install-tools
     script:
     - make verify
 
   - stage: Test
     name: "Run tests"
     install:
-    - make install-tools
+    - sudo make install-tools
     before_script:
+    - make build
     - make etcd
     - make north-server
     script:
