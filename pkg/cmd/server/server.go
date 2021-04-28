@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"net"
 	"os"
 	"os/signal"
+	"path"
 	"runtime"
 	"strings"
 	"sync"
@@ -24,17 +26,26 @@ const UNIX_SOCKET = "/tmp/ovsdb-etcd.sock"
 const ETCD_LOCALHOST = "localhost:2379"
 
 var (
-	tcpAddress     = flag.String("tcp-address", "", "TCP service address")
-	unixAddress    = flag.String("unix-address", "", "UNIX service address")
-	etcdMembers    = flag.String("etcd-members", ETCD_LOCALHOST, "ETCD service addresses, separated by ',' ")
-	schemaBasedir  = flag.String("schema-basedir", ".", "Schema base dir")
-	maxTasks       = flag.Int("max", 1, "Maximum concurrent tasks")
-	databasePrefix = flag.String("database-prefix", "ovsdb", "Database prefix")
+	tcpAddress         = flag.String("tcp-address", "", "TCP service address")
+	unixAddress        = flag.String("unix-address", "", "UNIX service address")
+	etcdMembers        = flag.String("etcd-members", ETCD_LOCALHOST, "ETCD service addresses, separated by ',' ")
+	schemaBasedir      = flag.String("schema-basedir", ".", "Schema base dir")
+	maxTasks           = flag.Int("max", 1, "Maximum concurrent tasks")
+	databasePrefix     = flag.String("database-prefix", "ovsdb", "Database prefix")
+	schemaFile         = flag.String("schema-file", "", "schema-file")
+	schemaName         = flag.String("schema-name", "", "schema-name")
+	loadServerDataFlag = flag.Bool("load-server-data", false, "load-server-data")
 )
 
 func main() {
 	klog.InitFlags(nil)
 	flag.Parse()
+
+	//TODO: for development purposes only. will be remove later
+	fmt.Println("start the ovsdb-etcd server with the following arguments:")
+	fmt.Printf("tcpAddress:%s\nunixAddressress:%s\netcdMembersress:%s\nschemaBasedir:%s\nmaxTasks:%d\ndatabasePrefix:%s\nschemaFile:%s\nschemaName:%s\nloadServerData:%v\n",
+		*tcpAddress, *unixAddress, *etcdMembers, *schemaBasedir, *maxTasks, *databasePrefix, *schemaFile, *schemaName, *loadServerDataFlag)
+
 	if len(*tcpAddress) == 0 && len(*unixAddress) == 0 {
 		klog.Fatal("You must provide a network-address (TCP and/or UNIX) to listen on")
 	}
@@ -49,18 +60,19 @@ func main() {
 	}
 	defer db.Close()
 
-	// For development only
 	err = db.AddSchema("_Server", *schemaBasedir+"/_server.ovsschema")
 	if err != nil {
 		klog.Fatal(err)
 	}
-	err = db.AddSchema("OVN_Northbound", *schemaBasedir+"/ovn-nb.ovsschema")
+	err = db.AddSchema(*schemaName, path.Join(*schemaBasedir, *schemaFile))
 	if err != nil {
 		klog.Fatal(err)
 	}
-	err = loadServerData(db.(*ovsdb.DatabaseEtcd))
-	if err != nil {
-		klog.Fatal(err)
+	if *loadServerDataFlag {
+		err = loadServerData(db.(*ovsdb.DatabaseEtcd))
+		if err != nil {
+			klog.Fatal(err)
+		}
 	}
 
 	ctx := context.Background()

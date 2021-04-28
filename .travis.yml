@@ -37,7 +37,7 @@ jobs:
     - make install-tools
     before_script:
     - make etcd
-    - make server
+    - make north-server
     script:
     - make tests
 

@@ -1,6 +1,7 @@
 .PHONY: install-tools
 install-tools:
 	./scripts/install_etcd.sh
+	mkdir /tmp/openvswitch/
 
 VERIFY += generate
 .PHONY: generate
@@ -43,6 +44,14 @@ etcd:
 .PHONY: server
 server:
 	$(MAKE) -C tests/e2e/ server &
+
+.PHONY: north-server
+north-server:
+	$(MAKE) -C tests/e2e/ server -e TCP_ADDRESS=127.0.0.1:6641 UNIX_ADDRESS=/tmp/openvswitch/ovnnb-privkey.pem DATABASE-PREFIX=ovsdb-nb SCHEMA-FILE=ovn-nb.ovsschema SCHEMA-NAME=OVN_NorthBound LOAD-SERVER-DATA=TRUE &
+
+.PHONY: south-server
+south-server:
+	$(MAKE) -C tests/e2e/ server -e TCP_ADDRESS=127.0.0.1:6642 UNIX_ADDRESS=/tmp/openvswitch/ovnsb-privkey.pem DATABASE-PREFIX=ovsdb-sb SCHEMA-FILE=ovn-sb.ovsschema SCHEMA-NAME=OVN_Southbound LOAD-SERVER-DATA=TRUE &
 
 .PHONY: tests
 tests:

@@ -18,7 +18,11 @@ SERVER_FILES := \
 SERVER_ARGS := \
 		-tcp-address $(TCP_ADDRESS) \
 		-unix-address $(UNIX_ADDRESS) \
-		-schema-basedir $(ROOT_DIR)/schemas
+		-schema-basedir $(ROOT_DIR)/schemas \
+		-database-prefix $(DATABASE-PREFIX) \
+		-schema-file $(SCHEMA-FILE) \
+		-schema-name $(SCHEMA-NAME) \
+		-load-server-data $(LOAD-SERVER-DATA)
 
 .PHONY: dbg-server
 dbg-server: 
