@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 	"reflect"
 	"strings"
 	"sync"
@@ -55,7 +56,7 @@ func (m *monitor) addHandler(mcr ovsjson.MonitorCondRequest, isV1 bool, handler 
 		indx = len(m.updaters)
 		m.updaters = append(m.updaters, *updater)
 	}
-	if mcr.Select == nil || mcr.Select.Insert {
+	if mcr.Select == nil || libovsdb.MSIsTrue(mcr.Select.Insert) {
 		hand, ok := m.insert[&m.updaters[indx]]
 		if ok {
 			hand = append(hand, handler)
@@ -64,7 +65,7 @@ func (m *monitor) addHandler(mcr ovsjson.MonitorCondRequest, isV1 bool, handler 
 		}
 		m.insert[&m.updaters[indx]] = hand
 	}
-	if mcr.Select == nil || mcr.Select.Delete {
+	if mcr.Select == nil || libovsdb.MSIsTrue(mcr.Select.Delete) {
 		hand, ok := m.delete[&m.updaters[indx]]
 		if ok {
 			hand = append(hand, handler)
@@ -73,7 +74,7 @@ func (m *monitor) addHandler(mcr ovsjson.MonitorCondRequest, isV1 bool, handler 
 		}
 		m.delete[&m.updaters[indx]] = hand
 	}
-	if mcr.Select == nil || mcr.Select.Modify {
+	if mcr.Select == nil || libovsdb.MSIsTrue(mcr.Select.Modify) {
 		hand, ok := m.modify[&m.updaters[indx]]
 		if ok {
 			hand = append(hand, handler)
@@ -98,7 +99,7 @@ func (m *monitor) delHandler(mcr ovsjson.MonitorCondRequest, isV1 bool, handler 
 	if indx == -1 {
 		klog.Warningf("remove unexsisting handler %v", mcr)
 	}
-	if mcr.Select == nil || mcr.Select.Insert {
+	if mcr.Select == nil || libovsdb.MSIsTrue(mcr.Select.Insert) {
 		handlers := m.insert[&m.updaters[indx]]
 		for k, v := range handlers {
 			if v == handler {
@@ -107,7 +108,7 @@ func (m *monitor) delHandler(mcr ovsjson.MonitorCondRequest, isV1 bool, handler 
 			}
 		}
 	}
-	if mcr.Select == nil || mcr.Select.Delete {
+	if mcr.Select == nil || libovsdb.MSIsTrue(mcr.Select.Delete) {
 		handlers := m.delete[&m.updaters[indx]]
 		for k, v := range handlers {
 			if v == handler {
@@ -116,7 +117,7 @@ func (m *monitor) delHandler(mcr ovsjson.MonitorCondRequest, isV1 bool, handler 
 			}
 		}
 	}
-	if mcr.Select == nil || mcr.Select.Modify {
+	if mcr.Select == nil || libovsdb.MSIsTrue(mcr.Select.Modify) {
 		handlers := m.modify[&m.updaters[indx]]
 		for k, v := range handlers {
 			if v == handler {

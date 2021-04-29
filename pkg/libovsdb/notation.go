@@ -64,11 +64,15 @@ type MonitorRequest struct {
 
 // MonitorSelect represents a monitor select according to RFC7047
 type MonitorSelect struct {
-	Initial bool `json:"initial,omitempty"`
-	Insert  bool `json:"insert,omitempty"`
-	Delete  bool `json:"delete,omitempty"`
-	Modify  bool `json:"modify,omitempty"`
+	Initial *bool `json:"initial,omitempty"`
+	Insert  *bool `json:"insert,omitempty"`
+	Delete  *bool `json:"delete,omitempty"`
+	Modify  *bool `json:"modify,omitempty"`
 }
+
+func Bool(v bool) *bool { return &v }
+
+func MSIsTrue(v *bool) bool { return v == nil || *v }
 
 // TableUpdates is a collection of TableUpdate entries
 // We cannot use TableUpdates directly by json encoding by inlining the TableUpdate Map
