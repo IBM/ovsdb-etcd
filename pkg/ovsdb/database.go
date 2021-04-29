@@ -12,28 +12,27 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"k8s.io/klog/v2"
+
+	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
 )
 
 type Databaser interface {
 	GetLock(ctx context.Context, id string) (Locker, error)
-	AddMonitors(dbName string, updaters map[string][]*updater, handler handlerKey)
-	RemoveMonitors(dbName string, updaters map[string][]string, handler handlerKey)
-	RemoveMonitor(dbName string)
 	AddSchema(schemaName, schemaFile string) error
 	GetData(prefix string, keysOnly bool) (*clientv3.GetResponse, error)
 	PutData(ctx context.Context, key string, obj interface{}) error
 	GetSchema(name string) (string, bool)
+	AddMonitor(prefix string, mcr ovsjson.MonitorCondRequest, isV1 bool, hand *handlerKey)
+	DelMonitor(prefix string, mcr ovsjson.MonitorCondRequest, isV1 bool, hand *handlerKey)
 }
 
 type DatabaseEtcd struct {
-	cli *clientv3.Client
-	// dataBaseName -> schema
+	cli     *clientv3.Client
 	Schemas map[string]string
-	mu      sync.Mutex
-	prefix  string
-	// databaseName -> monitor
-	// We have a single monitor (etcd watcher) per database
-	monitors map[string]*monitor
+	// map from prefix to monitors
+	monitors map[string]monitor
+	mu       sync.Mutex
+	prefix   string
 }
 
 type Locker interface {
@@ -72,7 +71,7 @@ func NewDatabaseEtcd(cli *clientv3.Client, prefix string) (Databaser, error) {
 		prefix = prefix + "/"
 	}
 	return &DatabaseEtcd{cli: cli,
-		Schemas: map[string]string{}, prefix: prefix, monitors: map[string]*monitor{}}, nil
+		Schemas: make(map[string]string), prefix: prefix}, nil
 }
 
 func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error) {
@@ -136,55 +135,32 @@ func (con *DatabaseEtcd) PutData(ctx context.Context, key string, obj interface{
 	}
 	return nil
 }
-
-func (con *DatabaseEtcd) AddMonitors(dbName string, updaters map[string][]*updater, handler handlerKey) {
+func (con *DatabaseEtcd) AddMonitor(keysPrefix string, mcr ovsjson.MonitorCondRequest, isV1 bool, hand *handlerKey) {
 	con.mu.Lock()
 	defer con.mu.Unlock()
-	m, ok := con.monitors[dbName]
-	if !ok {
-		// we don't have monitors for this database yet, create a new one.
-		m = newMonitor(dbName, con)
-		ctxt, cancel := context.WithCancel(context.Background())
-		m.cancel = cancel
-		wch := con.cli.Watch(clientv3.WithRequireLeader(ctxt), con.prefix+dbName,
-			clientv3.WithPrefix(),
-			clientv3.WithCreatedNotify(),
-			clientv3.WithPrevKV())
-		m.watchChannel = wch
-		con.monitors[dbName] = m
-	}
-	m.addUpdaters(con.prefix, updaters, handler)
-	if !ok {
-		m.start()
+	if monitor, ok := con.monitors[keysPrefix]; !ok {
+		con.monitors[keysPrefix] = *newMonitor(con.cli, con.prefix+keysPrefix, mcr, isV1, hand)
+	} else {
+		monitor.addHandler(mcr, isV1, hand)
 	}
 }
 
-func (con *DatabaseEtcd) RemoveMonitors(dbName string, updaters map[string][]string, handler handlerKey) {
+func (con *DatabaseEtcd) DelMonitor(keysPrefix string, mcr ovsjson.MonitorCondRequest, isV1 bool, hand *handlerKey) {
 	con.mu.Lock()
 	defer con.mu.Unlock()
-	m, ok := con.monitors[dbName]
-	if !ok {
-		klog.Warningf("Remove nonexistent db monitor %s", dbName)
-		return
+	if monitor, ok := con.monitors[keysPrefix]; !ok {
+		klog.Warningf("Delete unexisting monitor from %s", keysPrefix)
+	} else {
+		if monitor.delHandler(mcr, isV1, hand) {
+			delete(con.monitors, keysPrefix)
+		}
 	}
-	m.removeUpdaters(con.prefix, updaters, handler)
-	if !m.hasHandlers() {
-		m.cancel()
-		delete(con.monitors, dbName)
-	}
-}
-
-func (con *DatabaseEtcd) RemoveMonitor(dbName string) {
-	con.mu.Lock()
-	defer con.mu.Unlock()
-	delete(con.monitors, dbName)
 }
 
 type DatabaseMock struct {
 	Response interface{}
 	Error    error
 	Ok       bool
-	mu       sync.Mutex
 }
 
 type LockerMock struct {
@@ -239,11 +215,8 @@ func (con *DatabaseMock) GetUUID() string {
 	return con.Response.(string)
 }
 
-func (con *DatabaseMock) AddMonitors(dbName string, updaters map[string][]*updater, handler handlerKey) {
+func (con *DatabaseMock) AddMonitor(keysPrefix string, mcr ovsjson.MonitorCondRequest, isV1 bool, hand *handlerKey) {
 }
 
-func (con *DatabaseMock) RemoveMonitors(dbName string, updaters map[string][]string, handler handlerKey) {
-}
-
-func (con *DatabaseMock) RemoveMonitor(dbName string) {
+func (con *DatabaseMock) DelMonitor(keysPrefix string, mcr ovsjson.MonitorCondRequest, isV1 bool, hand *handlerKey) {
 }
