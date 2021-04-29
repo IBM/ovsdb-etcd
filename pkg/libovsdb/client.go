@@ -283,12 +283,7 @@ func (ovs OvsdbClient) MonitorAll(database string, jsonContext interface{}) (*Ta
 		}
 		requests[table] = MonitorRequest{
 			Columns: columns,
-			Select: MonitorSelect{
-				Initial: true,
-				Insert:  true,
-				Delete:  true,
-				Modify:  true,
-			}}
+			Select:  MonitorSelect{}}
 	}
 	return ovs.Monitor(database, jsonContext, requests)
 }

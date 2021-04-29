@@ -255,7 +255,7 @@ func (ch *Handler) getMonitoredData(dataBase string, conditions map[string][]ovs
 			// TODO deal with the array
 			klog.Warningf("MCR is not a singe %v", mcrs)
 		}
-		if mcrs[0].Select != nil && !mcrs[0].Select.Initial {
+		if mcrs[0].Select != nil && !libovsdb.MSIsTrue(mcrs[0].Select.Initial) {
 			continue
 		}
 		resp, err := ch.db.GetData(dataBase+"/"+tableName, false)
