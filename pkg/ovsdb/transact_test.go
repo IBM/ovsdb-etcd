@@ -1,5 +1,3 @@
-/* +build etcd */
-
 package ovsdb
 
 import (
@@ -14,13 +12,81 @@ import (
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 )
 
-const (
-	DBNAME1 = "db1"
-	TABLE1  = "table1"
-)
+var testSchemaSimple *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
+	Name:    "simple",
+	Version: "0.0.0",
+	Tables: map[string]libovsdb.TableSchema{
+		"table1": {
+			Columns: map[string]*libovsdb.ColumnSchema{
+				"key1": {
+					Type: libovsdb.TypeString,
+				},
+				"key2": {
+					Type: libovsdb.TypeInteger,
+				},
+			},
+		},
+	},
+}
 
-func TestMain(m *testing.M) {
-	common.SetPrefix("ovsdb/nb")
+var testSchemaAtomic *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
+	Name:    "atomic",
+	Version: "0.0.0",
+	Tables: map[string]libovsdb.TableSchema{
+		"table1": {
+			Columns: map[string]*libovsdb.ColumnSchema{
+				"string": {
+					Type: libovsdb.TypeString,
+				},
+				"boolean": {
+					Type: libovsdb.TypeBoolean,
+				},
+				"integer": {
+					Type: libovsdb.TypeInteger,
+				},
+				"real": {
+					Type: libovsdb.TypeInteger,
+				},
+				"uuid": {
+					Type: libovsdb.TypeInteger,
+				},
+			},
+		},
+	},
+}
+
+var testSchemaExtended *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
+	Name:    "extended",
+	Version: "0.0.0.0",
+	Tables: map[string]libovsdb.TableSchema{
+		"table1": {
+			Columns: map[string]*libovsdb.ColumnSchema{
+				"set": {
+					Type: libovsdb.TypeSet,
+					TypeObj: &libovsdb.ColumnType{
+						Key: &libovsdb.BaseType{
+							Type: libovsdb.TypeString,
+						},
+						Max: libovsdb.Unlimited,
+						Min: 0,
+					},
+				},
+				"map": {
+					Type: libovsdb.TypeMap,
+					TypeObj: &libovsdb.ColumnType{
+						Key: &libovsdb.BaseType{
+							Type: libovsdb.TypeString,
+						},
+						Value: &libovsdb.BaseType{
+							Type: libovsdb.TypeString,
+						},
+						Min: 1,
+						Max: 1,
+					},
+				},
+			},
+		},
+	},
 }
 
 func testEtcdNewCli() (*clientv3.Client, error) {
@@ -70,161 +136,192 @@ func testEtcdDump(t *testing.T, dbname, table string) map[string]interface{} {
 	return *dump
 }
 
-func testEtcdPut(t *testing.T, dbname, table, k string, v interface{}) {
+func testEtcdPut(t *testing.T, dbname, table string, row map[string]interface{}) {
 	cli, err := testEtcdNewCli()
 	assert.Nil(t, err)
 	ctx := context.TODO()
 	key := common.GenerateDataKey(dbname, table)
-	row := &map[string]interface{}{
-		k: v,
-	}
-	setRowUUID(row, key.UUID)
-	val, err := makeValue(row)
+	setRowUUID(&row, key.UUID)
+	val, err := makeValue(&row)
 	assert.Nil(t, err)
 	_, err = cli.Put(ctx, key.String(), val)
 	assert.Nil(t, err)
 }
 
-func testTransact(t *testing.T, req *libovsdb.Transact) *libovsdb.TransactResponse {
+func testTransact(t *testing.T, req *libovsdb.Transact) (*libovsdb.TransactResponse, *Transaction) {
 	cli, err := testEtcdNewCli()
 	assert.Nil(t, err)
 	defer cli.Close()
 	txn := NewTransaction(cli, req)
+	txn.AddSchema(testSchemaSimple)
+	txn.AddSchema(testSchemaAtomic)
+	txn.AddSchema(testSchemaExtended)
 	txn.Commit()
-	return &txn.response
+	return &txn.response, txn
+}
+
+func testTransactDump(t *testing.T, txn *Transaction, dbname, table string) map[string]interface{} {
+	dump := map[string]interface{}{}
+	databaseCache, ok := txn.cache[dbname]
+	assert.True(t, ok)
+	tableCache, ok := databaseCache[table]
+	assert.True(t, ok)
+	for _, row := range tableCache {
+		for k, v := range *row {
+			if k == COL_UUID || k == COL_VERSION {
+				continue
+			}
+			dump[k] = v
+		}
+	}
+	return dump
 }
 
 func TestTransactInsert(t *testing.T) {
 	req := &libovsdb.Transact{
-		DBName: DBNAME1,
+		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_INSERT,
-				Table: TABLE1,
+				Table: "table1",
 				Row: map[string]interface{}{
 					"key1": "val1",
 				},
 			},
 		},
 	}
-	testEtcdCleanup(t, DBNAME1, TABLE1)
-	resp := testTransact(t, req)
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t, "simple", "table1")
+	resp, txn := testTransact(t, req)
 	assert.Equal(t, "", resp.Error)
-	dump := testEtcdDump(t, DBNAME1, TABLE1)
+	dump := testTransactDump(t, txn, "simple", "table1")
 	assert.Equal(t, "val1", dump["key1"])
+	assert.Equal(t, int(0), dump["key2"])
 }
 
 func TestTransactSelect(t *testing.T) {
 	req := &libovsdb.Transact{
-		DBName: DBNAME1,
+		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_SELECT,
-				Table: TABLE1,
+				Table: "table1",
 			},
 		},
 	}
-	testEtcdCleanup(t, DBNAME1, TABLE1)
-	testEtcdPut(t, DBNAME1, TABLE1, "key1", "val1")
-	resp := testTransact(t, req)
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t, "simple", "table1")
+	testEtcdPut(t, "simple", "table1", map[string]interface{}{
+		"key1": "val1",
+		"key2": int(3),
+	})
+	resp, txn := testTransact(t, req)
 	assert.Equal(t, "", resp.Error)
-	dump := testEtcdDump(t, DBNAME1, TABLE1)
+	dump := testTransactDump(t, txn, "simple", "table1")
 	assert.Equal(t, "val1", dump["key1"])
+	assert.Equal(t, int(3), dump["key2"])
 }
 
 func TestTransactUpdate(t *testing.T) {
 	req := &libovsdb.Transact{
-		DBName: DBNAME1,
+		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_INSERT,
-				Table: TABLE1,
+				Table: "table1",
 				Row: map[string]interface{}{
 					"key1": "val1",
 				},
 			},
 			{
 				Op:    OP_UPDATE,
-				Table: TABLE1,
+				Table: "table1",
 				Row: map[string]interface{}{
 					"key1": "val2",
 				},
 			},
 		},
 	}
-	testEtcdCleanup(t, DBNAME1, TABLE1)
-	resp := testTransact(t, req)
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t, "simple", "table1")
+	resp, _ := testTransact(t, req)
 	assert.Equal(t, "", resp.Error)
-	dump := testEtcdDump(t, DBNAME1, TABLE1)
+	dump := testEtcdDump(t, "simple", "table1")
 	assert.Equal(t, "val2", dump["key1"])
 }
 
 func TestTransactMutate(t *testing.T) {
 	req := &libovsdb.Transact{
-		DBName: DBNAME1,
+		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_INSERT,
-				Table: TABLE1,
+				Table: "table1",
 				Row: map[string]interface{}{
-					"key1": float64(1),
+					"key2": int(1),
 				},
 			},
 			{
 				Op:    OP_MUTATE,
-				Table: TABLE1,
+				Table: "table1",
 				Mutations: []interface{}{
 					[]interface{}{
-						"key1",
+						"key2",
 						"+=",
-						float64(1),
+						int(1),
 					},
 				},
 			},
 		},
 	}
-	testEtcdCleanup(t, DBNAME1, TABLE1)
-	resp := testTransact(t, req)
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t, "simple", "table1")
+	resp, _ := testTransact(t, req)
 	assert.Equal(t, "", resp.Error)
-	dump := testEtcdDump(t, DBNAME1, TABLE1)
-	assert.Equal(t, float64(2), dump["key1"])
+	dump := testEtcdDump(t, "simple", "table1")
+	assert.Equal(t, float64(2), dump["key2"])
 }
 
 func TestTransactDelete(t *testing.T) {
 	req := &libovsdb.Transact{
-		DBName: DBNAME1,
+		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_DELETE,
-				Table: TABLE1,
+				Table: "table1",
 			},
 		},
 	}
-	testEtcdCleanup(t, DBNAME1, TABLE1)
-	testEtcdPut(t, DBNAME1, TABLE1, "key1", "val1")
-	resp := testTransact(t, req)
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t, "simple", "table1")
+	testEtcdPut(t, "simple", "table1", map[string]interface{}{
+		"key1": "val1",
+		"key2": int(2),
+	})
+	resp, _ := testTransact(t, req)
 	assert.Equal(t, "", resp.Error)
-	dump := testEtcdDump(t, DBNAME1, TABLE1)
+	dump := testEtcdDump(t, "simple", "table1")
 	_, ok := dump["key1"]
 	assert.False(t, ok)
 }
 
 func TestTransactWait(t *testing.T) {
 	req := &libovsdb.Transact{
-		DBName: DBNAME1,
+		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
 				Op: OP_WAIT,
 			},
 		},
 	}
-	resp := testTransact(t, req)
+	common.SetPrefix("ovsdb/nb")
+	resp, _ := testTransact(t, req)
 	assert.True(t, "" != resp.Error)
 }
 
 func TestTransactCommit(t *testing.T) {
 	req := &libovsdb.Transact{
-		DBName: DBNAME1,
+		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
 				Op:      OP_COMMIT,
@@ -232,26 +329,28 @@ func TestTransactCommit(t *testing.T) {
 			},
 		},
 	}
-	resp := testTransact(t, req)
+	common.SetPrefix("ovsdb/nb")
+	resp, _ := testTransact(t, req)
 	assert.True(t, "" != resp.Error)
 }
 
 func TestTransactAbort(t *testing.T) {
 	req := &libovsdb.Transact{
-		DBName: DBNAME1,
+		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
 				Op: OP_ABORT,
 			},
 		},
 	}
-	resp := testTransact(t, req)
+	common.SetPrefix("ovsdb/nb")
+	resp, _ := testTransact(t, req)
 	assert.True(t, "" != resp.Error)
 }
 
 func TestTransactComment(t *testing.T) {
 	req := &libovsdb.Transact{
-		DBName: DBNAME1,
+		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
 				Op:      OP_COMMENT,
@@ -259,8 +358,9 @@ func TestTransactComment(t *testing.T) {
 			},
 		},
 	}
-	testEtcdCleanupComment(t, DBNAME1)
-	resp := testTransact(t, req)
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanupComment(t, "simple")
+	resp, _ := testTransact(t, req)
 	assert.Equal(t, "", resp.Error)
 }
 

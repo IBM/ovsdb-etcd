@@ -1,11 +1,10 @@
 package libovsdb
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"testing"
-
-	"encoding/json"
 )
 
 func TestSchema(t *testing.T) {

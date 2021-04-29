@@ -7,11 +7,14 @@ import (
 	"strings"
 )
 
+type Schemas map[string]*DatabaseSchema
+
 // DatabaseSchema is a database schema according to RFC7047
 type DatabaseSchema struct {
 	Name    string                 `json:"name"`
 	Version string                 `json:"version"`
 	Tables  map[string]TableSchema `json:"tables"`
+	Checksm string                 `json:"checksm"`
 }
 
 // GetColumn returns a Column Schema for a given table and column name
@@ -82,6 +85,8 @@ func (schema DatabaseSchema) validateOperations(operations ...Operation) bool {
 type TableSchema struct {
 	Columns map[string]*ColumnSchema `json:"columns"`
 	Indexes [][]string               `json:"indexes,omitempty"`
+	MaxRows int                      `json:"maxRows,omitempty"`
+	IsRoot  bool                     `json:"isRoot"`
 }
 
 /*RFC7047 defines some atomic-types (e.g: integer, string, etc). However, the Column's type
@@ -139,7 +144,7 @@ type ColumnSchema struct {
 	Type      ExtendedType
 	TypeObj   *ColumnType
 	Ephemeral bool
-	Mutable   bool
+	Mutable   bool /* FIXME: default if not specified needs to be true */
 }
 
 // ColumnType is a type object as per RFC7047
@@ -162,9 +167,9 @@ type BaseType struct {
 	MaxReal    float64       `json:"maxReal,omitempty"`
 	MinInteger int           `json:"minInteger,omitempty"`
 	MaxInteger int           `json:"maxInteger,omitempty"`
-	MinLength  int           `json:"minLength,omitempty"`
-	MaxLength  int           `json:"maxLength,omitempty"`
-	RefTable   string        `json:"refTable,omitempty"`
+	MinLength  int           `json:"minLength,omitempty"` /* string */
+	MaxLength  int           `json:"maxLength,omitempty"` /* string */
+	RefTable   string        `json:"refTable,omitempty"`  /* UUIDs */
 	RefType    RefType       `json:"refType,omitempty"`
 }
 
@@ -376,4 +381,107 @@ func isAtomicType(atype string) bool {
 	default:
 		return false
 	}
+}
+
+/* default value generation */
+func (columnSchema *ColumnSchema) Default() interface{} {
+	switch columnSchema.Type {
+	case TypeInteger:
+		return int(0)
+	case TypeReal:
+		return float64(0)
+	case TypeBoolean:
+		return false
+	case TypeString:
+		return ""
+	case TypeUUID:
+		return UUID{"00000000-0000-0000-0000-000000000000"}
+	default:
+		panic(fmt.Sprintf("Unsupported type %s", columnSchema.Type))
+	}
+}
+
+func (tableSchema *TableSchema) Default(row *map[string]interface{}) {
+	for column, columnSchema := range tableSchema.Columns {
+		if _, ok := (*row)[column]; !ok {
+			(*row)[column] = columnSchema.Default()
+		}
+	}
+}
+
+func (databaseSchema *DatabaseSchema) Default(table string, row *map[string]interface{}) {
+	tableSchema, ok := databaseSchema.Tables[table]
+	if !ok {
+		panic(fmt.Sprintf("Missing schema for table %s", table))
+	}
+	tableSchema.Default(row)
+}
+
+func (schemas *Schemas) Default(dbname, table string, row *map[string]interface{}) {
+	databaseSchema, ok := (*schemas)[dbname]
+	if !ok {
+		panic(fmt.Sprintf("Missing schema for database %s", table))
+	}
+	databaseSchema.Default(table, row)
+}
+
+/* convert types */
+func (columnSchema *ColumnSchema) Convert(from interface{}) (interface{}, error) {
+	data, err := json.Marshal(from)
+	if err != nil {
+		return nil, err
+	}
+	switch columnSchema.Type {
+	case TypeInteger:
+		var to int
+		json.Unmarshal(data, &to)
+		return to, nil
+	case TypeReal:
+		var to float64
+		json.Unmarshal(data, &to)
+		return to, nil
+	case TypeBoolean:
+		var to bool
+		json.Unmarshal(data, &to)
+		return to, nil
+	case TypeString:
+		var to string
+		json.Unmarshal(data, &to)
+		return to, nil
+	case TypeUUID:
+		var to UUID
+		json.Unmarshal(data, &to)
+		return to, nil
+	default:
+		panic(fmt.Sprintf("Unsupported type %s", columnSchema.Type))
+	}
+}
+
+func (tableSchema *TableSchema) Convert(row *map[string]interface{}) error {
+	for column, columnSchema := range tableSchema.Columns {
+		if _, ok := (*row)[column]; ok {
+			to, err := columnSchema.Convert((*row)[column])
+			if err != nil {
+				return err
+			}
+			(*row)[column] = to
+		}
+	}
+	return nil
+}
+
+func (databaseSchema *DatabaseSchema) Convert(table string, row *map[string]interface{}) error {
+	tableSchema, ok := databaseSchema.Tables[table]
+	if !ok {
+		panic(fmt.Sprintf("Missing schema for table %s", table))
+	}
+	return tableSchema.Convert(row)
+}
+
+func (schemas *Schemas) Convert(dbname, table string, row *map[string]interface{}) error {
+	databaseSchema, ok := (*schemas)[dbname]
+	if !ok {
+		panic(fmt.Sprintf("Missing schema for database %s", table))
+	}
+	return databaseSchema.Convert(table, row)
 }
