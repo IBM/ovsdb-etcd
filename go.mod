@@ -8,6 +8,7 @@ require (
 	github.com/cenkalti/rpc2 v0.0.0-20210220005819-4a29bc83afe1
 	github.com/creachadair/jrpc2 v0.12.0
 	github.com/google/uuid v1.2.0
+	github.com/jinzhu/copier v0.2.9
 	github.com/onsi/ginkgo v1.16.1
 	github.com/onsi/gomega v1.11.0
 	github.com/spf13/cobra v1.1.3

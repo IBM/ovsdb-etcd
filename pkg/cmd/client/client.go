@@ -38,6 +38,18 @@ func unlock(ctx context.Context, cli *jrpc2.Client, id string) (result interface
 	return
 }
 
+func transact(ctx context.Context, cli *jrpc2.Client) (result interface{}, err error) {
+	req := []interface{}{
+		"db1",
+		map[string]interface{}{
+			"op":      "comment",
+			"comment": "just testing",
+		},
+	}
+	err = cli.CallResult(ctx, "transact", req, &result)
+	return
+}
+
 func main() {
 	klog.InitFlags(nil)
 	flag.Parse()
@@ -92,5 +104,10 @@ func main() {
 		klog.Fatalf("unlock: %v", err)
 	} else {
 		klog.Infof("unlock result=%v", lock)
+	}
+	if tx, err := transact(ctx, cli); err != nil {
+		klog.Fatalf("transact: %v", err)
+	} else {
+		klog.Infof("transact result=%v", tx)
 	}
 }

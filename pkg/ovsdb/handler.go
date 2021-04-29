@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"k8s.io/klog/v2"
 
@@ -21,7 +22,8 @@ type ClientConnection interface {
 }
 
 type Handler struct {
-	db Databaser
+	db         Databaser
+	etcdClient *clientv3.Client
 
 	connection     ClientConnection
 	handlerContext context.Context
@@ -36,67 +38,13 @@ type Handler struct {
 
 func (ch *Handler) Transact(ctx context.Context, param []interface{}) (interface{}, error) {
 	klog.V(5).Infof("Transact request, parameters %v", param)
-	transResponse := libovsdb.TransactResponse{}
-	aborting := false
-	dbname := "mydbname" // FIXME: this is the correct value param[0].(string)
-	param = param[1 : len(param)-1]
-	for i, v := range param {
-		klog.V(6).Infof("Transact i=%d v=%v\n", i, v)
-		opErr := fmt.Errorf("aborting: did not run operation")
-		opResult := &libovsdb.OperationResult{}
-
-		if !aborting {
-			m, ok := v.(map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			op := &libovsdb.Operation{}
-			b, _ := json.Marshal(m)    // FIXME: handle error
-			_ = json.Unmarshal(b, &op) // FIXME: handle error
-
-			doOp := doOperation{
-				dbname: dbname,
-				db:     ch.db,
-			}
-
-			switch op.Op { // FIXME: handle error
-			case "insert":
-				opResult, opErr = doOp.Insert(op)
-			case "select":
-				opResult, opErr = doOp.Select(op)
-			case "update":
-				opResult, opErr = doOp.Update(op)
-			case "mutate":
-				opResult, opErr = doOp.Mutate(op)
-			case "delete":
-				opResult, opErr = doOp.Delete(op)
-			case "wait":
-				opResult, opErr = doOp.Wait(op)
-			case "commit":
-				opResult, opErr = doOp.Commit(op)
-			case "abort":
-				opResult, opErr = doOp.Abort(op)
-			case "comment":
-				opResult, opErr = doOp.Comment(op)
-			case "assert":
-				opResult, opErr = doOp.Assert(op)
-			default:
-				opErr = fmt.Errorf("bad operation: %s", op.Op)
-				aborting = true
-			}
-		}
-		transResponse.Result = append(transResponse.Result, *opResult)
-		if opErr != nil {
-			transResponse.Error = "aborting transaction: " + opErr.Error()
-			aborting = true
-		}
+	req, err := libovsdb.NewTransact(param)
+	if err != nil {
+		return nil, err
 	}
-
-	b, _ := json.Marshal(transResponse) // FIXME: handle error
-	respMap := map[string]interface{}{}
-	_ = json.Unmarshal(b, &respMap) // FIXME: handle error
-	return respMap, nil
+	txn := NewTransaction(ch.etcdClient, req)
+	txn.Commit()
+	return txn.response, nil
 }
 
 func (ch *Handler) Cancel(ctx context.Context, param interface{}) (interface{}, error) {
@@ -141,7 +89,7 @@ func (ch *Handler) MonitorCancel(ctx context.Context, param interface{}) (interf
 	if !ok {
 		return nil, fmt.Errorf("unknown monitor")
 	}
-	for _, _ = range monitors {
+	for range monitors {
 		// TODO
 	}
 	delete(ch.jsonValueToMonitors, jsonValue)
@@ -261,9 +209,10 @@ func (ch *Handler) SetDbChangeAware(ctx context.Context, param interface{}) inte
 	return ovsjson.EmptyStruct{}
 }
 
-func NewHandler(tctx context.Context, db Databaser) *Handler {
+func NewHandler(tctx context.Context, db Databaser, cli *clientv3.Client) *Handler {
 	return &Handler{
 		handlerContext: tctx, db: db, databaseLocks: map[string]Locker{},
+		etcdClient: cli,
 	}
 }
 
