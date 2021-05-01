@@ -6,11 +6,11 @@ import (
 	"context"
 	"testing"
 
-	guuid "github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
+	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 )
 
@@ -18,6 +18,10 @@ const (
 	DBNAME1 = "db1"
 	TABLE1  = "table1"
 )
+
+func TestMain(m *testing.M) {
+	common.SetPrefix("ovsdb/nb")
+}
 
 func testEtcdNewCli() (*clientv3.Client, error) {
 	endpoints := []string{"http://127.0.0.1:2379"}
@@ -28,8 +32,7 @@ func testEtcdCleanup(t *testing.T, dbname, table string) {
 	cli, err := testEtcdNewCli()
 	assert.Nil(t, err)
 	ctx := context.TODO()
-	prefix := makePrefix(dbname, table)
-	_, err = cli.Delete(ctx, prefix, clientv3.WithPrefix())
+	_, err = cli.Delete(ctx, common.NewTableKey(dbname, table).TableKeyString(), clientv3.WithPrefix())
 	assert.Nil(t, err)
 }
 
@@ -44,7 +47,7 @@ func testMergeKvs(kvs []*mvccpb.KeyValue, table string) (*map[string]interface{}
 		if err != nil {
 			return nil, err
 		}
-		if kv.Table != table {
+		if kv.Key.TableName != table {
 			continue
 		}
 		for k, v := range kv.Value {
@@ -61,8 +64,7 @@ func testEtcdDump(t *testing.T, dbname, table string) map[string]interface{} {
 	cli, err := testEtcdNewCli()
 	assert.Nil(t, err)
 	ctx := context.TODO()
-	prefix := makePrefix(dbname, table)
-	res, err := cli.Get(ctx, prefix, clientv3.WithPrefix())
+	res, err := cli.Get(ctx, common.NewTableKey(dbname, table).TableKeyString(), clientv3.WithPrefix())
 	dump, err := testMergeKvs(res.Kvs, table)
 	assert.Nil(t, err)
 	return *dump
@@ -72,15 +74,14 @@ func testEtcdPut(t *testing.T, dbname, table, k string, v interface{}) {
 	cli, err := testEtcdNewCli()
 	assert.Nil(t, err)
 	ctx := context.TODO()
-	uuid := guuid.New().String() /* generate RFC4122 UUID */
-	key := makeKey(dbname, table, uuid)
+	key := common.GenerateDataKey(dbname, table)
 	row := &map[string]interface{}{
 		k: v,
 	}
-	setRowUUID(row, uuid)
+	setRowUUID(row, key.UUID)
 	val, err := makeValue(row)
 	assert.Nil(t, err)
-	_, err = cli.Put(ctx, key, val)
+	_, err = cli.Put(ctx, key.String(), val)
 	assert.Nil(t, err)
 }
 

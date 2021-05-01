@@ -4,9 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
-
 	"github.com/google/uuid"
+	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"k8s.io/klog/v2"
 
 	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
@@ -213,6 +212,11 @@ type Servicer interface {
 	Echo(ctx context.Context, param interface{}) interface{}
 }
 
+const (
+	INT_SERVER    = "_Server"
+	INT_DATABASES = "Database"
+)
+
 type Service struct {
 	db   Databaser
 	uuid string
@@ -220,14 +224,17 @@ type Service struct {
 
 func (s *Service) ListDbs(ctx context.Context, param interface{}) ([]string, error) {
 	klog.V(5).Infof("ListDbs request")
-	resp, err := s.db.GetData("_Server/Database/", true)
+	resp, err := s.db.GetData(common.NewTableKey(INT_SERVER, INT_DATABASES), true)
 	if err != nil {
 		return nil, err
 	}
 	dbs := []string{}
 	for _, kv := range resp.Kvs {
-		slices := strings.Split(string(kv.Key), "/")
-		dbs = append(dbs, slices[len(slices)-1])
+		key, err := common.ParseKey(string(kv.Key))
+		if err != nil {
+			return nil, err
+		}
+		dbs = append(dbs, key.UUID)
 	}
 	return dbs, nil
 }

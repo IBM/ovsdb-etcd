@@ -59,7 +59,7 @@ func putNbGlobalOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid string
 		Version:          newUUID(),
 		Uuid:             libovsdb.UUID{GoUUID: uuid},
 	}
-	con.PutData(ctx, "OVN_Northbound/NB_Global/"+uuid, nbGlobal)
+	con.PutData(ctx, common.NewDataKey("OVN_Northbound", "NB_Global", uuid), nbGlobal)
 	return nil
 }
 
@@ -77,7 +77,7 @@ func putAclOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid string, act
 		Version:      newUUID(),
 		Uuid:         libovsdb.UUID{GoUUID: uuid},
 	}
-	con.PutData(ctx, "OVN_Northbound/ACL/"+uuid, acl)
+	con.PutData(ctx, common.NewDataKey("OVN_Northbound", "ACL", uuid), acl)
 	return nil
 }
 
@@ -97,7 +97,7 @@ func putAddressSetOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid stri
 		Version:      newUUID(),
 		Uuid:         libovsdb.UUID{GoUUID: uuid},
 	}
-	con.PutData(ctx, "OVN_Northbound/Address_Set/"+uuid, addressSet)
+	con.PutData(ctx, common.NewDataKey("OVN_Northbound", "Address_Set", uuid), addressSet)
 	return nil
 }
 
@@ -118,7 +118,7 @@ func putConnectionOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid stri
 		Uuid:             libovsdb.UUID{GoUUID: uuid},
 	}
 
-	con.PutData(ctx, "OVN_Northbound/Connection/"+uuid, connection)
+	con.PutData(ctx, common.NewDataKey("OVN_Northbound", "Connection", uuid), connection)
 	return nil
 }
 
@@ -142,7 +142,7 @@ func putForwardingGroupOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid
 		Version:      newUUID(),
 		Uuid:         libovsdb.UUID{GoUUID: uuid},
 	}
-	con.PutData(ctx, "OVN_Northbound/Forwarding_Group/"+uuid, fowardingGroup)
+	con.PutData(ctx, common.NewDataKey("OVN_Northbound", "Forwarding_Group", uuid), fowardingGroup)
 	return nil
 }
 
@@ -175,7 +175,7 @@ func putloadBalancerOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid st
 		Version:          newUUID(),
 		Uuid:             libovsdb.UUID{GoUUID: uuid},
 	}
-	con.PutData(ctx, "OVN_Northbound/Load_Balancer/"+uuid, loadBalancer)
+	con.PutData(ctx, common.NewDataKey("OVN_Northbound", "Load_Balancer", uuid), loadBalancer)
 	return nil
 }
 
@@ -209,7 +209,7 @@ func putlogicalRouterOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid s
 		Version:       newUUID(),
 		Uuid:          common.ToUUID(uuid),
 	}
-	con.PutData(ctx, "OVN_Northbound/Logical_Router/"+uuid, logicalRouter)
+	con.PutData(ctx, common.NewDataKey("OVN_Northbound", "Logical_Router", uuid), logicalRouter)
 	return nil
 }
 
@@ -227,7 +227,7 @@ func putGatewayChassisOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid 
 		Version:      newUUID(),
 		Uuid:         libovsdb.UUID{GoUUID: uuid},
 	}
-	con.PutData(ctx, "OVN_Northbound/Gateway_Chassis/"+uuid, gatewayChassis)
+	con.PutData(ctx, common.NewDataKey("OVN_Northbound", "Gateway_Chassis", uuid), gatewayChassis)
 	return nil
 }
 
@@ -254,7 +254,7 @@ func putlogicalSwitchOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid s
 		Version:           newUUID(),
 		Uuid:              common.ToUUID(uuid),
 	}
-	con.PutData(ctx, "OVN_Northbound/Logical_Switch/"+uuid, logicalSwitch)
+	con.PutData(ctx, common.NewDataKey("OVN_Northbound", "Logical_Switch", uuid), logicalSwitch)
 
 	return nil
 }
@@ -269,7 +269,8 @@ func loadServerData(con *ovsdb.DatabaseEtcd) error {
 		}
 		srv := _Server.Database{Model: "standalone", Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
 			Connected: true, Leader: true, Schema: *schemaSet, Version: libovsdb.UUID{GoUUID: uuid.NewString()}}
-		if err := con.PutData(ctx, "_Server/Database/"+schemaName, srv); err != nil {
+		key := common.NewDataKey("_Server", "Database", schemaName)
+		if err := con.PutData(ctx, key, srv); err != nil {
 			cancel = nil
 			return err
 		}

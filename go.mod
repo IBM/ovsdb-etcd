@@ -8,13 +8,13 @@ require (
 	github.com/cenkalti/rpc2 v0.0.0-20210220005819-4a29bc83afe1
 	github.com/creachadair/jrpc2 v0.12.0
 	github.com/google/uuid v1.2.0
-	github.com/jinzhu/copier v0.2.9
+	github.com/jinzhu/copier v0.3.0
 	github.com/onsi/ginkgo v1.16.1
 	github.com/onsi/gomega v1.11.0
 	github.com/spf13/cobra v1.1.3
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.7.1
-	github.com/stretchr/testify v1.5.1
+	github.com/stretchr/testify v1.7.1-0.20210116013205-6990a05d54c2
 	go.etcd.io/etcd/api/v3 v3.5.0-alpha.0
 	go.etcd.io/etcd/client/v3 v3.5.0-alpha.0
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect

@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	clientv3 "go.etcd.io/etcd/client/v3"
+
+	"github.com/ibm/ovsdb-etcd/pkg/common"
 )
 
 func TestMockLock(t *testing.T) {
@@ -37,7 +39,7 @@ func TestMockGetData(t *testing.T) {
 		Error:    expectedError,
 		Response: expectedResponse,
 	}
-	actualResponse, actualError := mock.GetData("", true)
+	actualResponse, actualError := mock.GetData(common.GenerateDataKey("dbName", "tableName"), true)
 	assert.Equal(t, expectedError, actualError)
 	assert.Equal(t, expectedResponse, actualResponse)
 }
