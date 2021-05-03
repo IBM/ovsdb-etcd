@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strings"
 	"time"
 
 	guuid "github.com/google/uuid"
@@ -31,6 +30,7 @@ import (
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
+	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 )
 
@@ -76,9 +76,6 @@ func isEqualMap(a, b libovsdb.OvsMap) bool {
 func isEqual(a, b interface{}) bool {
 	return reflect.DeepEqual(a, b)
 }
-
-// XXX: move to db
-const DELIM = "/"
 
 // XXX: move to libovsdb
 const (
@@ -135,10 +132,8 @@ func (txn *Transaction) etcdTranaction() (*clientv3.TxnResponse, error) {
 
 // XXX: move to db
 type KeyValue struct {
-	DBName string
-	Table  string
-	UUID   string
-	Value  map[string]interface{}
+	Key   common.Key
+	Value map[string]interface{}
 }
 
 // XXX: move to db
@@ -146,16 +141,13 @@ func NewKeyValue(etcdKV *mvccpb.KeyValue) (*KeyValue, error) {
 	kv := new(KeyValue)
 
 	/* key */
-	split := strings.Split(string(etcdKV.Key), DELIM)
-	if len(split) != 3 {
-		return nil, errors.New(E_INTERNAL_ERROR)
+	key, err := common.ParseKey(string(etcdKV.Key))
+	if err != nil {
+		return nil, err
 	}
-	kv.DBName = split[0]
-	kv.Table = split[1]
-	kv.UUID = split[2]
-
+	kv.Key = *key
 	/* value */
-	err := json.Unmarshal(etcdKV.Value, &kv.Value)
+	err = json.Unmarshal(etcdKV.Value, &kv.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +156,7 @@ func NewKeyValue(etcdKV *mvccpb.KeyValue) (*KeyValue, error) {
 }
 
 func (kv *KeyValue) Dump() {
-	fmt.Printf("%s/%s/%s --> %v\n", kv.DBName, kv.Table, kv.UUID, kv.Value)
+	fmt.Printf("%s --> %v\n", kv.Key, kv.Value)
 }
 
 type Database map[string]Table
@@ -186,13 +178,13 @@ func (c *Cache) Table(table string) Table {
 	return t
 }
 
-func (c *Cache) Row(table, uuid string) *map[string]interface{} {
-	t := c.Table(table)
-	_, ok := t[uuid]
+func (c *Cache) Row(key common.Key) *map[string]interface{} {
+	t := c.Table(key.TableName)
+	_, ok := t[key.UUID]
 	if !ok {
-		t[uuid] = new(map[string]interface{})
+		t[key.UUID] = new(map[string]interface{})
 	}
-	return t[uuid]
+	return t[key.UUID]
 }
 
 func (c *Cache) PopulateFromKV(kvs []*mvccpb.KeyValue) error {
@@ -201,7 +193,7 @@ func (c *Cache) PopulateFromKV(kvs []*mvccpb.KeyValue) error {
 		if err != nil {
 			return err
 		}
-		row := c.Row(kv.Table, kv.UUID)
+		row := c.Row(kv.Key)
 		(*row) = kv.Value
 	}
 	return nil
@@ -295,19 +287,6 @@ func (txn *Transaction) Commit() error {
 	}
 
 	return nil
-}
-
-// XXX: move to db
-func makePrefix(dbname, table string) string {
-	return dbname + DELIM + table
-}
-
-// XXX: move to db
-// XXX: ovsdb/<server>/<dbname>/tables/<table>/<uuid>
-// XXX: ovsdb/<server>/<dbname>/locks/<id>
-// XXX: ovsdb/<server>/<dbname>/comments/<timestmap>
-func makeKey(dbname, table, uuid string) string {
-	return dbname + DELIM + table + DELIM + uuid
 }
 
 // XXX: move to db
@@ -862,24 +841,9 @@ func RowUpdate(original *map[string]interface{}, update map[string]interface{}) 
 	return nil
 }
 
-func etcdGetTable(txn *Transaction, table string) {
-	prefix := makePrefix(txn.request.DBName, table)
-	etcdOp := clientv3.OpGet(prefix, clientv3.WithPrefix())
+func etcdGetData(txn *Transaction, key *common.Key) {
+	etcdOp := clientv3.OpGet(key.String(), clientv3.WithPrefix())
 	txn.etcdThen = append(txn.etcdThen, etcdOp)
-}
-
-func etcdGetRow(txn *Transaction, table, uuid string) {
-	key := makeKey(txn.request.DBName, table, uuid)
-	etcdOp := clientv3.OpGet(key)
-	txn.etcdThen = append(txn.etcdThen, etcdOp)
-}
-
-func etcdGetTableOrRow(txn *Transaction, table, uuid string) {
-	if uuid != "" {
-		etcdGetRow(txn, table, uuid)
-	} else {
-		etcdGetTable(txn, table)
-	}
 }
 
 func etcdGetByWhere(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
@@ -888,18 +852,19 @@ func etcdGetByWhere(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libo
 		ovsResult.Error = err.Error()
 		return err
 	}
-	etcdGetTableOrRow(txn, ovsOp.Table, uuid)
+	key := common.NewDataKey(txn.request.DBName, ovsOp.Table, uuid)
+	etcdGetData(txn, key)
 	return nil
 }
 
-func etcdPutRow(txn *Transaction, table, uuid string, row *map[string]interface{}) error {
-	key := makeKey(txn.request.DBName, table, uuid)
-	setRowUUID(row, uuid)
+func etcdPutRow(txn *Transaction, key *common.Key, row *map[string]interface{}) error {
+	setRowUUID(row, key.UUID)
 	val, err := makeValue(row)
 	if err != nil {
 		return err
 	}
-	etcdOp := clientv3.OpPut(key, val)
+	keyStr := key.String()
+	etcdOp := clientv3.OpPut(keyStr, val)
 
 	/* remove any duplicate keys from prev operations */
 	newThen := []clientv3.Op{}
@@ -907,7 +872,7 @@ func etcdPutRow(txn *Transaction, table, uuid string, row *map[string]interface{
 		v := reflect.ValueOf(op)
 		f := v.FieldByName("key")
 		k := f.Bytes()
-		if string(k) != key {
+		if string(k) != keyStr {
 			newThen = append(newThen, op)
 		}
 	}
@@ -917,9 +882,8 @@ func etcdPutRow(txn *Transaction, table, uuid string, row *map[string]interface{
 	return nil
 }
 
-func etcdDelRow(txn *Transaction, table, uuid string) error {
-	key := makeKey(txn.request.DBName, table, uuid)
-	etcdOp := clientv3.OpDelete(key)
+func etcdDelRow(txn *Transaction, key *common.Key) error {
+	etcdOp := clientv3.OpDelete(key.String())
 	txn.etcdThen = append(txn.etcdThen, etcdOp)
 	return nil
 }
@@ -929,7 +893,7 @@ func preInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 	if ovsOp.UUIDName == "" {
 		return nil
 	}
-	etcdGetTable(txn, ovsOp.Table)
+	etcdGetData(txn, common.NewTableKey(txn.request.DBName, ovsOp.Table))
 	return nil
 }
 
@@ -944,10 +908,10 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		}
 	}
 	ovsResult.Count = ovsResult.Count + 1
-	uuid := guuid.New().String() /* generate RFC4122 UUID */
-	row := txn.data.Row(ovsOp.Table, uuid)
-	*row = ovsOp.Row // supporting read-afrer-write
-	return etcdPutRow(txn, ovsOp.Table, uuid, row)
+	key := common.GenerateDataKey(txn.request.DBName, ovsOp.Table) /* generate RFC4122 UUID */
+	row := txn.data.Row(*key)
+	*row = ovsOp.Row // supporting read-after-write
+	return etcdPutRow(txn, key, row)
 }
 
 /* select */
@@ -990,8 +954,9 @@ func doUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		if err != nil {
 			return err
 		}
-		*(txn.data.Row(ovsOp.Table, uuid)) = *row
-		etcdPutRow(txn, ovsOp.Table, uuid, row)
+		key := common.NewDataKey(txn.request.DBName, ovsOp.Table, uuid)
+		*(txn.data.Row(*key)) = *row
+		etcdPutRow(txn, key, row)
 	}
 	return nil
 }
@@ -1015,8 +980,9 @@ func doMutate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		if err != nil {
 			return err
 		}
-		*(txn.data.Row(ovsOp.Table, uuid)) = *row
-		etcdPutRow(txn, ovsOp.Table, uuid, row)
+		key := common.NewDataKey(txn.request.DBName, ovsOp.Table, uuid)
+		*(txn.data.Row(*key)) = *row
+		etcdPutRow(txn, key, row)
 	}
 	return nil
 }
@@ -1036,7 +1002,7 @@ func doDelete(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 			continue
 		}
 		ovsResult.Count = ovsResult.Count + 1
-		etcdDelRow(txn, ovsOp.Table, uuid)
+		etcdDelRow(txn, common.NewDataKey(txn.request.DBName, ovsOp.Table, uuid))
 	}
 	return nil
 }
@@ -1117,9 +1083,9 @@ func preComment(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb
 
 func doComment(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
 	timestamp := time.Now().Format(time.RFC3339)
-	key := makeKey(txn.request.DBName, "_comment", timestamp)
+	key := common.NewCommentKey(timestamp)
 	comment := ovsOp.Comment
-	etcdOp := clientv3.OpPut(key, comment)
+	etcdOp := clientv3.OpPut(key.String(), comment)
 	txn.etcdThen = append(txn.etcdThen, etcdOp)
 	return nil
 }

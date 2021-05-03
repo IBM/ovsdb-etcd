@@ -5,13 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
-	"strings"
 	"sync"
 	"time"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"k8s.io/klog/v2"
+
+	"github.com/ibm/ovsdb-etcd/pkg/common"
 )
 
 type Databaser interface {
@@ -20,8 +21,8 @@ type Databaser interface {
 	RemoveMonitors(dbName string, updaters map[string][]string, handler handlerKey)
 	RemoveMonitor(dbName string)
 	AddSchema(schemaName, schemaFile string) error
-	GetData(prefix string, keysOnly bool) (*clientv3.GetResponse, error)
-	PutData(ctx context.Context, key string, obj interface{}) error
+	GetData(key *common.Key, keysOnly bool) (*clientv3.GetResponse, error)
+	PutData(ctx context.Context, key *common.Key, obj interface{}) error
 	GetSchema(name string) (string, bool)
 }
 
@@ -30,7 +31,6 @@ type DatabaseEtcd struct {
 	// dataBaseName -> schema
 	Schemas map[string]string
 	mu      sync.Mutex
-	prefix  string
 	// databaseName -> monitor
 	// We have a single monitor (etcd watcher) per database
 	monitors map[string]*monitor
@@ -67,12 +67,9 @@ func (l *lock) cancel() {
 
 var EtcdClientTimeout = 100 * time.Millisecond
 
-func NewDatabaseEtcd(cli *clientv3.Client, prefix string) (Databaser, error) {
-	if !strings.HasSuffix(prefix, "/") {
-		prefix = prefix + "/"
-	}
+func NewDatabaseEtcd(cli *clientv3.Client) (Databaser, error) {
 	return &DatabaseEtcd{cli: cli,
-		Schemas: map[string]string{}, prefix: prefix, monitors: map[string]*monitor{}}, nil
+		Schemas: map[string]string{}, monitors: map[string]*monitor{}}, nil
 }
 
 func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error) {
@@ -82,7 +79,8 @@ func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error)
 		cancel()
 		return nil, err
 	}
-	mutex := concurrency.NewMutex(session, con.prefix+"locks/"+id)
+	// TODO
+	mutex := concurrency.NewMutex(session, common.NewLockKey(id).String())
 	return &lock{mutex: mutex, myCancel: cancel, cntx: ctctx}, nil
 }
 
@@ -97,14 +95,14 @@ func (con *DatabaseEtcd) AddSchema(schemaName, schemaFile string) error {
 	return nil
 }
 
-func (con *DatabaseEtcd) GetData(keysPrefix string, keysOnly bool) (*clientv3.GetResponse, error) {
+func (con *DatabaseEtcd) GetData(key *common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), EtcdClientTimeout)
 	var resp *clientv3.GetResponse
 	var err error
 	if keysOnly {
-		resp, err = con.cli.Get(ctx, con.prefix+keysPrefix, clientv3.WithPrefix(), clientv3.WithKeysOnly())
+		resp, err = con.cli.Get(ctx, key.String(), clientv3.WithPrefix(), clientv3.WithKeysOnly())
 	} else {
-		resp, err = con.cli.Get(ctx, con.prefix+keysPrefix, clientv3.WithPrefix())
+		resp, err = con.cli.Get(ctx, key.String(), clientv3.WithPrefix())
 	}
 	cancel()
 	if err != nil {
@@ -125,12 +123,12 @@ func (con *DatabaseEtcd) GetSchema(name string) (string, bool) {
 	return con.Schemas[name], true
 }
 
-func (con *DatabaseEtcd) PutData(ctx context.Context, key string, obj interface{}) error {
+func (con *DatabaseEtcd) PutData(ctx context.Context, key *common.Key, obj interface{}) error {
 	data, err := json.Marshal(obj)
 	if err != nil {
 		return err
 	}
-	_, err = con.cli.Put(ctx, con.prefix+key, string(data))
+	_, err = con.cli.Put(ctx, key.String(), string(data))
 	if err != nil {
 		return err
 	}
@@ -146,14 +144,14 @@ func (con *DatabaseEtcd) AddMonitors(dbName string, updaters map[string][]*updat
 		m = newMonitor(dbName, con)
 		ctxt, cancel := context.WithCancel(context.Background())
 		m.cancel = cancel
-		wch := con.cli.Watch(clientv3.WithRequireLeader(ctxt), con.prefix+dbName,
+		wch := con.cli.Watch(clientv3.WithRequireLeader(ctxt), common.NewDBPrefixKey(dbName).String(),
 			clientv3.WithPrefix(),
 			clientv3.WithCreatedNotify(),
 			clientv3.WithPrevKV())
 		m.watchChannel = wch
 		con.monitors[dbName] = m
 	}
-	m.addUpdaters(con.prefix, updaters, handler)
+	m.addUpdaters(updaters, handler)
 	if !ok {
 		m.start()
 	}
@@ -167,7 +165,7 @@ func (con *DatabaseEtcd) RemoveMonitors(dbName string, updaters map[string][]str
 		klog.Warningf("Remove nonexistent db monitor %s", dbName)
 		return
 	}
-	m.removeUpdaters(con.prefix, updaters, handler)
+	m.removeUpdaters(updaters, handler)
 	if !m.hasHandlers() {
 		m.cancel()
 		delete(con.monitors, dbName)
@@ -223,11 +221,11 @@ func (con *DatabaseMock) AddSchema(schemaName, schemaFile string) error {
 	return con.Error
 }
 
-func (con *DatabaseMock) GetData(keysPrefix string, keysOnly bool) (*clientv3.GetResponse, error) {
+func (con *DatabaseMock) GetData(key *common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
 	return con.Response.(*clientv3.GetResponse), con.Error
 }
 
-func (con *DatabaseMock) PutData(ctx context.Context, key string, obj interface{}) error {
+func (con *DatabaseMock) PutData(ctx context.Context, key *common.Key, obj interface{}) error {
 	return con.Error
 }
 

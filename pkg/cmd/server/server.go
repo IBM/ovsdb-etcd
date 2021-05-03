@@ -19,6 +19,7 @@ import (
 	"github.com/creachadair/jrpc2/metrics"
 	"k8s.io/klog/v2"
 
+	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/ovsdb"
 )
 
@@ -32,6 +33,7 @@ var (
 	schemaBasedir      = flag.String("schema-basedir", ".", "Schema base dir")
 	maxTasks           = flag.Int("max", 1, "Maximum concurrent tasks")
 	databasePrefix     = flag.String("database-prefix", "ovsdb", "Database prefix")
+	serviceName        = flag.String("service-name", "", "Deployment service name, e.g. 'nbdb' or 'sbdb'")
 	schemaFile         = flag.String("schema-file", "", "schema-file")
 	schemaName         = flag.String("schema-name", "", "schema-name")
 	loadServerDataFlag = flag.Bool("load-server-data", false, "load-server-data")
@@ -43,12 +45,23 @@ func main() {
 
 	//TODO: for development purposes only. will be remove later
 	fmt.Println("start the ovsdb-etcd server with the following arguments:")
-	fmt.Printf("tcpAddress:%s\nunixAddressress:%s\netcdMembersress:%s\nschemaBasedir:%s\nmaxTasks:%d\ndatabasePrefix:%s\nschemaFile:%s\nschemaName:%s\nloadServerData:%v\n",
-		*tcpAddress, *unixAddress, *etcdMembers, *schemaBasedir, *maxTasks, *databasePrefix, *schemaFile, *schemaName, *loadServerDataFlag)
+	fmt.Printf("\ttcpAddress:%s\n\tunixAddressress:%s\n\tetcdMembersress:%s\n\tschemaBasedir:%s\n\tmaxTasks:%d\n\tdatabasePrefix:%s\n\tserviceName:%s\n\tschemaFile:%s\n\tschemaName:%s\n\tloadServerData:%v\n",
+		*tcpAddress, *unixAddress, *etcdMembers, *schemaBasedir, *maxTasks, *databasePrefix, *serviceName, *schemaFile, *schemaName, *loadServerDataFlag)
 
 	if len(*tcpAddress) == 0 && len(*unixAddress) == 0 {
 		klog.Fatal("You must provide a network-address (TCP and/or UNIX) to listen on")
 	}
+
+	if len(*databasePrefix) == 0 || strings.Contains(*databasePrefix, common.KEY_DELIMETER) {
+		klog.Fatal("Illegal databasePrefix %s", *databasePrefix)
+	}
+	if len(*serviceName) == 0 || strings.Contains(*serviceName, common.KEY_DELIMETER) {
+		klog.Fatal("Illegal serviceName %s", *serviceName)
+	}
+
+	// several OVSDB deployments can share the same etcd, but for rest of the work, we don't have to separate
+	// databasePrefix and serviceName.
+	common.SetPrefix(*databasePrefix + common.KEY_DELIMETER + *serviceName)
 
 	if len(*etcdMembers) == 0 {
 		klog.Fatal("Wrong ETCD members list", etcdMembers)
@@ -61,7 +74,7 @@ func main() {
 	}
 	defer cli.Close()
 
-	db, _ := ovsdb.NewDatabaseEtcd(cli, *databasePrefix)
+	db, _ := ovsdb.NewDatabaseEtcd(cli)
 
 	err = db.AddSchema("_Server", *schemaBasedir+"/_server.ovsschema")
 	if err != nil {

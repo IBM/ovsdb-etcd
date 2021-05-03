@@ -276,7 +276,7 @@ func (ch *Handler) getMonitoredData(dataBase string, conditions map[string][]ovs
 		if mcrs[0].Select != nil && !libovsdb.MSIsTrue(mcrs[0].Select.Initial) {
 			continue
 		}
-		resp, err := ch.db.GetData(dataBase+"/"+tableName, false)
+		resp, err := ch.db.GetData(common.NewTableKey(dataBase, tableName), false)
 		if err != nil {
 			return nil, err
 		}

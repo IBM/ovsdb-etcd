@@ -7,10 +7,9 @@ import (
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
+	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
 )
-
-const baseMonitor string = "../../tests/data/monitor/"
 
 func TestRowUpdate(t *testing.T) {
 
@@ -136,6 +135,7 @@ func TestRowUpdate(t *testing.T) {
 }
 
 func TestAddRemoveUpdaters(t *testing.T) {
+	common.SetPrefix("ovsdb")
 	compareMonitorStates := func(expected, actual *monitor) {
 		assert.Equal(t, expected.handlers, actual.handlers, "Handlers maps should be equals")
 		assert.Equal(t, expected.key2Updaters, actual.key2Updaters, "Key to updater maps should be equals")
@@ -143,7 +143,6 @@ func TestAddRemoveUpdaters(t *testing.T) {
 	}
 
 	m := newMonitor("dbTest", &DatabaseMock{})
-	dbPrefix := "ovsdb/"
 	mcr1 := ovsjson.MonitorCondRequest{Columns: []string{"c1", "c3", "c2"}}
 	mcr2 := ovsjson.MonitorCondRequest{Columns: []string{"c4"}}
 	mcr3 := ovsjson.MonitorCondRequest{Columns: []string{"a1"}}
@@ -153,7 +152,7 @@ func TestAddRemoveUpdaters(t *testing.T) {
 	m1 := map[string][]*updater{"table1": {u1, u2}, "table2": {u3}}
 	h1 := handlerKey{jsonValue: "jsonValue1"}
 
-	m.addUpdaters(dbPrefix, m1, h1)
+	m.addUpdaters(m1, h1)
 	expected := &monitor{
 		handlers:        map[handlerKey]bool{h1: true},
 		key2Updaters:    map[string][]updater{"ovsdb/dbTest/table1": {*u1, *u2}, "ovsdb/dbTest/table2": {*u3}},
@@ -161,7 +160,7 @@ func TestAddRemoveUpdaters(t *testing.T) {
 	compareMonitorStates(expected, m)
 
 	h2 := handlerKey{jsonValue: "jsonValue2"}
-	m.addUpdaters(dbPrefix, m1, h2)
+	m.addUpdaters(m1, h2)
 	expected2 := &monitor{
 		handlers:        map[handlerKey]bool{h1: true, h2: true},
 		key2Updaters:    map[string][]updater{"ovsdb/dbTest/table1": {*u1, *u2}, "ovsdb/dbTest/table2": {*u3}},
@@ -171,21 +170,20 @@ func TestAddRemoveUpdaters(t *testing.T) {
 	u11 := mcrToUpdater(mcr1, false)
 	m11 := map[string][]*updater{"table1": {u11}}
 	h11 := handlerKey{jsonValue: "jsonValue11"}
-	m.addUpdaters(dbPrefix, m11, h11)
+	m.addUpdaters(m11, h11)
 	expected3 := &monitor{
 		handlers:        map[handlerKey]bool{h1: true, h2: true, h11: true},
 		key2Updaters:    map[string][]updater{"ovsdb/dbTest/table1": {*u1, *u2, *u11}, "ovsdb/dbTest/table2": {*u3}},
 		upater2handlers: map[string][]handlerKey{u1.key: {h1, h2}, u2.key: {h1, h2}, u3.key: {h1, h2}, u11.key: {h11}}}
 	compareMonitorStates(expected3, m)
 
-	m.removeUpdaters(dbPrefix, map[string][]string{"table1": {u11.key}}, h11)
+	m.removeUpdaters(map[string][]string{"table1": {u11.key}}, h11)
 	compareMonitorStates(expected2, m)
 
-	m.removeUpdaters(dbPrefix, map[string][]string{"table1": {u2.key, u1.key}, "table2": {u3.key}}, h1)
+	m.removeUpdaters(map[string][]string{"table1": {u2.key, u1.key}, "table2": {u3.key}}, h1)
 	expected4 := &monitor{
 		handlers:        map[handlerKey]bool{h2: true},
 		key2Updaters:    map[string][]updater{"ovsdb/dbTest/table1": {*u1, *u2}, "ovsdb/dbTest/table2": {*u3}},
 		upater2handlers: map[string][]handlerKey{u1.key: {h2}, u2.key: {h2}, u3.key: {h2}}}
 	compareMonitorStates(expected4, m)
-
 }
