@@ -366,9 +366,10 @@ type Condition struct {
 	Column   string
 	Function string
 	Value    interface{}
+	Schema   *libovsdb.ColumnSchema
 }
 
-func NewCondition(condition []interface{}) (*Condition, error) {
+func NewCondition(tableSchema *libovsdb.TableSchema, condition []interface{}) (*Condition, error) {
 	if len(condition) != 3 {
 		return nil, errors.New(E_INTERNAL_ERROR)
 	}
@@ -377,6 +378,7 @@ func NewCondition(condition []interface{}) (*Condition, error) {
 	if !ok {
 		return nil, errors.New(E_INTERNAL_ERROR)
 	}
+	schema := tableSchema.LookupColumn(column)
 
 	fn, ok := condition[1].(string)
 	if !ok {
@@ -384,7 +386,12 @@ func NewCondition(condition []interface{}) (*Condition, error) {
 	}
 
 	value := condition[2]
-	return &Condition{Column: column, Function: fn, Value: value}, nil
+	return &Condition{
+		Column:   column,
+		Function: fn,
+		Value:    value,
+		Schema:   schema,
+	}, nil
 }
 
 func (c *Condition) CompareInteger(row *map[string]interface{}) (bool, error) {
@@ -551,32 +558,32 @@ func (c *Condition) CompareMap(row *map[string]interface{}) (bool, error) {
 }
 
 func (c *Condition) Compare(row *map[string]interface{}) (bool, error) {
-	switch (*row)[c.Column].(type) {
-	case int:
+	switch c.Schema.Type {
+	case libovsdb.TypeInteger:
 		return c.CompareInteger(row)
-	case float64:
+	case libovsdb.TypeReal:
 		return c.CompareReal(row)
-	case bool:
+	case libovsdb.TypeBoolean:
 		return c.CompareBoolean(row)
-	case string:
+	case libovsdb.TypeString:
 		return c.CompareString(row)
-	case libovsdb.OvsSet:
-		return c.CompareSet(row)
-	case libovsdb.OvsMap:
-		return c.CompareMap(row)
-	case libovsdb.UUID:
+	case libovsdb.TypeUUID:
 		return c.CompareUUID(row)
+	case libovsdb.TypeSet:
+		return c.CompareSet(row)
+	case libovsdb.TypeMap:
+		return c.CompareMap(row)
 	default:
 		return false, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 }
 
-func getUUIDIfExists(cond1 interface{}) (string, error) {
+func getUUIDIfExists(tableSchema *libovsdb.TableSchema, cond1 interface{}) (string, error) {
 	cond2, ok := cond1.([]interface{})
 	if !ok {
 		return "", errors.New(E_INTERNAL_ERROR)
 	}
-	condition, err := NewCondition(cond2)
+	condition, err := NewCondition(tableSchema, cond2)
 	if err != nil {
 		return "", err
 	}
@@ -598,13 +605,13 @@ func getUUIDIfExists(cond1 interface{}) (string, error) {
 	return ovsUUID.GoUUID, err
 }
 
-func doesWhereContainCondTypeUUID(where []interface{}) (string, error) {
+func doesWhereContainCondTypeUUID(tableSchema *libovsdb.TableSchema, where []interface{}) (string, error) {
 	for _, c := range where {
 		cond, ok := c.([]interface{})
 		if !ok {
 			return "", errors.New(E_INTERNAL_ERROR)
 		}
-		uuid, err := getUUIDIfExists(cond)
+		uuid, err := getUUIDIfExists(tableSchema, cond)
 		if err != nil {
 			return "", err
 		}
@@ -616,13 +623,13 @@ func doesWhereContainCondTypeUUID(where []interface{}) (string, error) {
 
 }
 
-func isRowSelectedByWhere(row *map[string]interface{}, where []interface{}) (bool, error) {
+func isRowSelectedByWhere(tableSchema *libovsdb.TableSchema, row *map[string]interface{}, where []interface{}) (bool, error) {
 	for _, c := range where {
 		cond, ok := c.([]interface{})
 		if !ok {
 			return false, errors.New(E_INTERNAL_ERROR)
 		}
-		ok, err := isRowSelectedByCond(row, cond)
+		ok, err := isRowSelectedByCond(tableSchema, row, cond)
 		if err != nil {
 			return false, err
 		}
@@ -633,8 +640,8 @@ func isRowSelectedByWhere(row *map[string]interface{}, where []interface{}) (boo
 	return true, nil
 }
 
-func isRowSelectedByCond(row *map[string]interface{}, cond []interface{}) (bool, error) {
-	condition, err := NewCondition(cond)
+func isRowSelectedByCond(tableSchema *libovsdb.TableSchema, row *map[string]interface{}, cond []interface{}) (bool, error) {
+	condition, err := NewCondition(tableSchema, cond)
 	if err != nil {
 		return false, err
 	}
@@ -896,7 +903,8 @@ func etcdGetData(txn *Transaction, key *common.Key) {
 }
 
 func etcdGetByWhere(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
-	uuid, err := doesWhereContainCondTypeUUID(ovsOp.Where)
+	tableSchema := txn.schemas.LookupTable(txn.request.DBName, ovsOp.Table)
+	uuid, err := doesWhereContainCondTypeUUID(tableSchema, ovsOp.Where)
 	if err != nil {
 		ovsResult.Error = err.Error()
 		return err
@@ -970,8 +978,9 @@ func preSelect(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 }
 
 func doSelect(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
+	tableSchema := txn.schemas.LookupTable(txn.request.DBName, ovsOp.Table)
 	for _, row := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
-		ok, err := isRowSelectedByWhere(row, ovsOp.Where)
+		ok, err := isRowSelectedByWhere(tableSchema, row, ovsOp.Where)
 		if err != nil {
 			return err
 		}
@@ -991,8 +1000,9 @@ func preUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 }
 
 func doUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
+	tableSchema := txn.schemas.LookupTable(txn.request.DBName, ovsOp.Table)
 	for uuid, row := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
-		ok, err := isRowSelectedByWhere(row, ovsOp.Where)
+		ok, err := isRowSelectedByWhere(tableSchema, row, ovsOp.Where)
 		if err != nil {
 			return err
 		}
@@ -1017,8 +1027,9 @@ func preMutate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 }
 
 func doMutate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
+	tableSchema := txn.schemas.LookupTable(txn.request.DBName, ovsOp.Table)
 	for uuid, row := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
-		ok, err := isRowSelectedByWhere(row, ovsOp.Where)
+		ok, err := isRowSelectedByWhere(tableSchema, row, ovsOp.Where)
 		if err != nil {
 			return err
 		}
@@ -1043,8 +1054,9 @@ func preDelete(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 }
 
 func doDelete(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
+	tableSchema := txn.schemas.LookupTable(txn.request.DBName, ovsOp.Table)
 	for uuid, row := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
-		ok, err := isRowSelectedByWhere(row, ovsOp.Where)
+		ok, err := isRowSelectedByWhere(tableSchema, row, ovsOp.Where)
 		if err != nil {
 			return err
 		}
@@ -1069,8 +1081,9 @@ func preWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Op
 
 func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
 	rows := []map[string]interface{}{}
+	tableSchema := txn.schemas.LookupTable(txn.request.DBName, ovsOp.Table)
 	for _, row := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
-		ok, err := isRowSelectedByWhere(row, ovsOp.Where)
+		ok, err := isRowSelectedByWhere(tableSchema, row, ovsOp.Where)
 		if err != nil {
 			return err
 		}

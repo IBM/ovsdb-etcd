@@ -485,3 +485,44 @@ func (schemas *Schemas) Convert(dbname, table string, row *map[string]interface{
 	}
 	return databaseSchema.Convert(table, row)
 }
+
+/* lookup */
+func (tableSchema *TableSchema) LookupColumn(column string) *ColumnSchema {
+	columnSchema, ok := tableSchema.Columns[column]
+	if !ok {
+		panic(fmt.Sprintf("Missing schema for column %s", column))
+	}
+	return columnSchema
+}
+
+func (databaseSchema *DatabaseSchema) LookupColumn(table, column string) *ColumnSchema {
+	tableSchema, ok := databaseSchema.Tables[table]
+	if !ok {
+		panic(fmt.Sprintf("Missing schema for table %s", table))
+	}
+	return tableSchema.LookupColumn(column)
+}
+
+func (schemas *Schemas) LookupColumn(dbname, table, column string) *ColumnSchema {
+	databaseSchema, ok := (*schemas)[dbname]
+	if !ok {
+		panic(fmt.Sprintf("Missing schema for database %s", dbname))
+	}
+	return databaseSchema.LookupColumn(table, column)
+}
+
+func (databaseSchema *DatabaseSchema) LookupTable(table string) *TableSchema {
+	tableSchema, ok := databaseSchema.Tables[table]
+	if !ok {
+		panic(fmt.Sprintf("Missing schema for table %s", table))
+	}
+	return &tableSchema
+}
+
+func (schemas *Schemas) LookupTable(dbname, table string) *TableSchema {
+	databaseSchema, ok := (*schemas)[dbname]
+	if !ok {
+		panic(fmt.Sprintf("Missing schema for database %s", dbname))
+	}
+	return databaseSchema.LookupTable(table)
+}

@@ -310,7 +310,8 @@ func TestTransactWait(t *testing.T) {
 		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
-				Op: OP_WAIT,
+				Op:    OP_WAIT,
+				Table: "table1",
 			},
 		},
 	}
