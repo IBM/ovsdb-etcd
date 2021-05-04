@@ -1,7 +1,7 @@
 ROOT_DIR := ../..
 
-TCP_ADDRESS = 127.0.0.1:12345
-UNIX_ADDRESS = /tmp/unix.soc
+TCP_ADDRESS = :12345
+UNIX_ADDRESS = /tmp/ovnnb_db.db
 
 ETCD_NAME := ovsdb
 
