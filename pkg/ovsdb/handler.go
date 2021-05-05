@@ -43,7 +43,7 @@ func (ch *Handler) Transact(ctx context.Context, param []interface{}) (interface
 	}
 	txn := NewTransaction(ch.etcdClient, req)
 	txn.Commit()
-	return txn.response, nil
+	return txn.response.Result, nil
 }
 
 func (ch *Handler) Cancel(ctx context.Context, param interface{}) (interface{}, error) {
