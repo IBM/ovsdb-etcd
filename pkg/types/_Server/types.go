@@ -12,5 +12,5 @@ type Database struct {
 	Schema    libovsdb.OvsSet `json:"schema,omitempty"`
 	Sid       libovsdb.OvsSet `json:"sid,omitempty"`
 	Version   libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid      libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid      libovsdb.UUID   `json:"_uuid,omitempty"`
 }

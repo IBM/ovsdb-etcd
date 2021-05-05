@@ -110,7 +110,7 @@ func printStruct(w io.Writer, tableName string, columns []string) error {
 	if _, err := fmt.Fprintf(w, "\t Version libovsdb.UUID `json:\"_version,omitempty\"`\n"); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "\t Uuid libovsdb.UUID `json:\"uuid,omitempty\"`"); err != nil {
+	if _, err := fmt.Fprintf(w, "\t Uuid libovsdb.UUID `json:\"_uuid,omitempty\"`"); err != nil {
 		return err
 	}
 
