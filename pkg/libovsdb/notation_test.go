@@ -113,25 +113,25 @@ func TestValidateUuid(t *testing.T) {
 	uuid3 := UUID{"550e8400-e29b-41d4-a716-446655440000"} // Good
 	uuid4 := UUID{"thishoul-dnot-pass-vali-dationchecks"} // Bad
 
-	err := uuid1.validateUUID()
+	err := uuid1.ValidateUUID()
 
 	if err == nil {
 		t.Error(uuid1, " is not a valid UUID")
 	}
 
-	err = uuid2.validateUUID()
+	err = uuid2.ValidateUUID()
 
 	if err == nil {
 		t.Error(uuid2, " is not a valid UUID")
 	}
 
-	err = uuid3.validateUUID()
+	err = uuid3.ValidateUUID()
 
 	if err != nil {
 		t.Error(uuid3, " is a valid UUID")
 	}
 
-	err = uuid4.validateUUID()
+	err = uuid4.ValidateUUID()
 
 	if err == nil {
 		t.Error(uuid4, " is not a valid UUID")
