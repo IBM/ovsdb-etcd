@@ -47,11 +47,11 @@ server:
 
 .PHONY: north-server
 north-server:
-	$(MAKE) -C tests/e2e/ server -e TCP_ADDRESS=127.0.0.1:6641 UNIX_ADDRESS=/tmp/openvswitch/ovnnb-privkey.pem DATABASE-PREFIX=ovsdb-nb SCHEMA-FILE=ovn-nb.ovsschema SCHEMA-NAME=OVN_Northbound LOAD-SERVER-DATA=TRUE &
+	$(MAKE) -C tests/e2e/ server -e TCP_ADDRESS=:6641 UNIX_ADDRESS=/tmp/ovnnb_db.db DATABASE-PREFIX=ovsdb SERVICE-NAME=nb SCHEMA-FILE=ovn-nb.ovsschema SCHEMA-NAME=OVN_Northbound LOAD-SERVER-DATA=TRUE &
 
 .PHONY: south-server
 south-server:
-	$(MAKE) -C tests/e2e/ server -e TCP_ADDRESS=127.0.0.1:6642 UNIX_ADDRESS=/tmp/openvswitch/ovnsb-privkey.pem DATABASE-PREFIX=ovsdb-sb SCHEMA-FILE=ovn-sb.ovsschema SCHEMA-NAME=OVN_Southbound LOAD-SERVER-DATA=TRUE &
+	$(MAKE) -C tests/e2e/ server -e TCP_ADDRESS=:6642 UNIX_ADDRESS=/tmp/ovnsb_db.db DATABASE-PREFIX=ovsdb SERVICE-NAME=sb SCHEMA-FILE=ovn-sb.ovsschema SCHEMA-NAME=OVN_Southbound LOAD-SERVER-DATA=TRUE &
 
 .PHONY: tests
 tests:

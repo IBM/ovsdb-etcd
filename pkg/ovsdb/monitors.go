@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
-	"strings"
 	"sync"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -69,15 +68,15 @@ func newMonitor(dbName string, db Databaser) *monitor {
 	return &m
 }
 
-func (m *monitor) addUpdaters(dbPrefix string, updaters map[string][]*updater, handler handlerKey) {
+func (m *monitor) addUpdaters(updaters map[string][]*updater, handler handlerKey) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	for table, updaters := range updaters {
-		table = m.tableToKey(dbPrefix, table)
-		_, ok := m.key2Updaters[table]
+		path := common.NewTableKey(m.dataBaseName, table).TableKeyString()
+		_, ok := m.key2Updaters[path]
 		if !ok {
-			m.key2Updaters[table] = []updater{}
+			m.key2Updaters[path] = []updater{}
 		}
 
 	Outer:
@@ -86,18 +85,18 @@ func (m *monitor) addUpdaters(dbPrefix string, updaters map[string][]*updater, h
 				m.upater2handlers[uNew.key] = []handlerKey{}
 			}
 			m.upater2handlers[uNew.key] = append(m.upater2handlers[uNew.key], handler)
-			for _, u1 := range m.key2Updaters[table] {
+			for _, u1 := range m.key2Updaters[path] {
 				if uNew.key == u1.key {
 					continue Outer
 				}
 			}
-			m.key2Updaters[table] = append(m.key2Updaters[table], *uNew)
+			m.key2Updaters[path] = append(m.key2Updaters[path], *uNew)
 		}
 	}
 	m.handlers[handler] = true
 }
 
-func (m *monitor) removeUpdaters(dbPrefix string, updaters map[string][]string, handler handlerKey) {
+func (m *monitor) removeUpdaters(updaters map[string][]string, handler handlerKey) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if ok := m.handlers[handler]; !ok {
@@ -113,7 +112,7 @@ func (m *monitor) removeUpdaters(dbPrefix string, updaters map[string][]string, 
 		return
 	}
 	for table, updaterkeys := range updaters {
-		table = m.tableToKey(dbPrefix, table)
+		tablePath := common.NewTableKey(m.dataBaseName, table).TableKeyString()
 		for _, updaterKey := range updaterkeys {
 			handlers := m.upater2handlers[updaterKey]
 			for i, v := range handlers {
@@ -124,10 +123,10 @@ func (m *monitor) removeUpdaters(dbPrefix string, updaters map[string][]string, 
 			}
 			if len(m.upater2handlers[updaterKey]) == 0 {
 				delete(m.upater2handlers, updaterKey)
-				updt := m.key2Updaters[table]
+				updt := m.key2Updaters[tablePath]
 				for i, v := range updt {
 					if v.key == updaterKey {
-						m.key2Updaters[table] = append(updt[:i], updt[i+1:]...)
+						m.key2Updaters[tablePath] = append(updt[:i], updt[i+1:]...)
 						break
 					}
 				}
@@ -185,15 +184,14 @@ func (m *monitor) prepareTableUpdate(events []*clientv3.Event) (map[handlerKey]o
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, ev := range events {
-		key := string(ev.Kv.Key)
-		path, table, uuid, err := keyToTableAndUUID(key)
+		key, err := common.ParseKey(string(ev.Kv.Key))
 		if err != nil {
-			klog.Errorf("Wrong event's key %s", key)
+			klog.Errorf("Wrong event's key %s", string(ev.Kv.Key))
 			continue
 		}
-		updaters, ok := m.key2Updaters[path]
+		updaters, ok := m.key2Updaters[key.TableKeyString()]
 		if !ok {
-			klog.Infof("There is no monitors for table path %s", path)
+			klog.Infof("There is no monitors for table path %s", key.TableKeyString())
 			continue
 		}
 		for _, updater := range updaters {
@@ -216,18 +214,17 @@ func (m *monitor) prepareTableUpdate(events []*clientv3.Event) (map[handlerKey]o
 					tableUpdates = ovsjson.TableUpdates{} //map[string]map[string]ovsjson.RowUpdate{}
 					result[hKey] = tableUpdates
 				}
-				tableUpdate, ok := tableUpdates[table]
+				tableUpdate, ok := tableUpdates[key.TableName]
 				if !ok {
 					tableUpdate = ovsjson.TableUpdate{} // map[string]ovsjson.RowUpdate{}
-					tableUpdates[table] = tableUpdate
+					tableUpdates[key.TableName] = tableUpdate
 				}
 				// check if there is a rowUpdate for the same uuid
-				_, ok = tableUpdate[uuid]
+				_, ok = tableUpdate[key.UUID]
 				if ok {
-					// TODO key unification
-					klog.Warningf("Duplicate event for %s/%s/%s", m.dataBaseName, table, uuid)
+					klog.Warningf("Duplicate event for %s", key.ShortString())
 				}
-				tableUpdate[uuid] = *rowUpdate
+				tableUpdate[key.UUID] = *rowUpdate
 			}
 		}
 	}
@@ -344,26 +341,6 @@ func unmarshalData(data []byte) (map[string]interface{}, error) {
 	if err := json.Unmarshal(data, &obj); err != nil {
 		return nil, err
 	}
-	// TODO use a constant
-	delete(obj, "_uuid")
+	delete(obj, COL_UUID)
 	return obj, nil
-}
-
-func (m *monitor) tableToKey(dbPrefix string, table string) string {
-	// TODO key unification
-	return fmt.Sprintf("%s%s/%s", dbPrefix, m.dataBaseName, table)
-}
-
-func keyToTableAndUUID(key string) (path string, table string, uuid string, err error) {
-	// TODO key unification
-	slices := strings.Split(key, "/")
-	l := len(slices)
-	if l < 4 {
-		err = fmt.Errorf("wrong formated key: %s", key)
-		return
-	}
-	path = fmt.Sprintf("%s/%s/%s", slices[0], slices[1], slices[2])
-	table = slices[l-2]
-	uuid = slices[l-1]
-	return
 }

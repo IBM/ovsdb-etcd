@@ -1,9 +1,15 @@
 ROOT_DIR := ../..
 
-TCP_ADDRESS = 127.0.0.1:12345
-UNIX_ADDRESS = /tmp/unix.soc
+TCP_ADDRESS = :12345
+UNIX_ADDRESS = /tmp/ovnnb_db.db
 
 ETCD_NAME := ovsdb
+
+DATABASE-PREFIX := ovsdb
+SERVICE-NAME :=nb
+SCHEMA-FILE := ovn-nb.ovsschema
+SCHEMA-NAME := OVN_NorthBound
+LOAD-SERVER-DATA=TRUE := true
 
 .PHONY: etcd
 etcd:
@@ -20,6 +26,7 @@ SERVER_ARGS := \
 		-unix-address $(UNIX_ADDRESS) \
 		-schema-basedir $(ROOT_DIR)/schemas \
 		-database-prefix $(DATABASE-PREFIX) \
+		-service-name $(SERVICE-NAME) \
 		-schema-file $(SCHEMA-FILE) \
 		-schema-name $(SCHEMA-NAME) \
 		-load-server-data $(LOAD-SERVER-DATA)
