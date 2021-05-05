@@ -13,7 +13,7 @@ type ACL struct {
 	Priority     int64           `json:"priority,omitempty"`
 	Severity     libovsdb.OvsSet `json:"severity,omitempty"`
 	Version      libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid         libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid         libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type Address_Set struct {
@@ -21,7 +21,7 @@ type Address_Set struct {
 	External_ids libovsdb.OvsMap `json:"external_ids,omitempty"`
 	Name         string          `json:"name,omitempty"`
 	Version      libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid         libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid         libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type BFD struct {
@@ -34,7 +34,7 @@ type BFD struct {
 	Options      libovsdb.OvsMap `json:"options,omitempty"`
 	Status       libovsdb.OvsSet `json:"status,omitempty"`
 	Version      libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid         libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid         libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type Connection struct {
@@ -46,7 +46,7 @@ type Connection struct {
 	Status           libovsdb.OvsMap `json:"status,omitempty"`
 	Target           string          `json:"target,omitempty"`
 	Version          libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid             libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid             libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type DHCP_Options struct {
@@ -54,14 +54,14 @@ type DHCP_Options struct {
 	External_ids libovsdb.OvsMap `json:"external_ids,omitempty"`
 	Options      libovsdb.OvsMap `json:"options,omitempty"`
 	Version      libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid         libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid         libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type DNS struct {
 	External_ids libovsdb.OvsMap `json:"external_ids,omitempty"`
 	Records      libovsdb.OvsMap `json:"records,omitempty"`
 	Version      libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid         libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid         libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type Forwarding_Group struct {
@@ -72,7 +72,7 @@ type Forwarding_Group struct {
 	Vip          string          `json:"vip,omitempty"`
 	Vmac         string          `json:"vmac,omitempty"`
 	Version      libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid         libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid         libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type Gateway_Chassis struct {
@@ -82,7 +82,7 @@ type Gateway_Chassis struct {
 	Options      libovsdb.OvsMap `json:"options,omitempty"`
 	Priority     int64           `json:"priority,omitempty"`
 	Version      libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid         libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid         libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type HA_Chassis struct {
@@ -90,7 +90,7 @@ type HA_Chassis struct {
 	External_ids libovsdb.OvsMap `json:"external_ids,omitempty"`
 	Priority     int64           `json:"priority,omitempty"`
 	Version      libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid         libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid         libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type HA_Chassis_Group struct {
@@ -98,7 +98,7 @@ type HA_Chassis_Group struct {
 	Ha_chassis   libovsdb.OvsSet `json:"ha_chassis,omitempty"`
 	Name         string          `json:"name,omitempty"`
 	Version      libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid         libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid         libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type Load_Balancer struct {
@@ -111,7 +111,7 @@ type Load_Balancer struct {
 	Selection_fields libovsdb.OvsSet `json:"selection_fields,omitempty"`
 	Vips             libovsdb.OvsMap `json:"vips,omitempty"`
 	Version          libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid             libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid             libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type Load_Balancer_Health_Check struct {
@@ -119,7 +119,7 @@ type Load_Balancer_Health_Check struct {
 	Options      libovsdb.OvsMap `json:"options,omitempty"`
 	Vip          string          `json:"vip,omitempty"`
 	Version      libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid         libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid         libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type Logical_Router struct {
@@ -133,7 +133,7 @@ type Logical_Router struct {
 	Ports         libovsdb.OvsSet `json:"ports,omitempty"`
 	Static_routes libovsdb.OvsSet `json:"static_routes,omitempty"`
 	Version       libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid          libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid          libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type Logical_Router_Policy struct {
@@ -145,7 +145,7 @@ type Logical_Router_Policy struct {
 	Options      libovsdb.OvsMap `json:"options,omitempty"`
 	Priority     int64           `json:"priority,omitempty"`
 	Version      libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid         libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid         libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type Logical_Router_Port struct {
@@ -161,7 +161,7 @@ type Logical_Router_Port struct {
 	Options          libovsdb.OvsMap `json:"options,omitempty"`
 	Peer             libovsdb.OvsSet `json:"peer,omitempty"`
 	Version          libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid             libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid             libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type Logical_Router_Static_Route struct {
@@ -173,7 +173,7 @@ type Logical_Router_Static_Route struct {
 	Output_port  libovsdb.OvsSet `json:"output_port,omitempty"`
 	Policy       libovsdb.OvsSet `json:"policy,omitempty"`
 	Version      libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid         libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid         libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type Logical_Switch struct {
@@ -187,7 +187,7 @@ type Logical_Switch struct {
 	Ports             libovsdb.OvsSet `json:"ports,omitempty"`
 	Qos_rules         libovsdb.OvsSet `json:"qos_rules,omitempty"`
 	Version           libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid              libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid              libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type Logical_Switch_Port struct {
@@ -207,7 +207,7 @@ type Logical_Switch_Port struct {
 	Type              string          `json:"type,omitempty"`
 	Up                libovsdb.OvsSet `json:"up,omitempty"`
 	Version           libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid              libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid              libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type Meter struct {
@@ -217,7 +217,7 @@ type Meter struct {
 	Name         string          `json:"name,omitempty"`
 	Unit         string          `json:"unit,omitempty"`
 	Version      libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid         libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid         libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type Meter_Band struct {
@@ -226,7 +226,7 @@ type Meter_Band struct {
 	External_ids libovsdb.OvsMap `json:"external_ids,omitempty"`
 	Rate         int64           `json:"rate,omitempty"`
 	Version      libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid         libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid         libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type NAT struct {
@@ -241,7 +241,7 @@ type NAT struct {
 	Options             libovsdb.OvsMap `json:"options,omitempty"`
 	Type                string          `json:"type,omitempty"`
 	Version             libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid                libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid                libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type NB_Global struct {
@@ -258,7 +258,7 @@ type NB_Global struct {
 	Sb_cfg_timestamp int64           `json:"sb_cfg_timestamp,omitempty"`
 	Ssl              libovsdb.OvsSet `json:"ssl,omitempty"`
 	Version          libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid             libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid             libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type Port_Group struct {
@@ -267,7 +267,7 @@ type Port_Group struct {
 	Name         string          `json:"name,omitempty"`
 	Ports        libovsdb.OvsSet `json:"ports,omitempty"`
 	Version      libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid         libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid         libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type QoS struct {
@@ -278,7 +278,7 @@ type QoS struct {
 	Match        string          `json:"match,omitempty"`
 	Priority     int64           `json:"priority,omitempty"`
 	Version      libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid         libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid         libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type SSL struct {
@@ -290,5 +290,5 @@ type SSL struct {
 	Ssl_ciphers       string          `json:"ssl_ciphers,omitempty"`
 	Ssl_protocols     string          `json:"ssl_protocols,omitempty"`
 	Version           libovsdb.UUID   `json:"_version,omitempty"`
-	Uuid              libovsdb.UUID   `json:"uuid,omitempty"`
+	Uuid              libovsdb.UUID   `json:"_uuid,omitempty"`
 }
