@@ -9,6 +9,7 @@ DATABASE-PREFIX := ovsdb
 SERVICE-NAME :=nb
 SCHEMA-FILE := ovn-nb.ovsschema
 LOAD-SERVER-DATA=TRUE := true
+PID-FILE :=/tmp/nb-ovsdb.pid
 
 .PHONY: etcd
 etcd:
@@ -27,7 +28,8 @@ SERVER_ARGS := \
 		-database-prefix $(DATABASE-PREFIX) \
 		-service-name $(SERVICE-NAME) \
 		-schema-file $(SCHEMA-FILE) \
-		-load-server-data $(LOAD-SERVER-DATA)
+		-load-server-data $(LOAD-SERVER-DATA) \
+		-pid-file $(PID-FILE)
 
 .PHONY: dbg-server
 dbg-server: 
