@@ -1,8 +1,10 @@
 package ovsdb
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io/ioutil"
 	"sync"
 	"time"
 
@@ -19,7 +21,7 @@ type Databaser interface {
 	RemoveMonitors(dbName string, updaters map[string][]string, handler handlerKey)
 	RemoveMonitor(dbName string)
 	AddSchema(schemaName, schemaFile string) error
-	GetSchemas() map[string]string
+	GetSchemaFiles() []string
 	GetData(key *common.Key, keysOnly bool) (*clientv3.GetResponse, error)
 	PutData(ctx context.Context, key *common.Key, obj interface{}) error
 	GetSchema(name string) (string, bool)
@@ -28,8 +30,9 @@ type Databaser interface {
 type DatabaseEtcd struct {
 	cli *clientv3.Client
 	// dataBaseName -> schema
-	Schemas map[string]string
-	mu      sync.Mutex
+	Schemas     map[string]string
+	SchemaFiles []string
+	mu          sync.Mutex
 	// databaseName -> monitor
 	// We have a single monitor (etcd watcher) per database
 	monitors map[string]*monitor
@@ -84,12 +87,19 @@ func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error)
 }
 
 func (con *DatabaseEtcd) AddSchema(schemaName, schemaFile string) error {
-	con.Schemas[schemaName] = schemaFile
+	data, err := ioutil.ReadFile(schemaFile)
+	if err != nil {
+		return err
+	}
+	buffer := new(bytes.Buffer)
+	json.Compact(buffer, data)
+	con.Schemas[schemaName] = buffer.String()
+	con.SchemaFiles = append(con.SchemaFiles, schemaFile)
 	return nil
 }
 
-func (con *DatabaseEtcd) GetSchemas() map[string]string {
-	return con.Schemas
+func (con *DatabaseEtcd) GetSchemaFiles() []string {
+	return con.SchemaFiles
 }
 
 func (con *DatabaseEtcd) GetData(key *common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
@@ -218,8 +228,8 @@ func (con *DatabaseMock) AddSchema(schemaName, schemaFile string) error {
 	return con.Error
 }
 
-func (con *DatabaseMock) GetSchemas() map[string]string {
-	return map[string]string{}
+func (con *DatabaseMock) GetSchemaFiles() []string {
+	return []string{}
 }
 
 func (con *DatabaseMock) GetData(key *common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
