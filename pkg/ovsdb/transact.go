@@ -701,7 +701,10 @@ func NewMutation(tableSchema *libovsdb.TableSchema, mutation []interface{}) (*Mu
 
 func (m *Mutation) MutateInteger(row *map[string]interface{}) error {
 	original := (*row)[m.Column].(int)
-	value := m.Value.(int)
+	value, ok := m.Value.(int)
+	if !ok {
+		return errors.New(E_CONSTRAINT_VIOLATION)
+	}
 	mutated := original
 	var err error
 	switch m.Mutator {
@@ -732,7 +735,10 @@ func (m *Mutation) MutateInteger(row *map[string]interface{}) error {
 
 func (m *Mutation) MutateReal(row *map[string]interface{}) error {
 	original := (*row)[m.Column].(float64)
-	value := m.Value.(float64)
+	value, ok := m.Value.(float64)
+	if !ok {
+		return errors.New(E_CONSTRAINT_VIOLATION)
+	}
 	mutated := original
 	var err error
 	switch m.Mutator {
@@ -867,14 +873,14 @@ func (m *Mutation) Mutate(row *map[string]interface{}) error {
 	if !m.ColumnSchema.Mutable {
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
-	switch (*row)[m.Column].(type) {
-	case int:
+	switch m.ColumnSchema.Type {
+	case libovsdb.TypeInteger:
 		return m.MutateInteger(row)
-	case float64:
+	case libovsdb.TypeReal:
 		return m.MutateReal(row)
-	case libovsdb.OvsSet:
+	case libovsdb.TypeSet:
 		return m.MutateSet(row)
-	case libovsdb.OvsMap:
+	case libovsdb.TypeMap:
 		return m.MutateMap(row)
 	default:
 		return errors.New(E_CONSTRAINT_VIOLATION)
