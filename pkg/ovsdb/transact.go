@@ -934,7 +934,7 @@ func etcdGetByWhere(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libo
 		return err
 	}
 	key := common.NewDataKey(txn.request.DBName, ovsOp.Table, uuid)
-	etcdGetData(txn, key)
+	etcdGetData(txn, &key)
 	return nil
 }
 
@@ -974,7 +974,8 @@ func preInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 	if ovsOp.UUIDName == "" {
 		return nil
 	}
-	etcdGetData(txn, common.NewTableKey(txn.request.DBName, ovsOp.Table))
+	key := common.NewTableKey(txn.request.DBName, ovsOp.Table)
+	etcdGetData(txn, &key)
 	return nil
 }
 
@@ -998,10 +999,10 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 
 	ovsResult.Count = ovsResult.Count + 1
 	key := common.GenerateDataKey(txn.request.DBName, ovsOp.Table) /* generate RFC4122 UUID */
-	row := txn.cache.Row(*key)
+	row := txn.cache.Row(key)
 	*row = ovsOp.Row
 	txn.schemas.Default(txn.request.DBName, ovsOp.Table, row)
-	return etcdPutRow(txn, key, row)
+	return etcdPutRow(txn, &key, row)
 }
 
 /* select */
@@ -1058,8 +1059,8 @@ func doUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 			return err
 		}
 		key := common.NewDataKey(txn.request.DBName, ovsOp.Table, uuid)
-		*(txn.cache.Row(*key)) = *row
-		etcdPutRow(txn, key, row)
+		*(txn.cache.Row(key)) = *row
+		etcdPutRow(txn, &key, row)
 	}
 	return nil
 }
@@ -1085,8 +1086,8 @@ func doMutate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 			return err
 		}
 		key := common.NewDataKey(txn.request.DBName, ovsOp.Table, uuid)
-		*(txn.cache.Row(*key)) = *row
-		etcdPutRow(txn, key, row)
+		*(txn.cache.Row(key)) = *row
+		etcdPutRow(txn, &key, row)
 	}
 	return nil
 }
@@ -1107,7 +1108,8 @@ func doDelete(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 			continue
 		}
 		ovsResult.Count = ovsResult.Count + 1
-		etcdDelRow(txn, common.NewDataKey(txn.request.DBName, ovsOp.Table, uuid))
+		key := common.NewDataKey(txn.request.DBName, ovsOp.Table, uuid)
+		etcdDelRow(txn, &key)
 	}
 	return nil
 }

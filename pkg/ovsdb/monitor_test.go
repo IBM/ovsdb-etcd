@@ -1,8 +1,11 @@
 package ovsdb
 
 import (
+	"encoding/json"
+	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 	"testing"
 
+	guuid "github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -25,92 +28,100 @@ func TestRowUpdate(t *testing.T) {
 		err          error
 	}
 
+	data := map[string]interface{}{"c1": "v1", "c2": "v2"}
+	data[COL_UUID] = libovsdb.UUID{GoUUID: guuid.NewString()}
+	data1Json, err := json.Marshal(data)
+	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
+
+	data["c2"] = "v3"
+	data2Json, err := json.Marshal(data)
+	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
+
 	tests := map[string]struct {
 		updater updater
 		op      operation
 	}{"allColumns-v1": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{}, true),
 		op: operation{PUT: {event: clientv3.Event{Type: mvccpb.PUT,
-			Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"),
-				Value: []byte("{\"c1\":\"v1\",\"c2\":\"v2\"}"), CreateRevision: 1, ModRevision: 1}},
+			Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"),
+				Value: data1Json, CreateRevision: 1, ModRevision: 1}},
 			expRowUpdate: &ovsjson.RowUpdate{New: &map[string]interface{}{"c1": "v1", "c2": "v2"}}},
 			DELETE: {event: clientv3.Event{Type: mvccpb.DELETE,
-				PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"),
-					Value: []byte("{\"c1\":\"v1\",\"c2\":\"v2\"}")},
+				PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"),
+					Value: data1Json},
 				Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid")}},
 				expRowUpdate: &ovsjson.RowUpdate{Old: &map[string]interface{}{"c1": "v1", "c2": "v2"}}},
 			MODIFY: {event: clientv3.Event{Type: mvccpb.PUT,
-				PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"),
-					Value: []byte("{\"c1\":\"v1\",\"c2\":\"v2\"}")},
+				PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json},
 				Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"),
-					Value: []byte("{\"c1\":\"v1\",\"c2\":\"v3\"}"), CreateRevision: 1, ModRevision: 2}},
+					Value: data2Json, CreateRevision: 1, ModRevision: 2}},
 				expRowUpdate: &ovsjson.RowUpdate{Old: &map[string]interface{}{"c2": "v2"}, New: &map[string]interface{}{"c1": "v1", "c2": "v3"}}}}},
-		"SingleColumn-v1": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{Columns: []string{"c1"}}, true),
+		"SingleColumn-v1": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{Columns: []string{"c2"}}, true),
 			op: operation{PUT: {event: clientv3.Event{Type: mvccpb.PUT,
-				Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"),
-					Value: []byte("{\"c1\":\"v1\",\"c2\":\"v2\"}"), CreateRevision: 1, ModRevision: 1}},
-				expRowUpdate: &ovsjson.RowUpdate{New: &map[string]interface{}{"c1": "v1"}}},
+				Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"),
+					Value: data1Json, CreateRevision: 1, ModRevision: 1}},
+				expRowUpdate: &ovsjson.RowUpdate{New: &map[string]interface{}{"c2": "v2"}}},
 				DELETE: {event: clientv3.Event{Type: mvccpb.DELETE,
-					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"), Value: []byte("{\"c1\":\"v1\",\"c2\":\"v2\"}")},
-					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/uuid")}},
-					expRowUpdate: &ovsjson.RowUpdate{Old: &map[string]interface{}{"c1": "v1"}}},
+					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json},
+					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/000")}},
+					expRowUpdate: &ovsjson.RowUpdate{Old: &map[string]interface{}{"c2": "v2"}}},
 				MODIFY: {event: clientv3.Event{Type: mvccpb.PUT,
-					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"), Value: []byte("{\"c1\":\"v1\",\"c2\":\"v2\"}")},
-					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"), Value: []byte("{\"c1\":\"v3\",\"c2\":\"v3\"}"), CreateRevision: 1, ModRevision: 2}},
-					expRowUpdate: &ovsjson.RowUpdate{Old: &map[string]interface{}{"c1": "v1"}, New: &map[string]interface{}{"c1": "v3"}}}}},
+					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json},
+					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data2Json, CreateRevision: 1, ModRevision: 2}},
+					expRowUpdate: &ovsjson.RowUpdate{Old: &map[string]interface{}{"c2": "v2"}, New: &map[string]interface{}{"c2": "v3"}}}}},
 		"ZeroColumn-v1": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{Columns: []string{"c3"}}, true),
 			op: operation{PUT: {event: clientv3.Event{Type: mvccpb.PUT,
-				Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"), Value: []byte("{\"c1\":\"v1\",\"c2\":\"v2\"}"), CreateRevision: 1, ModRevision: 1}},
+				Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json, CreateRevision: 1, ModRevision: 1}},
 				expRowUpdate: nil},
 				DELETE: {event: clientv3.Event{Type: mvccpb.DELETE,
-					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"), Value: []byte("{\"c1\":\"v1\",\"c2\":\"v2\"}")},
-					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/uuid")}},
+					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json},
+					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/000")}},
 					expRowUpdate: nil},
 				MODIFY: {event: clientv3.Event{Type: mvccpb.PUT,
-					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"), Value: []byte("{\"c1\":\"v1\",\"c2\":\"v2\"}")},
-					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"), Value: []byte("{\"c1\":\"v1\",\"c2\":\"v3\"}"), CreateRevision: 1, ModRevision: 2}},
+					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json},
+					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data2Json, CreateRevision: 1, ModRevision: 2}},
 					expRowUpdate: nil}}},
 
 		"allColumns-v2": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{}, false),
 			op: operation{PUT: {event: clientv3.Event{Type: mvccpb.PUT,
-				Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"), Value: []byte("{\"c1\":\"v1\",\"c2\":\"v2\"}"), CreateRevision: 1, ModRevision: 1}},
+				Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json, CreateRevision: 1, ModRevision: 1}},
 				expRowUpdate: &ovsjson.RowUpdate{Insert: &map[string]interface{}{"c1": "v1", "c2": "v2"}}},
 				DELETE: {event: clientv3.Event{Type: mvccpb.DELETE,
-					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"), Value: []byte("{\"c1\":\"v1\",\"c2\":\"v2\"}")},
-					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/uuid")}},
+					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json},
+					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/000")}},
 					expRowUpdate: &ovsjson.RowUpdate{Delete: nil}},
 				MODIFY: {event: clientv3.Event{Type: mvccpb.PUT,
-					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"), Value: []byte("{\"c1\":\"v1\",\"c2\":\"v2\"}")},
-					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"), Value: []byte("{\"c1\":\"v1\",\"c2\":\"v3\"}"), CreateRevision: 1, ModRevision: 2}},
+					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json},
+					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data2Json, CreateRevision: 1, ModRevision: 2}},
 					expRowUpdate: &ovsjson.RowUpdate{Modify: &map[string]interface{}{"c2": "v3"}}}}},
-		"SingleColumn-v2": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{Columns: []string{"c1"}}, false),
+		"SingleColumn-v2": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{Columns: []string{"c2"}}, false),
 			op: operation{PUT: {event: clientv3.Event{Type: mvccpb.PUT,
-				Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"), Value: []byte("{\"c1\":\"v1\",\"c2\":\"v2\"}"), CreateRevision: 1, ModRevision: 1}},
-				expRowUpdate: &ovsjson.RowUpdate{Insert: &map[string]interface{}{"c1": "v1"}}},
+				Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json, CreateRevision: 1, ModRevision: 1}},
+				expRowUpdate: &ovsjson.RowUpdate{Insert: &map[string]interface{}{"c2": "v2"}}},
 				DELETE: {event: clientv3.Event{Type: mvccpb.DELETE,
-					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"), Value: []byte("{\"c1\":\"v1\",\"c2\":\"v2\"}")},
-					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/uuid")}},
+					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json},
+					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/000")}},
 					expRowUpdate: &ovsjson.RowUpdate{Delete: nil}},
 				MODIFY: {event: clientv3.Event{Type: mvccpb.PUT,
-					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"), Value: []byte("{\"c1\":\"v1\",\"c2\":\"v2\"}")},
-					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"), Value: []byte("{\"c1\":\"v3\",\"c2\":\"v3\"}"), CreateRevision: 1, ModRevision: 2}},
-					expRowUpdate: &ovsjson.RowUpdate{Modify: &map[string]interface{}{"c1": "v3"}}}}},
+					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json},
+					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data2Json, CreateRevision: 1, ModRevision: 2}},
+					expRowUpdate: &ovsjson.RowUpdate{Modify: &map[string]interface{}{"c2": "v3"}}}}},
 		"ZeroColumn-v2": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{Columns: []string{"c3"}}, false),
 			op: operation{PUT: {event: clientv3.Event{Type: mvccpb.PUT,
-				Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"), Value: []byte("{\"c1\":\"v1\",\"c2\":\"v2\"}"), CreateRevision: 1, ModRevision: 1}},
+				Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json, CreateRevision: 1, ModRevision: 1}},
 				expRowUpdate: nil},
 				DELETE: {event: clientv3.Event{Type: mvccpb.DELETE,
-					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"), Value: []byte("{\"c1\":\"v1\",\"c2\":\"v2\"}")},
-					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/uuid")}},
+					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json},
+					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/000")}},
 					expRowUpdate: &ovsjson.RowUpdate{Delete: nil}},
 				MODIFY: {event: clientv3.Event{Type: mvccpb.PUT,
-					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"), Value: []byte("{\"c1\":\"v1\",\"c2\":\"v2\"}")},
-					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"), Value: []byte("{\"c1\":\"v1\",\"c2\":\"v3\"}"), CreateRevision: 1, ModRevision: 2}},
+					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json},
+					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data2Json, CreateRevision: 1, ModRevision: 2}},
 					expRowUpdate: nil}}},
 	}
 	for name, ts := range tests {
 		updater := ts.updater
 		for opName, op := range ts.op {
-			row, err := updater.prepareRowUpdate(&op.event)
+			row, _, err := updater.prepareRowUpdate(&op.event)
 			if op.err != nil {
 				assert.EqualErrorf(t, err, op.err.Error(), "[%s-%s test] expected error %s, got %v", name, opName, op.err.Error(), err)
 				continue
@@ -135,27 +146,32 @@ func TestRowUpdate(t *testing.T) {
 }
 
 func TestAddRemoveUpdaters(t *testing.T) {
-	common.SetPrefix("ovsdb")
+	common.SetPrefix("ovsdb/nb")
 	compareMonitorStates := func(expected, actual *monitor) {
 		assert.Equal(t, expected.handlers, actual.handlers, "Handlers maps should be equals")
 		assert.Equal(t, expected.key2Updaters, actual.key2Updaters, "Key to updater maps should be equals")
 		assert.Equal(t, expected.upater2handlers, actual.upater2handlers, "Updaters to handlers maps should be equals")
 	}
-
-	m := newMonitor("dbTest", &DatabaseMock{})
+	dbName := "dbtest"
+	t1 := "table1"
+	t2 := "table2"
+	m := newMonitor(dbName, &DatabaseMock{})
 	mcr1 := ovsjson.MonitorCondRequest{Columns: []string{"c1", "c3", "c2"}}
 	mcr2 := ovsjson.MonitorCondRequest{Columns: []string{"c4"}}
 	mcr3 := ovsjson.MonitorCondRequest{Columns: []string{"a1"}}
 	u1 := mcrToUpdater(mcr1, true)
 	u2 := mcrToUpdater(mcr2, true)
 	u3 := mcrToUpdater(mcr3, true)
-	m1 := map[string][]*updater{"table1": {u1, u2}, "table2": {u3}}
+	k1 := common.NewTableKey(dbName, t1)
+	k2 := common.NewTableKey(dbName, t2)
+
+	m1 := Key2Updaters{k1: {*u1, *u2}, k2: {*u3}}
 	h1 := handlerKey{jsonValue: "jsonValue1"}
 
 	m.addUpdaters(m1, h1)
 	expected := &monitor{
 		handlers:        map[handlerKey]bool{h1: true},
-		key2Updaters:    map[string][]updater{"ovsdb/dbTest/table1": {*u1, *u2}, "ovsdb/dbTest/table2": {*u3}},
+		key2Updaters:    Key2Updaters{k1: {*u1, *u2}, k2: {*u3}},
 		upater2handlers: map[string][]handlerKey{u1.key: {h1}, u2.key: {h1}, u3.key: {h1}}}
 	compareMonitorStates(expected, m)
 
@@ -163,27 +179,27 @@ func TestAddRemoveUpdaters(t *testing.T) {
 	m.addUpdaters(m1, h2)
 	expected2 := &monitor{
 		handlers:        map[handlerKey]bool{h1: true, h2: true},
-		key2Updaters:    map[string][]updater{"ovsdb/dbTest/table1": {*u1, *u2}, "ovsdb/dbTest/table2": {*u3}},
+		key2Updaters:    Key2Updaters{k1: {*u1, *u2}, k2: {*u3}},
 		upater2handlers: map[string][]handlerKey{u1.key: {h1, h2}, u2.key: {h1, h2}, u3.key: {h1, h2}}}
 	compareMonitorStates(expected2, m)
 
 	u11 := mcrToUpdater(mcr1, false)
-	m11 := map[string][]*updater{"table1": {u11}}
+	m11 := Key2Updaters{k1: {*u11}}
 	h11 := handlerKey{jsonValue: "jsonValue11"}
 	m.addUpdaters(m11, h11)
 	expected3 := &monitor{
 		handlers:        map[handlerKey]bool{h1: true, h2: true, h11: true},
-		key2Updaters:    map[string][]updater{"ovsdb/dbTest/table1": {*u1, *u2, *u11}, "ovsdb/dbTest/table2": {*u3}},
+		key2Updaters:    Key2Updaters{k1: {*u1, *u2, *u11}, k2: {*u3}},
 		upater2handlers: map[string][]handlerKey{u1.key: {h1, h2}, u2.key: {h1, h2}, u3.key: {h1, h2}, u11.key: {h11}}}
 	compareMonitorStates(expected3, m)
 
-	m.removeUpdaters(map[string][]string{"table1": {u11.key}}, h11)
+	m.removeUpdaters(map[string][]string{t1: {u11.key}}, h11)
 	compareMonitorStates(expected2, m)
 
-	m.removeUpdaters(map[string][]string{"table1": {u2.key, u1.key}, "table2": {u3.key}}, h1)
+	m.removeUpdaters(map[string][]string{t1: {u2.key, u1.key}, t2: {u3.key}}, h1)
 	expected4 := &monitor{
 		handlers:        map[handlerKey]bool{h2: true},
-		key2Updaters:    map[string][]updater{"ovsdb/dbTest/table1": {*u1, *u2}, "ovsdb/dbTest/table2": {*u3}},
+		key2Updaters:    Key2Updaters{k1: {*u1, *u2}, k2: {*u3}},
 		upater2handlers: map[string][]handlerKey{u1.key: {h2}, u2.key: {h2}, u3.key: {h2}}}
 	compareMonitorStates(expected4, m)
 }

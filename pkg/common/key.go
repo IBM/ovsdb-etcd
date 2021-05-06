@@ -78,45 +78,49 @@ func (k *Key) DeploymentKeyString() string {
 	return k.Prefix
 }
 
+func (k *Key) ToTableKey() Key {
+	return Key{Prefix: k.Prefix, DBName: k.DBName, TableName: k.TableName}
+}
+
 // Creates a new data key with a generated uuid
-func GenerateDataKey(dbName, tableName string) *Key {
+func GenerateDataKey(dbName, tableName string) Key {
 	return NewDataKey(dbName, tableName, guuid.NewString()) /* generate RFC4122 UUID */
 }
 
 // Returns a new Data key. If the given uuid is an empty string, the return key will point to the entire table, and the
 // this function call is equals to call `NewTableKey` with the same dbName and tableName parameters.
-func NewDataKey(dbName, tableName, uuid string) *Key {
-	return &Key{Prefix: prefix, DBName: dbName, TableName: tableName, UUID: uuid}
+func NewDataKey(dbName, tableName, uuid string) Key {
+	return Key{Prefix: prefix, DBName: dbName, TableName: tableName, UUID: uuid}
 }
 
 // Returns a new Comment key. If the given commentID is an empty string, the return key will point to the entire
 // comments table, and the this function call is equals to call `NewCommentTableKey`.
-func NewCommentKey(commentID string) *Key {
+func NewCommentKey(commentID string) Key {
 	return NewDataKey(INTERNAL_DB, COMMENTS, commentID)
 }
 
 // Returns a new Lock key. If the given lockID is an empty string, the return key will point to the entire
 // locks table, and the this function call is equals to call `NewLockTableKey`.
-func NewLockKey(lockID string) *Key {
+func NewLockKey(lockID string) Key {
 	return NewDataKey(INTERNAL_DB, LOCKS, lockID)
 }
 
 // Helper function, which returns a key to entire table
-func NewTableKey(dbName, tableName string) *Key {
+func NewTableKey(dbName, tableName string) Key {
 	return NewDataKey(dbName, tableName, "")
 }
 
 // Helper function, which returns a key to the Comments table
-func NewCommentTableKey() *Key {
+func NewCommentTableKey() Key {
 	return NewCommentKey("")
 }
 
 // Helper function, which returns a key to the Locks table
-func NewLockTableKey() *Key {
+func NewLockTableKey() Key {
 	return NewLockKey("")
 }
 
 // Returns a key to entire database of this service
-func NewDBPrefixKey(dbName string) *Key {
-	return &Key{Prefix: prefix, DBName: dbName}
+func NewDBPrefixKey(dbName string) Key {
+	return Key{Prefix: prefix, DBName: dbName}
 }

@@ -143,7 +143,8 @@ func testEtcdCleanup(t *testing.T, dbname, table string) {
 	cli, err := testEtcdNewCli()
 	assert.Nil(t, err)
 	ctx := context.TODO()
-	_, err = cli.Delete(ctx, common.NewTableKey(dbname, table).TableKeyString(), clientv3.WithPrefix())
+	key := common.NewTableKey(dbname, table)
+	_, err = cli.Delete(ctx, key.TableKeyString(), clientv3.WithPrefix())
 	assert.Nil(t, err)
 }
 
@@ -175,7 +176,8 @@ func testEtcdDump(t *testing.T, dbname, table string) map[string]interface{} {
 	cli, err := testEtcdNewCli()
 	assert.Nil(t, err)
 	ctx := context.TODO()
-	res, err := cli.Get(ctx, common.NewTableKey(dbname, table).TableKeyString(), clientv3.WithPrefix())
+	key := common.NewTableKey(dbname, table)
+	res, err := cli.Get(ctx, key.TableKeyString(), clientv3.WithPrefix())
 	dump, err := testMergeKvs(res.Kvs, table)
 	assert.Nil(t, err)
 	return *dump
