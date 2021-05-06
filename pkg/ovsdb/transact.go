@@ -644,13 +644,9 @@ func isRowSelectedByCond(tableSchema *libovsdb.TableSchema, row *map[string]inte
 }
 
 // XXX: shared with monitors
-func reduceRowByColumns(tableSchema *libovsdb.TableSchema, row *map[string]interface{}, columns []string) (*map[string]interface{}, error) {
+func reduceRowByColumns(row *map[string]interface{}, columns []string) (*map[string]interface{}, error) {
 	newRow := map[string]interface{}{}
 	for _, column := range columns {
-		columnSchema := tableSchema.LookupColumn(column)
-		if columnSchema == nil {
-			return nil, errors.New(E_CONSTRAINT_VIOLATION)
-		}
 		newRow[column] = (*row)[column]
 	}
 	return &newRow, nil
@@ -1019,7 +1015,7 @@ func doSelect(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		if !ok {
 			continue
 		}
-		resultRow, err := reduceRowByColumns(tableSchema, row, ovsOp.Columns)
+		resultRow, err := reduceRowByColumns(row, ovsOp.Columns)
 		if err != nil {
 			return err
 		}
@@ -1133,7 +1129,7 @@ func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Ope
 		if !ok {
 			continue
 		}
-		newRow, err := reduceRowByColumns(tableSchema, row, ovsOp.Columns)
+		newRow, err := reduceRowByColumns(row, ovsOp.Columns)
 		if err != nil {
 			return err
 		}
