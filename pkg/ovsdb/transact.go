@@ -23,7 +23,6 @@ import (
 	"reflect"
 	"time"
 
-	guuid "github.com/google/uuid"
 	"github.com/jinzhu/copier"
 	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	"go.etcd.io/etcd/api/v3/mvccpb"
@@ -594,8 +593,7 @@ func getUUIDIfExists(tableSchema *libovsdb.TableSchema, cond1 interface{}) (stri
 	if !ok {
 		return "", errors.New(E_INTERNAL_ERROR)
 	}
-	// XXX: replace libovsdb.validateUUID() implementation
-	_, err = guuid.Parse(ovsUUID.GoUUID)
+	err = ovsUUID.ValidateUUID()
 	if err != nil {
 		return "", err
 	}
@@ -646,8 +644,16 @@ func isRowSelectedByCond(tableSchema *libovsdb.TableSchema, row *map[string]inte
 }
 
 // XXX: shared with monitors
-func reduceRowByColumns(row *map[string]interface{}, columns []string) *map[string]interface{} {
-	return row // FIXME: missing implementation
+func reduceRowByColumns(tableSchema *libovsdb.TableSchema, row *map[string]interface{}, columns []string) (*map[string]interface{}, error) {
+	newRow := map[string]interface{}{}
+	for _, column := range columns {
+		columnSchema := tableSchema.LookupColumn(column)
+		if columnSchema == nil {
+			return nil, errors.New(E_CONSTRAINT_VIOLATION)
+		}
+		newRow[column] = (*row)[column]
+	}
+	return &newRow, nil
 }
 
 const (
@@ -976,6 +982,14 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 			}
 		}
 	}
+
+	ok := txn.schemas.Validate(txn.request.DBName, ovsOp.Table, &ovsOp.Row)
+	if !ok {
+		err := errors.New(E_CONSTRAINT_VIOLATION)
+		ovsResult.Error = err.Error()
+		return err
+	}
+
 	ovsResult.Count = ovsResult.Count + 1
 	key := common.GenerateDataKey(txn.request.DBName, ovsOp.Table) /* generate RFC4122 UUID */
 	row := txn.cache.Row(*key)
@@ -999,7 +1013,10 @@ func doSelect(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		if !ok {
 			continue
 		}
-		resultRow := reduceRowByColumns(row, ovsOp.Columns)
+		resultRow, err := reduceRowByColumns(tableSchema, row, ovsOp.Columns)
+		if err != nil {
+			return err
+		}
 		ovsResult.Count = ovsResult.Count + 1
 		ovsResult.Rows = append(ovsResult.Rows, *resultRow)
 	}
@@ -1021,6 +1038,14 @@ func doUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		if !ok {
 			continue
 		}
+
+		ok = txn.schemas.Validate(txn.request.DBName, ovsOp.Table, &ovsOp.Row)
+		if !ok {
+			err := errors.New(E_CONSTRAINT_VIOLATION)
+			ovsResult.Error = err.Error()
+			return err
+		}
+
 		ovsResult.Count = ovsResult.Count + 1
 		err = RowUpdate(tableSchema, row, ovsOp.Row)
 		if err != nil {
@@ -1102,7 +1127,11 @@ func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Ope
 		if !ok {
 			continue
 		}
-		rows = append(rows, *(reduceRowByColumns(row, ovsOp.Columns)))
+		newRow, err := reduceRowByColumns(tableSchema, row, ovsOp.Columns)
+		if err != nil {
+			return err
+		}
+		rows = append(rows, *newRow)
 	}
 
 	var err error

@@ -396,6 +396,10 @@ func (columnSchema *ColumnSchema) Default() interface{} {
 		return ""
 	case TypeUUID:
 		return UUID{"00000000-0000-0000-0000-000000000000"}
+	case TypeSet:
+		return OvsSet{}
+	case TypeMap:
+		return OvsMap{}
 	default:
 		panic(fmt.Sprintf("Unsupported type %s", columnSchema.Type))
 	}
@@ -450,6 +454,14 @@ func (columnSchema *ColumnSchema) Convert(from interface{}) (interface{}, error)
 		return to, nil
 	case TypeUUID:
 		var to UUID
+		json.Unmarshal(data, &to)
+		return to, nil
+	case TypeSet:
+		var to OvsSet
+		json.Unmarshal(data, &to)
+		return to, nil
+	case TypeMap:
+		var to OvsMap
 		json.Unmarshal(data, &to)
 		return to, nil
 	default:
@@ -525,4 +537,177 @@ func (schemas *Schemas) LookupTable(dbname, table string) *TableSchema {
 		panic(fmt.Sprintf("Missing schema for database %s", dbname))
 	}
 	return databaseSchema.LookupTable(table)
+}
+
+/* validate */
+func (baseType *BaseType) ValidateInteger(value interface{}) bool {
+	_, ok := value.(int)
+	return ok
+}
+
+func (baseType *BaseType) ValidateReal(value interface{}) bool {
+	_, ok := value.(float64)
+	return ok
+}
+
+func (baseType *BaseType) ValidateBoolean(value interface{}) bool {
+	_, ok := value.(bool)
+	return ok
+}
+
+func (baseType *BaseType) ValidateString(value interface{}) bool {
+	_, ok := value.(string)
+	return ok
+}
+
+func (baseType *BaseType) ValidateUUID(value interface{}) bool {
+	_, ok := value.(UUID)
+	return ok
+}
+
+func (baseType *BaseType) Validate(value interface{}) bool {
+	if baseType == nil {
+		return false
+	}
+	switch baseType.Type {
+	case TypeInteger:
+		return baseType.ValidateInteger(value)
+	case TypeString:
+		return baseType.ValidateString(value)
+	case TypeBoolean:
+		return baseType.ValidateBoolean(value)
+	case TypeReal:
+		return baseType.ValidateReal(value)
+	case TypeUUID:
+		return baseType.ValidateUUID(value)
+	default:
+		panic(fmt.Sprintf("Unsupported value type %s", baseType.Type))
+	}
+}
+
+func (columnSchema *ColumnSchema) ValidateInteger(value interface{}) bool {
+	_, ok := value.(int)
+	return ok
+}
+
+func (columnSchema *ColumnSchema) ValidateReal(value interface{}) bool {
+	_, ok := value.(float64)
+	return ok
+}
+
+func (columnSchema *ColumnSchema) ValidateBoolean(value interface{}) bool {
+	_, ok := value.(bool)
+	return ok
+}
+
+func (columnSchema *ColumnSchema) ValidateString(value interface{}) bool {
+	_, ok := value.(string)
+	return ok
+}
+
+func (columnSchema *ColumnSchema) ValidateUUID(value interface{}) bool {
+	_, ok := value.(UUID)
+	return ok
+}
+
+func (columnSchema *ColumnSchema) ValidateSet(value interface{}) bool {
+	setval, ok := value.(OvsSet)
+	if !ok {
+		return false
+	}
+
+	l := len(setval.GoSet)
+	if l < columnSchema.TypeObj.Min {
+		return false
+	}
+	if columnSchema.TypeObj.Max != Unlimited && columnSchema.TypeObj.Max < l {
+		return false
+	}
+	for _, val := range setval.GoSet {
+		ok = columnSchema.TypeObj.Value.Validate(val)
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func (columnSchema *ColumnSchema) ValidateMap(value interface{}) bool {
+	mapval, ok := value.(OvsMap)
+	if !ok {
+		return false
+	}
+
+	l := 0
+	for key, val := range mapval.GoMap {
+		l++
+		ok = columnSchema.TypeObj.Key.Validate(key)
+		if !ok {
+			return false
+		}
+		ok = columnSchema.TypeObj.Value.Validate(val)
+		if !ok {
+			return false
+		}
+	}
+
+	if l < columnSchema.TypeObj.Min {
+		return false
+	}
+	if columnSchema.TypeObj.Max != Unlimited && columnSchema.TypeObj.Max < l {
+		return false
+	}
+
+	return true
+}
+
+func (columnSchema *ColumnSchema) Validate(value interface{}) bool {
+	if columnSchema == nil {
+		return false
+	}
+	switch columnSchema.Type {
+	case TypeInteger:
+		return columnSchema.ValidateInteger(value)
+	case TypeReal:
+		return columnSchema.ValidateReal(value)
+	case TypeBoolean:
+		return columnSchema.ValidateBoolean(value)
+	case TypeString:
+		return columnSchema.ValidateString(value)
+	case TypeUUID:
+		return columnSchema.ValidateUUID(value)
+	case TypeSet:
+		return columnSchema.ValidateSet(value)
+	case TypeMap:
+		return columnSchema.ValidateMap(value)
+	default:
+		panic(fmt.Sprintf("Unsupported type %s", columnSchema.Type))
+	}
+}
+
+func (tableSchema *TableSchema) Validate(row *map[string]interface{}) bool {
+	for column, columnSchema := range tableSchema.Columns {
+		if _, ok := (*row)[column]; ok {
+			if ok = columnSchema.Validate((*row)[column]); !ok {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (databaseSchema *DatabaseSchema) Validate(table string, row *map[string]interface{}) bool {
+	tableSchema, ok := databaseSchema.Tables[table]
+	if !ok {
+		panic(fmt.Sprintf("Missing schema for table %s", table))
+	}
+	return tableSchema.Validate(row)
+}
+
+func (schemas *Schemas) Validate(dbname, table string, row *map[string]interface{}) bool {
+	databaseSchema, ok := (*schemas)[dbname]
+	if !ok {
+		panic(fmt.Sprintf("Missing schema for database %s", table))
+	}
+	return databaseSchema.Validate(table, row)
 }

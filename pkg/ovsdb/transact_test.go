@@ -76,23 +76,46 @@ var testSchemaAtomic *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 	},
 }
 
-var testSchemaExtended *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
-	Name:    "extended",
+var testSchemaSet *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
+	Name:    "set",
 	Version: "0.0.0.0",
 	Tables: map[string]libovsdb.TableSchema{
 		"table1": {
 			Columns: map[string]*libovsdb.ColumnSchema{
-				"set": {
+				"string": {
 					Type: libovsdb.TypeSet,
 					TypeObj: &libovsdb.ColumnType{
-						Key: &libovsdb.BaseType{
+						Value: &libovsdb.BaseType{
 							Type: libovsdb.TypeString,
 						},
 						Max: libovsdb.Unlimited,
 						Min: 0,
 					},
+					Mutable: true,
 				},
-				"map": {
+				"integer": {
+					Type: libovsdb.TypeSet,
+					TypeObj: &libovsdb.ColumnType{
+						Value: &libovsdb.BaseType{
+							Type: libovsdb.TypeString,
+						},
+						Max: 2,
+						Min: 0,
+					},
+					Mutable: true,
+				},
+			},
+		},
+	},
+}
+
+var testSchemaMap *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
+	Name:    "map",
+	Version: "0.0.0.0",
+	Tables: map[string]libovsdb.TableSchema{
+		"table1": {
+			Columns: map[string]*libovsdb.ColumnSchema{
+				"string": {
 					Type: libovsdb.TypeMap,
 					TypeObj: &libovsdb.ColumnType{
 						Key: &libovsdb.BaseType{
@@ -104,6 +127,7 @@ var testSchemaExtended *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 						Min: 1,
 						Max: 1,
 					},
+					Mutable: true,
 				},
 			},
 		},
@@ -177,7 +201,8 @@ func testTransact(t *testing.T, req *libovsdb.Transact) (*libovsdb.TransactRespo
 	txn.AddSchema(testSchemaSimple)
 	txn.AddSchema(testSchemaMutable)
 	txn.AddSchema(testSchemaAtomic)
-	txn.AddSchema(testSchemaExtended)
+	txn.AddSchema(testSchemaSet)
+	txn.AddSchema(testSchemaMap)
 	txn.Commit()
 	return &txn.response, txn
 }
@@ -199,7 +224,7 @@ func testTransactDump(t *testing.T, txn *Transaction, dbname, table string) map[
 	return dump
 }
 
-func TestTransactInsert(t *testing.T) {
+func TestTransactInsertSimple(t *testing.T) {
 	req := &libovsdb.Transact{
 		DBName: "simple",
 		Operations: []libovsdb.Operation{
@@ -219,6 +244,46 @@ func TestTransactInsert(t *testing.T) {
 	dump := testTransactDump(t, txn, "simple", "table1")
 	assert.Equal(t, "val1", dump["key1"])
 	assert.Equal(t, int(0), dump["key2"])
+}
+
+func TestTransactInsertSetOk(t *testing.T) {
+	req := &libovsdb.Transact{
+		DBName: "set",
+		Operations: []libovsdb.Operation{
+			{
+				Op:    OP_INSERT,
+				Table: "table1",
+				Row: map[string]interface{}{
+					"string": libovsdb.OvsSet{GoSet: []interface{}{"a", "b", "c"}},
+				},
+			},
+		},
+	}
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t, "set", "table1")
+	resp, txn := testTransact(t, req)
+	assert.Equal(t, "", resp.Error)
+	dump := testTransactDump(t, txn, "set", "table1")
+	assert.Equal(t, libovsdb.OvsSet{GoSet: []interface{}{"a", "b", "c"}}, dump["string"])
+}
+
+func TestTransactInsertSetError(t *testing.T) {
+	req := &libovsdb.Transact{
+		DBName: "set",
+		Operations: []libovsdb.Operation{
+			{
+				Op:    OP_INSERT,
+				Table: "table1",
+				Row: map[string]interface{}{
+					"string": libovsdb.OvsSet{GoSet: []interface{}{1, 2, 3}},
+				},
+			},
+		},
+	}
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t, "set", "table1")
+	resp, _ := testTransact(t, req)
+	assert.NotEqual(t, "", resp.Error)
 }
 
 func TestTransactSelect(t *testing.T) {
@@ -270,6 +335,60 @@ func TestTransactUpdateSimple(t *testing.T) {
 	assert.Equal(t, "", resp.Error)
 	dump := testEtcdDump(t, "simple", "table1")
 	assert.Equal(t, "val2", dump["key1"])
+}
+
+func TestTransactUpdateMapOk(t *testing.T) {
+	req := &libovsdb.Transact{
+		DBName: "map",
+		Operations: []libovsdb.Operation{
+			{
+				Op:    OP_INSERT,
+				Table: "table1",
+				Row: map[string]interface{}{
+					"string": libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "value1"}},
+				},
+			},
+			{
+				Op:    OP_UPDATE,
+				Table: "table1",
+				Row: map[string]interface{}{
+					"string": libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "value2"}},
+				},
+			},
+		},
+	}
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t, "map", "table1")
+	resp, txn := testTransact(t, req)
+	assert.Equal(t, "", resp.Error)
+	dump := testTransactDump(t, txn, "map", "table1")
+	assert.Equal(t, libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "value2"}}, dump["string"])
+}
+
+func TestTransactUpdateMapError(t *testing.T) {
+	req := &libovsdb.Transact{
+		DBName: "map",
+		Operations: []libovsdb.Operation{
+			{
+				Op:    OP_INSERT,
+				Table: "table1",
+				Row: map[string]interface{}{
+					"string": libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "value1"}},
+				},
+			},
+			{
+				Op:    OP_UPDATE,
+				Table: "table1",
+				Row: map[string]interface{}{
+					"string": libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": int(2) /* error */}},
+				},
+			},
+		},
+	}
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t, "map", "table1")
+	resp, _ := testTransact(t, req)
+	assert.NotEqual(t, "", resp.Error)
 }
 
 func TestTransactUpdateUnmutableError(t *testing.T) {
