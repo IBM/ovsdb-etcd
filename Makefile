@@ -1,3 +1,10 @@
+ROOT_DIR := .
+SERVER_EXECUTEBLE=$(ROOT_DIR)/pkg/cmd/server/server
+
+SERVER_FILES := \
+	$(ROOT_DIR)/pkg/cmd/server/server.go \
+	$(ROOT_DIR)/pkg/cmd/server/testdata.go
+
 .PHONY: install-tools
 install-tools:
 	./scripts/install_etcd.sh
@@ -41,18 +48,30 @@ verify: $(VERIFY)
 etcd:
 	$(MAKE) -C tests/e2e/ etcd &
 
+.PHONY: build
+build:
+	CGO_ENABLED=0 go build -o $(SERVER_EXECUTEBLE) $(SERVER_FILES)
+
 .PHONY: server
 server:
 	$(MAKE) -C tests/e2e/ server &
 
 .PHONY: north-server
 north-server:
-	$(MAKE) -C tests/e2e/ server -e TCP_ADDRESS=:6641 UNIX_ADDRESS=/tmp/ovnnb_db.db DATABASE-PREFIX=ovsdb SERVICE-NAME=nb SCHEMA-FILE=ovn-nb.ovsschema SCHEMA-NAME=OVN_Northbound LOAD-SERVER-DATA=TRUE &
+	$(MAKE) -C tests/e2e/ server -e TCP_ADDRESS=:6641 UNIX_ADDRESS=/tmp/ovnnb_db.db DATABASE-PREFIX=ovsdb SERVICE-NAME=nb SCHEMA-FILE=ovn-nb.ovsschema LOAD-SERVER-DATA=FALSE PID-FILE=/tmp/nb-ovsdb.pid &
 
 .PHONY: south-server
 south-server:
-	$(MAKE) -C tests/e2e/ server -e TCP_ADDRESS=:6642 UNIX_ADDRESS=/tmp/ovnsb_db.db DATABASE-PREFIX=ovsdb SERVICE-NAME=sb SCHEMA-FILE=ovn-sb.ovsschema SCHEMA-NAME=OVN_Southbound LOAD-SERVER-DATA=TRUE &
+	$(MAKE) -C tests/e2e/ server -e TCP_ADDRESS=:6642 UNIX_ADDRESS=/tmp/ovnsb_db.db DATABASE-PREFIX=ovsdb SERVICE-NAME=sb SCHEMA-FILE=ovn-sb.ovsschema LOAD-SERVER-DATA=FALSE PID-FILE=/tmp/sb-ovsdb.pid &
 
 .PHONY: tests
 tests:
 	go test -v ./...
+
+.PHONY: image-etcd
+image-etcd:
+	docker build . -t etcd -f dist/images/etcd/Dockerfile
+
+.PHONY: image-server
+image-server: build
+	docker build . -t server -f dist/images/server/Dockerfile

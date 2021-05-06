@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 	"github.com/ibm/ovsdb-etcd/pkg/types/_Server"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/signal"
@@ -40,16 +41,17 @@ var (
 	serviceName        = flag.String("service-name", "", "Deployment service name, e.g. 'nbdb' or 'sbdb'")
 	schemaFile         = flag.String("schema-file", "", "schema-file")
 	loadServerDataFlag = flag.Bool("load-server-data", false, "load-server-data")
+	pidfile            = flag.String("pid-file", "", "Name of file that will hold the pid")
 )
 
 func main() {
 	klog.InitFlags(nil)
 	flag.Parse()
+	defer klog.Flush()
 
-	//TODO: for development purposes only. will be remove later
 	fmt.Println("start the ovsdb-etcd server with the following arguments:")
-	fmt.Printf("\ttcpAddress:%s\n\tunixAddressress:%s\n\tetcdMembersress:%s\n\tschemaBasedir:%s\n\tmaxTasks:%d\n\tdatabasePrefix:%s\n\tserviceName:%s\n\tschemaFile:%s\n\tloadServerData:%v\n",
-		*tcpAddress, *unixAddress, *etcdMembers, *schemaBasedir, *maxTasks, *databasePrefix, *serviceName, *schemaFile, *loadServerDataFlag)
+	fmt.Printf("\ttcpAddress: %s\n\tunixAddressress: %s\n\tetcdMembersress: %s\n\tschemaBasedir: %s\n\tmaxTasks: %d\n\tdatabasePrefix: %s\n\tserviceName: %s\n\tschemaFile: %s\n\tloadServerData: %v\n\tpid_file: %s\n",
+		*tcpAddress, *unixAddress, *etcdMembers, *schemaBasedir, *maxTasks, *databasePrefix, *serviceName, *schemaFile, *loadServerDataFlag, *pidfile)
 
 	if len(*tcpAddress) == 0 && len(*unixAddress) == 0 {
 		klog.Fatal("You must provide a network-address (TCP and/or UNIX) to listen on")
@@ -60,6 +62,13 @@ func main() {
 	}
 	if len(*serviceName) == 0 || strings.Contains(*serviceName, common.KEY_DELIMETER) {
 		klog.Fatal("Illegal serviceName %s", *serviceName)
+	}
+
+	if *pidfile != "" {
+		defer delPidfile(*pidfile)
+		if err := setupPIDFile(*pidfile); err != nil {
+			klog.Fatal(err)
+		}
 	}
 
 	// several OVSDB deployments can share the same etcd, but for rest of the work, we don't have to separate
@@ -229,5 +238,44 @@ func setServerData(con *ovsdb.Databaser) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func delPidfile(pidfile string) {
+	if pidfile != "" {
+		if _, err := os.Stat(pidfile); err == nil {
+			if err := os.Remove(pidfile); err != nil {
+				klog.Errorf("%s delete failed: %v", pidfile, err)
+			}
+		}
+	}
+}
+
+func setupPIDFile(pidfile string) error {
+	// need to test if already there
+	_, err := os.Stat(pidfile)
+
+	// Create if it doesn't exist, else exit with error
+	if os.IsNotExist(err) {
+		if err := ioutil.WriteFile(pidfile, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
+			klog.Errorf("Failed to write pidfile %s (%v). Ignoring..", pidfile, err)
+		}
+	} else {
+		// get the pid and see if it exists
+		pid, err := ioutil.ReadFile(pidfile)
+		if err != nil {
+			return fmt.Errorf("pidfile %s exists but can't be read: %v", pidfile, err)
+		}
+		_, err1 := os.Stat("/proc/" + string(pid[:]) + "/cmdline")
+		if os.IsNotExist(err1) {
+			// Left over pid from dead process
+			if err := ioutil.WriteFile(pidfile, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
+				klog.Errorf("Failed to write pidfile %s (%v). Ignoring..", pidfile, err)
+			}
+		} else {
+			return fmt.Errorf("pidfile %s exists and ovnkube is running", pidfile)
+		}
+	}
+
 	return nil
 }
