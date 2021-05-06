@@ -42,6 +42,9 @@ func (ch *Handler) Transact(ctx context.Context, param []interface{}) (interface
 		return nil, err
 	}
 	txn := NewTransaction(ch.etcdClient, req)
+	for _, file := range ch.db.GetSchemas() {
+		txn.AddSchemaFromFile(file)
+	}
 	txn.Commit()
 	return txn.response.Result, nil
 }

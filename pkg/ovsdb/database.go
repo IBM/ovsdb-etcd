@@ -1,10 +1,8 @@
 package ovsdb
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"sync"
 	"time"
 
@@ -21,6 +19,7 @@ type Databaser interface {
 	RemoveMonitors(dbName string, updaters map[string][]string, handler handlerKey)
 	RemoveMonitor(dbName string)
 	AddSchema(schemaName, schemaFile string) error
+	GetSchemas() map[string]string
 	GetData(key *common.Key, keysOnly bool) (*clientv3.GetResponse, error)
 	PutData(ctx context.Context, key *common.Key, obj interface{}) error
 	GetSchema(name string) (string, bool)
@@ -85,14 +84,12 @@ func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error)
 }
 
 func (con *DatabaseEtcd) AddSchema(schemaName, schemaFile string) error {
-	data, err := ioutil.ReadFile(schemaFile)
-	if err != nil {
-		return err
-	}
-	buffer := new(bytes.Buffer)
-	json.Compact(buffer, data)
-	con.Schemas[schemaName] = buffer.String()
+	con.Schemas[schemaName] = schemaFile
 	return nil
+}
+
+func (con *DatabaseEtcd) GetSchemas() map[string]string {
+	return con.Schemas
 }
 
 func (con *DatabaseEtcd) GetData(key *common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
@@ -219,6 +216,10 @@ func (con *DatabaseMock) GetLock(ctx context.Context, id string) (Locker, error)
 
 func (con *DatabaseMock) AddSchema(schemaName, schemaFile string) error {
 	return con.Error
+}
+
+func (con *DatabaseMock) GetSchemas() map[string]string {
+	return map[string]string{}
 }
 
 func (con *DatabaseMock) GetData(key *common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
