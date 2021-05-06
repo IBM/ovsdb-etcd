@@ -33,7 +33,7 @@ func newMap(s interface{}) (*libovsdb.OvsMap, error) {
 	return set, nil
 }
 
-func putNbGlobalOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid string, connections []string, options map[string]string) error {
+func putNbGlobalOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid string, connections []libovsdb.UUID, options map[string]string) error {
 	connectionsSet, err := newSet(connections)
 	if err != nil {
 		return err
@@ -280,7 +280,7 @@ func loadServerData(con *ovsdb.DatabaseEtcd) error {
 
 	// NB_Global
 
-	err := putNbGlobalOnEtcd(ctx, con, "a5088a51-7756-4dd4-909c-b7c59c9fcce7", []string{"413afe3e-79ff-4583-88a6-f02b70b8e927"},
+	err := putNbGlobalOnEtcd(ctx, con, "a5088a51-7756-4dd4-909c-b7c59c9fcce7", []libovsdb.UUID{{GoUUID: "413afe3e-79ff-4583-88a6-f02b70b8e927"}},
 		map[string]string{
 			"e2e_timestamp":           "1612817071",
 			"mac_prefix":              "86:a9:cb",
