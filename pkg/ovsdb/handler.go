@@ -2,7 +2,6 @@ package ovsdb
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -57,10 +56,11 @@ func (ch *Handler) Cancel(ctx context.Context, param interface{}) (interface{}, 
 
 func (ch *Handler) Monitor(ctx context.Context, param ovsjson.CondMonitorParameters) (interface{}, error) {
 	klog.V(5).Infof("Monitor request, parameters %v", param)
-	if err := ch.monitor(param, ovsjson.Update); err != nil {
+	updatersMap, err := ch.monitor(param, ovsjson.Update)
+	if err != nil {
 		return nil, err
 	}
-	return ch.getMonitoredData(param.DatabaseName, param.MonitorCondRequests, true)
+	return ch.getMonitoredData(updatersMap, true)
 }
 
 func (ch *Handler) MonitorCancel(ctx context.Context, param interface{}) (interface{}, error) {
@@ -155,10 +155,11 @@ func (ch *Handler) Steal(ctx context.Context, param interface{}) (interface{}, e
 
 func (ch *Handler) MonitorCond(ctx context.Context, param ovsjson.CondMonitorParameters) (interface{}, error) {
 	klog.V(5).Infof("MonitorCond request, parameters %v", param)
-	if err := ch.monitor(param, ovsjson.Update2); err != nil {
+	updatersMap, err := ch.monitor(param, ovsjson.Update2)
+	if err != nil {
 		return nil, err
 	}
-	return ch.getMonitoredData(param.DatabaseName, param.MonitorCondRequests, false)
+	return ch.getMonitoredData(updatersMap, false)
 }
 
 func (ch *Handler) MonitorCondChange(ctx context.Context, param []interface{}) (interface{}, error) {
@@ -169,10 +170,11 @@ func (ch *Handler) MonitorCondChange(ctx context.Context, param []interface{}) (
 
 func (ch *Handler) MonitorCondSince(ctx context.Context, param ovsjson.CondMonitorParameters) (interface{}, error) {
 	klog.V(5).Infof("MonitorCondSince request, parameters %v", param)
-	if err := ch.monitor(param, ovsjson.Update3); err != nil {
+	updatersMap, err := ch.monitor(param, ovsjson.Update3)
+	if err != nil {
 		return nil, err
 	}
-	data, err := ch.getMonitoredData(param.DatabaseName, param.MonitorCondRequests, false)
+	data, err := ch.getMonitoredData(updatersMap, false)
 	if err != nil {
 		return nil, err
 	}
@@ -239,111 +241,69 @@ func (ch *Handler) monitorCanceledNotification(jsonValue interface{}) {
 	}
 }
 
-func (ch *Handler) monitor(param ovsjson.CondMonitorParameters, notificationType ovsjson.UpdateNotificationType) error {
+func (ch *Handler) monitor(param ovsjson.CondMonitorParameters, notificationType ovsjson.UpdateNotificationType) (Key2Updaters, error) {
 	if len(param.DatabaseName) == 0 {
-		return fmt.Errorf("DataBase name is not specified")
+		return nil, fmt.Errorf("DataBase name is not specified")
 	}
 	jsonValue := param.JsonValue
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
 	if _, ok := ch.monitors[jsonValue]; ok {
-		return fmt.Errorf("duplicate json-value")
+		return nil, fmt.Errorf("duplicate json-value")
 	}
-	updatersMap := map[string][]*updater{}
+	updatersMap := Key2Updaters{}
 	updaterKeys := map[string][]string{}
 
 	for tableName, mcrs := range param.MonitorCondRequests {
-		updaters := []*updater{}
+		updaters := []updater{}
 		keys := []string{}
 		for _, mcr := range mcrs {
 			updater := mcrToUpdater(mcr, notificationType == ovsjson.Update)
 			keys = append(keys, updater.key)
-			updaters = append(updaters, updater)
+			updaters = append(updaters, *updater)
 		}
-		updatersMap[tableName] = updaters
+		updatersMap[common.NewTableKey(param.DatabaseName, tableName)] = updaters
 		updaterKeys[tableName] = keys
 	}
 	ch.monitors[jsonValue] = handlerMonitorData{dataBaseName: param.DatabaseName, notificationType: notificationType, updaters: updaterKeys}
 	ch.db.AddMonitors(param.DatabaseName, updatersMap, handlerKey{jsonValue: jsonValue, handler: ch})
-	return nil
+	return updatersMap, nil
 }
 
-func (ch *Handler) getMonitoredData(dataBase string, conditions map[string][]ovsjson.MonitorCondRequest, isV1 bool) (ovsjson.TableUpdates, error) {
-
+func (ch *Handler) getMonitoredData(updatersMap Key2Updaters, isV1 bool) (ovsjson.TableUpdates, error) {
 	returnData := ovsjson.TableUpdates{}
-	for tableName, mcrs := range conditions {
-		if len(mcrs) > 1 {
-			// TODO deal with the array
-			klog.Warningf("MCR is not a singe %v", mcrs)
-		}
-		if mcrs[0].Select != nil && !libovsdb.MSIsTrue(mcrs[0].Select.Initial) {
+	for tableKey, updaters := range updatersMap {
+		if len(updaters) == 0 {
+			// nothing to update
 			continue
 		}
-		resp, err := ch.db.GetData(common.NewTableKey(dataBase, tableName), false)
+		// validate that Initial is required
+		reqInitial := false
+		for _, updater := range updaters {
+			reqInitial := reqInitial || libovsdb.MSIsTrue(updater.Select.Initial)
+			if reqInitial {
+				break
+			}
+		}
+		resp, err := ch.db.GetData(tableKey, false)
 		if err != nil {
 			return nil, err
 		}
 		d1 := ovsjson.TableUpdate{}
-		for _, v := range resp.Kvs {
-			data := map[string]interface{}{}
-			json.Unmarshal(v.Value, &data)
-			uuidSet, ok := data["uuid"]
-			if !ok {
-				err := fmt.Errorf("key %s, wrong formatting, doesn't include UUID %v", v.Key, data)
-				klog.Error(err)
+		for _, kv := range resp.Kvs {
+			if err != nil {
 				return nil, err
 			}
-			uuid := uuidSet.([]interface{})[1]
-			if len(mcrs[0].Columns) == 0 {
-				delete(data, "uuid")
-				delete(data, "_version")
-			} else {
-				columnsMap := common.StringArrayToMap(mcrs[0].Columns)
-				for column := range data {
-					if _, ok := columnsMap[column]; !ok {
-						delete(data, column)
-					}
+			for _, updater := range updaters {
+				row, uuid, err := updater.prepareCreateRowInitial(&kv.Value)
+				if err != nil {
+					return nil, err
 				}
-			}
-			if isV1 {
-				d1[uuid.(string)] = ovsjson.RowUpdate{New: &data}
-			} else {
-				d1[uuid.(string)] = ovsjson.RowUpdate{Initial: &data}
+				// TODO merge
+				d1[uuid] = *row
 			}
 		}
-		returnData[tableName] = d1
+		returnData[tableKey.TableName] = d1
 	}
 	return returnData, nil
 }
-
-/*
-func (ch *Handler) newWatcher(prefix string) *watcher {
-
-	ctx := context.Background()
-	ctxt, cancel := context.WithCancel(ctx)
-	wch := ch.db.Watch(ctxt, prefix)
-
-	monitor := &watcher{cancel: cancel}
-	go func() {
-		for wresp := range wch {
-			for _, ev := range wresp.Events {
-				var dest map[*updater][]*handlerKey
-				monitor.mu.Lock()
-				if ev.IsCreate() {
-					// insert event
-					dest = monitor.insert
-				} else if ev.IsModify() {
-					dest = monitor.modify
-				} else {
-					// delete event
-					dest = monitor.delete
-				}
-				monitor.mu.Unlock()
-				// TODO queue or a separate goroutine
-				monitor.propagateEvent(ev, dest)
-			}
-		}
-	}() // todo start
-	return monitor
-}
-*/

@@ -17,13 +17,13 @@ import (
 
 type Databaser interface {
 	GetLock(ctx context.Context, id string) (Locker, error)
-	AddMonitors(dbName string, updaters map[string][]*updater, handler handlerKey)
+	AddMonitors(dbName string, updaters Key2Updaters, handler handlerKey)
 	RemoveMonitors(dbName string, updaters map[string][]string, handler handlerKey)
 	RemoveMonitor(dbName string)
 	AddSchema(schemaName, schemaFile string) error
 	GetSchemaFiles() []string
-	GetData(key *common.Key, keysOnly bool) (*clientv3.GetResponse, error)
-	PutData(ctx context.Context, key *common.Key, obj interface{}) error
+	GetData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error)
+	PutData(ctx context.Context, key common.Key, obj interface{}) error
 	GetSchema(name string) (string, bool)
 }
 
@@ -81,8 +81,8 @@ func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error)
 		cancel()
 		return nil, err
 	}
-	// TODO
-	mutex := concurrency.NewMutex(session, common.NewLockKey(id).String())
+	key := common.NewLockKey(id)
+	mutex := concurrency.NewMutex(session, key.String())
 	return &lock{mutex: mutex, myCancel: cancel, cntx: ctctx}, nil
 }
 
@@ -102,7 +102,7 @@ func (con *DatabaseEtcd) GetSchemaFiles() []string {
 	return con.SchemaFiles
 }
 
-func (con *DatabaseEtcd) GetData(key *common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
+func (con *DatabaseEtcd) GetData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), EtcdClientTimeout)
 	var resp *clientv3.GetResponse
 	var err error
@@ -130,7 +130,7 @@ func (con *DatabaseEtcd) GetSchema(name string) (string, bool) {
 	return con.Schemas[name], true
 }
 
-func (con *DatabaseEtcd) PutData(ctx context.Context, key *common.Key, obj interface{}) error {
+func (con *DatabaseEtcd) PutData(ctx context.Context, key common.Key, obj interface{}) error {
 	data, err := json.Marshal(obj)
 	if err != nil {
 		return err
@@ -142,7 +142,11 @@ func (con *DatabaseEtcd) PutData(ctx context.Context, key *common.Key, obj inter
 	return nil
 }
 
-func (con *DatabaseEtcd) AddMonitors(dbName string, updaters map[string][]*updater, handler handlerKey) {
+func (con *DatabaseEtcd) AddMonitors(dbName string, updaters Key2Updaters, handler handlerKey) {
+	if len(updaters) == 0 {
+		// nothing to add
+		return
+	}
 	con.mu.Lock()
 	defer con.mu.Unlock()
 	m, ok := con.monitors[dbName]
@@ -151,7 +155,8 @@ func (con *DatabaseEtcd) AddMonitors(dbName string, updaters map[string][]*updat
 		m = newMonitor(dbName, con)
 		ctxt, cancel := context.WithCancel(context.Background())
 		m.cancel = cancel
-		wch := con.cli.Watch(clientv3.WithRequireLeader(ctxt), common.NewDBPrefixKey(dbName).String(),
+		key := common.NewDBPrefixKey(dbName)
+		wch := con.cli.Watch(clientv3.WithRequireLeader(ctxt), key.String(),
 			clientv3.WithPrefix(),
 			clientv3.WithCreatedNotify(),
 			clientv3.WithPrevKV())
@@ -232,11 +237,11 @@ func (con *DatabaseMock) GetSchemaFiles() []string {
 	return []string{}
 }
 
-func (con *DatabaseMock) GetData(key *common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
+func (con *DatabaseMock) GetData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
 	return con.Response.(*clientv3.GetResponse), con.Error
 }
 
-func (con *DatabaseMock) PutData(ctx context.Context, key *common.Key, obj interface{}) error {
+func (con *DatabaseMock) PutData(ctx context.Context, key common.Key, obj interface{}) error {
 	return con.Error
 }
 
@@ -248,7 +253,7 @@ func (con *DatabaseMock) GetUUID() string {
 	return con.Response.(string)
 }
 
-func (con *DatabaseMock) AddMonitors(dbName string, updaters map[string][]*updater, handler handlerKey) {
+func (con *DatabaseMock) AddMonitors(dbName string, updaters Key2Updaters, handler handlerKey) {
 }
 
 func (con *DatabaseMock) RemoveMonitors(dbName string, updaters map[string][]string, handler handlerKey) {
