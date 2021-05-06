@@ -166,7 +166,7 @@ func TestAddRemoveUpdaters(t *testing.T) {
 	k2 := common.NewTableKey(dbName, t2)
 
 	m1 := Key2Updaters{k1: {*u1, *u2}, k2: {*u3}}
-	h1 := handlerKey{jsonValue: "jsonValue1"}
+	h1 := handlerKey{jsonValueStr: "jsonValue1"}
 
 	m.addUpdaters(m1, h1)
 	expected := &monitor{
@@ -175,7 +175,7 @@ func TestAddRemoveUpdaters(t *testing.T) {
 		upater2handlers: map[string][]handlerKey{u1.key: {h1}, u2.key: {h1}, u3.key: {h1}}}
 	compareMonitorStates(expected, m)
 
-	h2 := handlerKey{jsonValue: "jsonValue2"}
+	h2 := handlerKey{jsonValueStr: "jsonValue2"}
 	m.addUpdaters(m1, h2)
 	expected2 := &monitor{
 		handlers:        map[handlerKey]bool{h1: true, h2: true},
@@ -185,7 +185,7 @@ func TestAddRemoveUpdaters(t *testing.T) {
 
 	u11 := mcrToUpdater(mcr1, false)
 	m11 := Key2Updaters{k1: {*u11}}
-	h11 := handlerKey{jsonValue: "jsonValue11"}
+	h11 := handlerKey{jsonValueStr: "jsonValue11"}
 	m.addUpdaters(m11, h11)
 	expected3 := &monitor{
 		handlers:        map[handlerKey]bool{h1: true, h2: true, h11: true},
