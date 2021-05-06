@@ -26,14 +26,15 @@ type updater struct {
 }
 
 type handlerKey struct {
-	handler   *Handler
-	jsonValue interface{}
+	handler      *Handler
+	jsonValueStr string
 }
 
 type handlerMonitorData struct {
 	notificationType ovsjson.UpdateNotificationType
 	updaters         map[string][]string
 	dataBaseName     string
+	jsonValue        interface{}
 }
 
 // Map from a key which represents a table paths (prefix/dbname/table) to arrays of updaters
@@ -147,7 +148,7 @@ func (m *monitor) start() {
 				m.mu.Lock()
 				for hlk := range m.handlers {
 					// run in separate goroutines
-					go hlk.handler.monitorCanceledNotification(hlk.jsonValue)
+					go hlk.handler.monitorCanceledNotification(hlk.jsonValueStr)
 				}
 				m.mu.Unlock()
 				// remove itself
@@ -156,7 +157,7 @@ func (m *monitor) start() {
 			}
 			result, _ := m.prepareTableUpdate(wresp.Events)
 			for hd, tu := range result {
-				go hd.handler.notify(hd.jsonValue, tu)
+				go hd.handler.notify(hd.jsonValueStr, tu)
 			}
 		}
 	}()

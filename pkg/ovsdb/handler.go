@@ -29,8 +29,8 @@ type Handler struct {
 
 	mu sync.Mutex
 
-	// jsonValue -> handlerMonitorData
-	monitors      map[interface{}]handlerMonitorData
+	// jsonValueStr -> handlerMonitorData
+	monitors      map[string]handlerMonitorData
 	databaseLocks map[string]Locker
 }
 
@@ -65,15 +65,14 @@ func (ch *Handler) Monitor(ctx context.Context, param ovsjson.CondMonitorParamet
 
 func (ch *Handler) MonitorCancel(ctx context.Context, param interface{}) (interface{}, error) {
 	klog.V(5).Infof("MonitorCancel request, parameters %v", param)
-	jsonValue := param
-
+	jsonValue := jsonValueToString(param)
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
 	monitorHandler, ok := ch.monitors[jsonValue]
 	if !ok {
 		return nil, fmt.Errorf("unknown monitor")
 	}
-	ch.db.RemoveMonitors(monitorHandler.dataBaseName, monitorHandler.updaters, handlerKey{handler: ch, jsonValue: jsonValue})
+	ch.db.RemoveMonitors(monitorHandler.dataBaseName, monitorHandler.updaters, handlerKey{handler: ch, jsonValueStr: jsonValue})
 	delete(ch.monitors, jsonValue)
 	return "{}", nil
 }
@@ -188,7 +187,7 @@ func (ch *Handler) SetDbChangeAware(ctx context.Context, param interface{}) inte
 
 func NewHandler(tctx context.Context, db Databaser, cli *clientv3.Client) *Handler {
 	return &Handler{
-		handlerContext: tctx, db: db, databaseLocks: map[string]Locker{}, monitors: map[interface{}]handlerMonitorData{},
+		handlerContext: tctx, db: db, databaseLocks: map[string]Locker{}, monitors: map[string]handlerMonitorData{},
 		etcdClient: cli,
 	}
 }
@@ -200,8 +199,8 @@ func (ch *Handler) Cleanup() error {
 	for _, m := range ch.databaseLocks {
 		m.unlock()
 	}
-	for jsonValue, monitorHandler := range ch.monitors {
-		ch.db.RemoveMonitors(monitorHandler.dataBaseName, monitorHandler.updaters, handlerKey{handler: ch, jsonValue: jsonValue})
+	for jsonValueStr, monitorHandler := range ch.monitors {
+		ch.db.RemoveMonitors(monitorHandler.dataBaseName, monitorHandler.updaters, handlerKey{handler: ch, jsonValueStr: jsonValueStr})
 	}
 	return nil
 }
@@ -210,21 +209,21 @@ func (ch *Handler) SetConnection(con ClientConnection) {
 	ch.connection = con
 }
 
-func (ch *Handler) notify(jsonValue interface{}, updates ovsjson.TableUpdates) {
-	klog.V(5).Infof("Monitor notification jsonValue %v", jsonValue)
+func (ch *Handler) notify(jsonValueStr string, updates ovsjson.TableUpdates) {
+	klog.V(5).Infof("Monitor notification jsonValue %v", jsonValueStr)
 	var err error
-	handler, ok := ch.monitors[jsonValue]
+	handler, ok := ch.monitors[jsonValueStr]
 	if !ok {
-		klog.Errorf("Unknown jsonValue %s", jsonValue)
+		klog.Errorf("Unknown jsonValue %s", jsonValueStr)
 		return
 	}
 	switch handler.notificationType {
 	case ovsjson.Update:
-		err = ch.connection.Notify(ch.handlerContext, "update", []interface{}{jsonValue, updates})
+		err = ch.connection.Notify(ch.handlerContext, "update", []interface{}{handler.jsonValue, updates})
 	case ovsjson.Update2:
-		err = ch.connection.Notify(ch.handlerContext, "update2", []interface{}{jsonValue, updates})
+		err = ch.connection.Notify(ch.handlerContext, "update2", []interface{}{handler.jsonValue, updates})
 	case ovsjson.Update3:
-		err = ch.connection.Notify(ch.handlerContext, "update3", []interface{}{jsonValue, ovsjson.ZERO_UUID, updates})
+		err = ch.connection.Notify(ch.handlerContext, "update3", []interface{}{handler.jsonValue, ovsjson.ZERO_UUID, updates})
 	}
 	if err != nil {
 		// TODO should we do something else
@@ -246,9 +245,10 @@ func (ch *Handler) monitor(param ovsjson.CondMonitorParameters, notificationType
 		return nil, fmt.Errorf("DataBase name is not specified")
 	}
 	jsonValue := param.JsonValue
+	JsonValueStr := jsonValueToString(jsonValue)
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
-	if _, ok := ch.monitors[jsonValue]; ok {
+	if _, ok := ch.monitors[JsonValueStr]; ok {
 		return nil, fmt.Errorf("duplicate json-value")
 	}
 	updatersMap := Key2Updaters{}
@@ -265,8 +265,12 @@ func (ch *Handler) monitor(param ovsjson.CondMonitorParameters, notificationType
 		updatersMap[common.NewTableKey(param.DatabaseName, tableName)] = updaters
 		updaterKeys[tableName] = keys
 	}
-	ch.monitors[jsonValue] = handlerMonitorData{dataBaseName: param.DatabaseName, notificationType: notificationType, updaters: updaterKeys}
-	ch.db.AddMonitors(param.DatabaseName, updatersMap, handlerKey{jsonValue: jsonValue, handler: ch})
+	ch.monitors[JsonValueStr] = handlerMonitorData{
+		dataBaseName:     param.DatabaseName,
+		notificationType: notificationType,
+		updaters:         updaterKeys,
+		jsonValue:        jsonValue}
+	ch.db.AddMonitors(param.DatabaseName, updatersMap, handlerKey{jsonValueStr: JsonValueStr, handler: ch})
 	return updatersMap, nil
 }
 
@@ -306,4 +310,8 @@ func (ch *Handler) getMonitoredData(updatersMap Key2Updaters, isV1 bool) (ovsjso
 		returnData[tableKey.TableName] = d1
 	}
 	return returnData, nil
+}
+
+func jsonValueToString(jsonValue interface{}) string {
+	return fmt.Sprintf("%v", jsonValue)
 }
