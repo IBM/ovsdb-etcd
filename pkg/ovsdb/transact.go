@@ -1200,7 +1200,7 @@ func doComment(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 
 /* assert */
 func preAssert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
-	return errors.New(E_NOT_OWNER)
+	return nil
 }
 
 func doAssert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
