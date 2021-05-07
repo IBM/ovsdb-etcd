@@ -583,7 +583,7 @@ func TestTransactAbort(t *testing.T) {
 	}
 	common.SetPrefix("ovsdb/nb")
 	resp, _ := testTransact(t, req)
-	assert.True(t, "" != resp.Error)
+	assert.True(t, E_ABORTED == resp.Error)
 }
 
 func TestTransactComment(t *testing.T) {

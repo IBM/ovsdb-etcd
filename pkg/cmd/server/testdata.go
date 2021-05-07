@@ -275,7 +275,10 @@ func loadServerData(con *ovsdb.DatabaseEtcd) error {
 			return err
 		}
 	}
-
+	if !*loadServerDataFlag {
+		cancel()
+		return nil
+	}
 	// OVN_Northbound
 
 	// NB_Global

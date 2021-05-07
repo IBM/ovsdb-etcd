@@ -77,16 +77,21 @@ func createBridge(ovs *libovsdb.OvsdbClient, bridgeName string) {
 	}
 	ok := true
 	for i, o := range reply {
-		if o.Error != "" && i < len(operations) {
-			fmt.Println("Transaction Failed due to an error :", o.Error, " details:", o.Details, " in ", operations[i])
-			ok = false
-		} else if o.Error != "" {
-			fmt.Println("Transaction Failed due to an error :", o.Error)
+		errorable, ok := o.(libovsdb.ErrorableOperationResult)
+		if ok && errorable.Error != "" {
+			if i < len(operations) {
+				fmt.Println("Transaction Failed due to an error :", errorable.Error, " in ", operations[i])
+			} else {
+				fmt.Println("Transaction Failed due to an error :", errorable.Error)
+			}
 			ok = false
 		}
 	}
 	if ok {
-		fmt.Println("Bridge Addition Successful : ", reply[0].UUID.GoUUID)
+		fmt.Print("Bridge Addition Successful : ")
+		if uuidable, ok := reply[0].(libovsdb.UUIDOperationResult); ok {
+			fmt.Println("UUID: ", uuidable.UUID.GoUUID)
+		}
 	}
 }
 

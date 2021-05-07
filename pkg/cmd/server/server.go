@@ -84,11 +84,9 @@ func main() {
 	if err != nil {
 		klog.Fatal(err)
 	}
-	if *loadServerDataFlag {
-		err = loadServerData(db.(*ovsdb.DatabaseEtcd))
-		if err != nil {
-			klog.Fatal(err)
-		}
+	err = loadServerData(db.(*ovsdb.DatabaseEtcd))
+	if err != nil {
+		klog.Fatal(err)
 	}
 
 	ctx := context.Background()

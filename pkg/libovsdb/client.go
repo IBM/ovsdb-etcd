@@ -291,7 +291,7 @@ func (ovs OvsdbClient) MonitorAll(database string, jsonContext interface{}) (*Ta
 // MonitorCancel will request cancel a previously issued monitor request
 // RFC 7047 : monitor_cancel
 func (ovs OvsdbClient) MonitorCancel(jsonContext interface{}) error {
-	var reply OperationResult
+	var reply ErrorableOperationResult
 
 	args := NewMonitorCancelArgs(jsonContext)
 

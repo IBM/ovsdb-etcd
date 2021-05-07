@@ -154,12 +154,24 @@ type TransactResponse struct {
 }
 
 // OperationResult is the result of an Operation
-type OperationResult struct {
-	Count   int         `json:"count,omitempty"`
-	Error   string      `json:"error,omitempty"`
-	Details string      `json:"details,omitempty"`
-	UUID    *UUID       `json:"uuid,omitempty"`
-	Rows    []ResultRow `json:"rows,omitempty"`
+type OperationResult interface{}
+
+type ErrorableOperationResult struct {
+	Error string `json:"error,omitempty"`
+}
+
+type EmptyOperationResult struct{}
+
+type CountableOperationResult struct {
+	Count int `json:"count,omitempty"`
+}
+
+type RowableOperationResult struct {
+	Rows []ResultRow `json:"rows"`
+}
+
+type UUIDOperationResult struct {
+	UUID UUID `json:"uuid,omitempty"`
 }
 
 func ovsSliceToGoNotation(val interface{}) (interface{}, error) {
