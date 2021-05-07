@@ -158,7 +158,7 @@ type OperationResult struct {
 	Count   int         `json:"count,omitempty"`
 	Error   string      `json:"error,omitempty"`
 	Details string      `json:"details,omitempty"`
-	UUID    UUID        `json:"uuid,omitempty"`
+	UUID    *UUID       `json:"uuid,omitempty"`
 	Rows    []ResultRow `json:"rows,omitempty"`
 }
 

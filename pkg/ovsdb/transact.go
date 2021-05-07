@@ -11,6 +11,7 @@ package ovsdb
 // TODO: add schema to support GC
 // TODO: Support the "Cancel" method
 // TODO: log errors to klog
+// TODO: set and update _version
 // TODO: https://docs.openvswitch.org/en/latest/ref/ovsdb-server.7/#insert
 
 import (
@@ -344,7 +345,7 @@ func makeValue(row *map[string]interface{}) (string, error) {
 
 // TODO: we should not add uuid to etcd
 func setRowUUID(row *map[string]interface{}, uuid string) {
-	(*row)[COL_UUID] = uuid
+	(*row)[COL_UUID] = libovsdb.UUID{GoUUID: uuid}
 }
 
 const (
