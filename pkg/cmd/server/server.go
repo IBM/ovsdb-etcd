@@ -199,6 +199,8 @@ func addClientHandlers(handlerMap handler.Map, ch *ovsdb.Handler) *handler.Map {
 	handlerMap["steal"] = handler.New(ch.Steal)
 	handlerMap["unlock"] = handler.New(ch.Unlock)
 	handlerMap["monitor_cond"] = handler.New(ch.MonitorCond)
+	handlerMap["monitor_cond_since"] = handler.New(ch.MonitorCondSince)
+	handlerMap["monitor_cond_change"] = handler.New(ch.MonitorCondChange)
 	handlerMap["set_db_change_aware"] = handler.New(ch.SetDbChangeAware)
 	return &handlerMap
 }
