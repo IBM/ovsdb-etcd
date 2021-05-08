@@ -513,6 +513,15 @@ func (c *Condition) CompareUUID(row *map[string]interface{}) (bool, error) {
 	return false, nil
 }
 
+func (c *Condition) CompareEnum(row *map[string]interface{}) (bool, error) {
+	switch c.ColumnSchema.TypeObj.Key.Type {
+	case libovsdb.TypeString:
+		return c.CompareString(row)
+	default:
+		return false, errors.New(E_CONSTRAINT_VIOLATION)
+	}
+}
+
 func (c *Condition) CompareSet(row *map[string]interface{}) (bool, error) {
 	actual, ok := (*row)[c.Column].(libovsdb.OvsSet)
 	if !ok {
@@ -565,6 +574,8 @@ func (c *Condition) Compare(row *map[string]interface{}) (bool, error) {
 		return c.CompareString(row)
 	case libovsdb.TypeUUID:
 		return c.CompareUUID(row)
+	case libovsdb.TypeEnum:
+		return c.CompareEnum(row)
 	case libovsdb.TypeSet:
 		return c.CompareSet(row)
 	case libovsdb.TypeMap:
