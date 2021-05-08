@@ -299,8 +299,8 @@ func (ovs OvsdbClient) MonitorCancel(jsonContext interface{}) error {
 	if err != nil {
 		return err
 	}
-	if reply.Error != "" {
-		return fmt.Errorf("Error while executing transaction: %s", reply.Error)
+	if *reply.Error != "" {
+		return fmt.Errorf("Error while executing transaction: %s", *reply.Error)
 	}
 	return nil
 }

@@ -77,10 +77,10 @@ func createBridge(ovs *libovsdb.OvsdbClient, bridgeName string) {
 	}
 	ok := true
 	for i, o := range reply {
-		if o.Error != "" && i < len(operations) {
+		if *o.Error != "" && i < len(operations) {
 			fmt.Println("Transaction Failed due to an error :", o.Error, " details:", o.Details, " in ", operations[i])
 			ok = false
-		} else if o.Error != "" {
+		} else if *o.Error != "" {
 			fmt.Println("Transaction Failed due to an error :", o.Error)
 			ok = false
 		}
