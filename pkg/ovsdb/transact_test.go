@@ -76,6 +76,37 @@ var testSchemaAtomic *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 	},
 }
 
+var testSchemaEnum *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
+	Name:    "enum",
+	Version: "0.0.0.0",
+	Tables: map[string]libovsdb.TableSchema{
+		"table1": {
+			Columns: map[string]*libovsdb.ColumnSchema{
+				"color": {
+					Type: libovsdb.TypeEnum,
+					TypeObj: &libovsdb.ColumnType{
+						Key: &libovsdb.BaseType{
+							Type: libovsdb.TypeString,
+							Enum: []interface{}{"red", "green", "blue"},
+						},
+					},
+					Mutable: true,
+				},
+				"animal": {
+					Type: libovsdb.TypeEnum,
+					TypeObj: &libovsdb.ColumnType{
+						Key: &libovsdb.BaseType{
+							Type: libovsdb.TypeString,
+							Enum: []interface{}{"dog", "cat", "mouse"},
+						},
+					},
+					Mutable: true,
+				},
+			},
+		},
+	},
+}
+
 var testSchemaSet *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 	Name:    "set",
 	Version: "0.0.0.0",
@@ -203,6 +234,7 @@ func testTransact(t *testing.T, req *libovsdb.Transact) (*libovsdb.TransactRespo
 	txn.AddSchema(testSchemaSimple)
 	txn.AddSchema(testSchemaMutable)
 	txn.AddSchema(testSchemaAtomic)
+	txn.AddSchema(testSchemaEnum)
 	txn.AddSchema(testSchemaSet)
 	txn.AddSchema(testSchemaMap)
 	txn.Commit()
@@ -246,6 +278,46 @@ func TestTransactInsertSimple(t *testing.T) {
 	dump := testTransactDump(t, txn, "simple", "table1")
 	assert.Equal(t, "val1", dump["key1"])
 	assert.Equal(t, int(0), dump["key2"])
+}
+
+func TestTransactInsertEnumOk(t *testing.T) {
+	req := &libovsdb.Transact{
+		DBName: "enum",
+		Operations: []libovsdb.Operation{
+			{
+				Op:    OP_INSERT,
+				Table: "table1",
+				Row: map[string]interface{}{
+					"color": "red",
+				},
+			},
+		},
+	}
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t, "enum", "table1")
+	resp, txn := testTransact(t, req)
+	assert.Equal(t, "", resp.Error)
+	dump := testTransactDump(t, txn, "enum", "table1")
+	assert.Equal(t, "red", dump["color"])
+}
+
+func TestTransactInsertEnumError(t *testing.T) {
+	req := &libovsdb.Transact{
+		DBName: "enum",
+		Operations: []libovsdb.Operation{
+			{
+				Op:    OP_INSERT,
+				Table: "table1",
+				Row: map[string]interface{}{
+					"animal": "red",
+				},
+			},
+		},
+	}
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t, "enum", "table1")
+	resp, _ := testTransact(t, req)
+	assert.NotEqual(t, "", resp.Error)
 }
 
 func TestTransactInsertSetOk(t *testing.T) {

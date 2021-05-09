@@ -396,6 +396,13 @@ func (columnSchema *ColumnSchema) Default() interface{} {
 		return ""
 	case TypeUUID:
 		return UUID{"00000000-0000-0000-0000-000000000000"}
+	case TypeEnum:
+		switch columnSchema.TypeObj.Key.Type {
+		case TypeString:
+			return ""
+		default:
+			panic(fmt.Sprintf("Unsupported enum type %s", columnSchema.TypeObj.Key.Type))
+		}
 	case TypeSet:
 		return OvsSet{}
 	case TypeMap:
@@ -454,6 +461,10 @@ func (columnSchema *ColumnSchema) Convert(from interface{}) (interface{}, error)
 		return to, nil
 	case TypeUUID:
 		var to UUID
+		json.Unmarshal(data, &to)
+		return to, nil
+	case TypeEnum:
+		var to interface{}
 		json.Unmarshal(data, &to)
 		return to, nil
 	case TypeSet:
@@ -556,8 +567,23 @@ func (baseType *BaseType) ValidateBoolean(value interface{}) bool {
 }
 
 func (baseType *BaseType) ValidateString(value interface{}) bool {
-	_, ok := value.(string)
-	return ok
+	typeval, ok := value.(string)
+	if !ok {
+		return false
+	}
+	if baseType.Enum == nil {
+		return true
+	}
+	for _, v := range baseType.Enum {
+		enumval, ok := v.(string)
+		if !ok {
+			return false
+		}
+		if typeval == enumval {
+			return true
+		}
+	}
+	return false
 }
 
 func (baseType *BaseType) ValidateUUID(value interface{}) bool {
@@ -608,6 +634,10 @@ func (columnSchema *ColumnSchema) ValidateString(value interface{}) bool {
 func (columnSchema *ColumnSchema) ValidateUUID(value interface{}) bool {
 	_, ok := value.(UUID)
 	return ok
+}
+
+func (columnSchema *ColumnSchema) ValidateEnum(value interface{}) bool {
+	return columnSchema.TypeObj.Key.Validate(value)
 }
 
 func (columnSchema *ColumnSchema) ValidateSet(value interface{}) bool {
@@ -676,6 +706,8 @@ func (columnSchema *ColumnSchema) Validate(value interface{}) bool {
 		return columnSchema.ValidateString(value)
 	case TypeUUID:
 		return columnSchema.ValidateUUID(value)
+	case TypeEnum:
+		return columnSchema.ValidateEnum(value)
 	case TypeSet:
 		return columnSchema.ValidateSet(value)
 	case TypeMap:
