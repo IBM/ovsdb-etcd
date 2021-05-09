@@ -4,10 +4,33 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"os"
 	"strings"
 )
 
 type Schemas map[string]*DatabaseSchema
+
+func (schemas *Schemas) AddFromFile(path string) error {
+	jsonFile, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer jsonFile.Close()
+
+	data, _ := ioutil.ReadAll(jsonFile)
+	var databaseSchema DatabaseSchema
+	err = json.Unmarshal(data, &databaseSchema)
+	if err != nil {
+		return err
+	}
+	schemas.Add(&databaseSchema)
+	return nil
+}
+
+func (schemas *Schemas) Add(databaseSchema *DatabaseSchema) {
+	(*schemas)[databaseSchema.Name] = databaseSchema
+}
 
 // DatabaseSchema is a database schema according to RFC7047
 type DatabaseSchema struct {
@@ -79,6 +102,14 @@ func (schema DatabaseSchema) validateOperations(operations ...Operation) bool {
 		}
 	}
 	return true
+}
+
+func (schema *DatabaseSchema) String() string {
+	buf, err := json.Marshal(schema)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal: %s", err))
+	}
+	return string(buf)
 }
 
 // TableSchema is a table schema according to RFC7047

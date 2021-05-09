@@ -19,8 +19,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"reflect"
 	"time"
 
@@ -251,24 +249,11 @@ var ovsOpCallbackMap = map[string][2]ovsOpCallback{
 }
 
 func (txn *Transaction) AddSchemaFromFile(path string) error {
-	jsonFile, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer jsonFile.Close()
-
-	data, _ := ioutil.ReadAll(jsonFile)
-	var databaseSchema libovsdb.DatabaseSchema
-	err = json.Unmarshal(data, &databaseSchema)
-	if err != nil {
-		return err
-	}
-	txn.AddSchema(&databaseSchema)
-	return nil
+	return txn.schemas.AddFromFile(path)
 }
 
-func (txn *Transaction) AddSchema(schema *libovsdb.DatabaseSchema) {
-	txn.schemas[schema.Name] = schema
+func (txn *Transaction) AddSchema(databaseSchema *libovsdb.DatabaseSchema) {
+	txn.schemas.Add(databaseSchema)
 }
 
 func (txn *Transaction) Commit() error {
