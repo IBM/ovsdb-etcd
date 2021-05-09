@@ -293,6 +293,7 @@ func (txn *Transaction) Commit() error {
 	/* fetch needed data from database needed to perform the operation */
 	for i, ovsOp := range txn.request.Operations {
 		if err = ovsOpCallbackMap[ovsOp.Op][0](txn, &ovsOp, &txn.response.Result[i]); err != nil {
+			txn.response.Result[i].SetError(err.Error())
 			txn.response.Error = err.Error()
 			return err
 		}
@@ -307,6 +308,7 @@ func (txn *Transaction) Commit() error {
 	for i, ovsOp := range txn.request.Operations {
 		err = ovsOpCallbackMap[ovsOp.Op][1](txn, &ovsOp, &txn.response.Result[i])
 		if err != nil {
+			txn.response.Result[i].SetError(err.Error())
 			txn.response.Error = err.Error()
 			return err
 		}
@@ -938,7 +940,6 @@ func etcdGetByWhere(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libo
 	tableSchema := txn.schemas.LookupTable(txn.request.DBName, ovsOp.Table)
 	uuid, err := doesWhereContainCondTypeUUID(tableSchema, ovsOp.Where)
 	if err != nil {
-		ovsResult.Error = err.Error()
 		return err
 	}
 	key := common.NewDataKey(txn.request.DBName, ovsOp.Table, uuid)
@@ -991,22 +992,18 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 	if ovsOp.UUIDName != "" {
 		for _, row := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
 			if (*row)[COL_UUIDNAME] == ovsOp.UUIDName {
-				err := errors.New(E_DUP_UUIDNAME)
-				ovsResult.Error = err.Error()
-				return err
+				return errors.New(E_DUP_UUIDNAME)
 			}
 		}
 	}
 
 	ok := txn.schemas.Validate(txn.request.DBName, ovsOp.Table, &ovsOp.Row)
 	if !ok {
-		err := errors.New(E_CONSTRAINT_VIOLATION)
-		ovsResult.Error = err.Error()
-		return err
+		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
-	ovsResult.Count = ovsResult.Count + 1
 	key := common.GenerateDataKey(txn.request.DBName, ovsOp.Table) /* generate RFC4122 UUID */
+	ovsResult.InitUUID(key.UUID)
 	row := txn.cache.Row(key)
 	*row = ovsOp.Row
 	txn.schemas.Default(txn.request.DBName, ovsOp.Table, row)
@@ -1019,7 +1016,9 @@ func preSelect(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 }
 
 func doSelect(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
+	ovsResult.InitRows()
 	tableSchema := txn.schemas.LookupTable(txn.request.DBName, ovsOp.Table)
+
 	for _, row := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
 		ok, err := isRowSelectedByWhere(tableSchema, row, ovsOp.Where)
 		if err != nil {
@@ -1032,8 +1031,7 @@ func doSelect(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		if err != nil {
 			return err
 		}
-		ovsResult.Count = ovsResult.Count + 1
-		ovsResult.Rows = append(ovsResult.Rows, *resultRow)
+		ovsResult.AppendRows(*resultRow)
 	}
 	return nil
 }
@@ -1044,6 +1042,7 @@ func preUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 }
 
 func doUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
+	ovsResult.InitCount()
 	tableSchema := txn.schemas.LookupTable(txn.request.DBName, ovsOp.Table)
 	for uuid, row := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
 		ok, err := isRowSelectedByWhere(tableSchema, row, ovsOp.Where)
@@ -1056,12 +1055,9 @@ func doUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 
 		ok = txn.schemas.Validate(txn.request.DBName, ovsOp.Table, &ovsOp.Row)
 		if !ok {
-			err := errors.New(E_CONSTRAINT_VIOLATION)
-			ovsResult.Error = err.Error()
-			return err
+			return errors.New(E_CONSTRAINT_VIOLATION)
 		}
 
-		ovsResult.Count = ovsResult.Count + 1
 		err = RowUpdate(tableSchema, row, ovsOp.Row)
 		if err != nil {
 			return err
@@ -1069,6 +1065,7 @@ func doUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		key := common.NewDataKey(txn.request.DBName, ovsOp.Table, uuid)
 		*(txn.cache.Row(key)) = *row
 		etcdPutRow(txn, &key, row)
+		ovsResult.IncrementCount()
 	}
 	return nil
 }
@@ -1079,6 +1076,7 @@ func preMutate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 }
 
 func doMutate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
+	ovsResult.InitCount()
 	tableSchema := txn.schemas.LookupTable(txn.request.DBName, ovsOp.Table)
 	for uuid, row := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
 		ok, err := isRowSelectedByWhere(tableSchema, row, ovsOp.Where)
@@ -1088,7 +1086,6 @@ func doMutate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		if !ok {
 			continue
 		}
-		ovsResult.Count = ovsResult.Count + 1
 		err = RowMutate(tableSchema, row, ovsOp.Mutations)
 		if err != nil {
 			return err
@@ -1096,6 +1093,7 @@ func doMutate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		key := common.NewDataKey(txn.request.DBName, ovsOp.Table, uuid)
 		*(txn.cache.Row(key)) = *row
 		etcdPutRow(txn, &key, row)
+		ovsResult.IncrementCount()
 	}
 	return nil
 }
@@ -1106,6 +1104,7 @@ func preDelete(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 }
 
 func doDelete(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
+	ovsResult.InitCount()
 	tableSchema := txn.schemas.LookupTable(txn.request.DBName, ovsOp.Table)
 	for uuid, row := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
 		ok, err := isRowSelectedByWhere(tableSchema, row, ovsOp.Where)
@@ -1115,9 +1114,9 @@ func doDelete(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		if !ok {
 			continue
 		}
-		ovsResult.Count = ovsResult.Count + 1
 		key := common.NewDataKey(txn.request.DBName, ovsOp.Table, uuid)
 		etcdDelRow(txn, &key)
+		ovsResult.IncrementCount()
 	}
 	return nil
 }
@@ -1125,9 +1124,7 @@ func doDelete(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 /* wait */
 func preWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
 	if ovsOp.Timeout != 0 {
-		err := fmt.Errorf("only support timeout 0")
-		ovsResult.Error = err.Error()
-		return err
+		return fmt.Errorf("only support timeout 0")
 	}
 	return etcdGetByWhere(txn, ovsOp, ovsResult)
 }
@@ -1150,33 +1147,26 @@ func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Ope
 		rows = append(rows, *newRow)
 	}
 
-	var err error
 	equal := isEqualRows(rows, ovsOp.Rows)
 	switch ovsOp.Until {
 	case FN_EQ:
 		if !equal {
-			err = errors.New(E_TIMEOUT)
+			return errors.New(E_TIMEOUT)
 		}
 	case FN_NE:
 		if equal {
-			err = errors.New(E_TIMEOUT)
+			return errors.New(E_TIMEOUT)
 		}
 	default:
-		err = errors.New(E_CONSTRAINT_VIOLATION)
+		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
-
-	if err != nil {
-		ovsResult.Error = err.Error()
-	}
-	return err
+	return nil
 }
 
 /* commit */
 func preCommit(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
 	if ovsOp.Durable {
-		err := errors.New(E_NOT_SUPPORTED)
-		ovsResult.Error = err.Error()
-		return err
+		return errors.New(E_NOT_SUPPORTED)
 	}
 	return nil
 }
@@ -1187,9 +1177,7 @@ func doCommit(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 
 /* abort */
 func preAbort(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
-	err := errors.New(E_ABORTED)
-	ovsResult.Error = err.Error()
-	return err
+	return errors.New(E_ABORTED)
 }
 
 func doAbort(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {

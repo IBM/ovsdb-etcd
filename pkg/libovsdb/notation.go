@@ -155,11 +155,38 @@ type TransactResponse struct {
 
 // OperationResult is the result of an Operation
 type OperationResult struct {
-	Count   int         `json:"count,omitempty"`
-	Error   string      `json:"error,omitempty"`
-	Details string      `json:"details,omitempty"`
-	UUID    *UUID       `json:"uuid,omitempty"`
-	Rows    []ResultRow `json:"rows,omitempty"`
+	Count   *int         `json:"count,omitempty"`
+	Error   *string      `json:"error,omitempty"`
+	Details *string      `json:"details,omitempty"`
+	UUID    *UUID        `json:"uuid,omitempty"`
+	Rows    *[]ResultRow `json:"rows,omitempty"`
+}
+
+func (res *OperationResult) SetError(err string) {
+	res.Error = &err
+	res.Count = nil
+	res.UUID = nil
+	res.Rows = nil
+}
+
+func (res *OperationResult) InitUUID(uuid string) {
+	res.UUID = &UUID{GoUUID: uuid}
+}
+
+func (res *OperationResult) InitRows() {
+	res.Rows = new([]ResultRow)
+}
+
+func (res *OperationResult) InitCount() {
+	res.Count = new(int)
+}
+
+func (res *OperationResult) IncrementCount() {
+	*res.Count++
+}
+
+func (res *OperationResult) AppendRows(row ResultRow) {
+	*res.Rows = append(*res.Rows, row)
 }
 
 func ovsSliceToGoNotation(val interface{}) (interface{}, error) {
