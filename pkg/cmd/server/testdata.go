@@ -4,13 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/ibm/ovsdb-etcd/pkg/common"
+	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 	"github.com/ibm/ovsdb-etcd/pkg/ovsdb"
 	"github.com/ibm/ovsdb-etcd/pkg/types/OVN_Northbound"
-	"github.com/ibm/ovsdb-etcd/pkg/types/_Server"
-
-	"github.com/google/uuid"
-	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 )
 
 func newUUID() libovsdb.UUID {
@@ -261,21 +259,6 @@ func putlogicalSwitchOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid s
 
 func loadServerData(con *ovsdb.DatabaseEtcd) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	for schemaName, schema := range con.Schemas {
-		schemaSet, err := libovsdb.NewOvsSet([]string{schema.String()})
-		if err != nil {
-			cancel = nil
-			return err
-		}
-		srv := _Server.Database{Model: "standalone", Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
-			Connected: true, Leader: true, Schema: *schemaSet, Version: libovsdb.UUID{GoUUID: uuid.NewString()}}
-		key := common.NewDataKey("_Server", "Database", schemaName)
-		if err := con.PutData(ctx, key, srv); err != nil {
-			cancel = nil
-			return err
-		}
-	}
-
 	// OVN_Northbound
 
 	// NB_Global

@@ -8,7 +8,6 @@ ETCD_NAME := ovsdb
 DATABASE-PREFIX := ovsdb
 SERVICE-NAME :=nb
 SCHEMA-FILE := ovn-nb.ovsschema
-SCHEMA-NAME := OVN_NorthBound
 LOAD-SERVER-DATA=TRUE := true
 
 .PHONY: etcd
@@ -28,7 +27,6 @@ SERVER_ARGS := \
 		-database-prefix $(DATABASE-PREFIX) \
 		-service-name $(SERVICE-NAME) \
 		-schema-file $(SCHEMA-FILE) \
-		-schema-name $(SCHEMA-NAME) \
 		-load-server-data $(LOAD-SERVER-DATA)
 
 .PHONY: dbg-server
