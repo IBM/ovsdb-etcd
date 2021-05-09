@@ -1,10 +1,8 @@
 package ovsdb
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"sync"
 	"time"
 
@@ -13,6 +11,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
+	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 )
 
 type Databaser interface {
@@ -20,8 +19,8 @@ type Databaser interface {
 	AddMonitors(dbName string, updaters Key2Updaters, handler handlerKey)
 	RemoveMonitors(dbName string, updaters map[string][]string, handler handlerKey)
 	RemoveMonitor(dbName string)
-	AddSchema(schemaName, schemaFile string) error
-	GetSchemaFiles() []string
+	AddSchema(schemaFile string) error
+	GetSchemas() libovsdb.Schemas
 	GetData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error)
 	PutData(ctx context.Context, key common.Key, obj interface{}) error
 	GetSchema(name string) (string, bool)
@@ -30,9 +29,8 @@ type Databaser interface {
 type DatabaseEtcd struct {
 	cli *clientv3.Client
 	// dataBaseName -> schema
-	Schemas     map[string]string
-	SchemaFiles []string
-	mu          sync.Mutex
+	Schemas libovsdb.Schemas
+	mu      sync.Mutex
 	// databaseName -> monitor
 	// We have a single monitor (etcd watcher) per database
 	monitors map[string]*monitor
@@ -71,7 +69,7 @@ var EtcdClientTimeout = 100 * time.Millisecond
 
 func NewDatabaseEtcd(cli *clientv3.Client) (Databaser, error) {
 	return &DatabaseEtcd{cli: cli,
-		Schemas: map[string]string{}, monitors: map[string]*monitor{}}, nil
+		Schemas: libovsdb.Schemas{}, monitors: map[string]*monitor{}}, nil
 }
 
 func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error) {
@@ -86,20 +84,12 @@ func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error)
 	return &lock{mutex: mutex, myCancel: cancel, cntx: ctctx}, nil
 }
 
-func (con *DatabaseEtcd) AddSchema(schemaName, schemaFile string) error {
-	data, err := ioutil.ReadFile(schemaFile)
-	if err != nil {
-		return err
-	}
-	buffer := new(bytes.Buffer)
-	json.Compact(buffer, data)
-	con.Schemas[schemaName] = buffer.String()
-	con.SchemaFiles = append(con.SchemaFiles, schemaFile)
-	return nil
+func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
+	return con.Schemas.AddFromFile(schemaFile)
 }
 
-func (con *DatabaseEtcd) GetSchemaFiles() []string {
-	return con.SchemaFiles
+func (con *DatabaseEtcd) GetSchemas() libovsdb.Schemas {
+	return con.Schemas
 }
 
 func (con *DatabaseEtcd) GetData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
@@ -127,7 +117,7 @@ func (con *DatabaseEtcd) GetData(key common.Key, keysOnly bool) (*clientv3.GetRe
 }
 
 func (con *DatabaseEtcd) GetSchema(name string) (string, bool) {
-	return con.Schemas[name], true
+	return con.Schemas[name].String(), true
 }
 
 func (con *DatabaseEtcd) PutData(ctx context.Context, key common.Key, obj interface{}) error {
@@ -229,12 +219,12 @@ func (con *DatabaseMock) GetLock(ctx context.Context, id string) (Locker, error)
 	return &LockerMock{}, nil
 }
 
-func (con *DatabaseMock) AddSchema(schemaName, schemaFile string) error {
+func (con *DatabaseMock) AddSchema(schemaFile string) error {
 	return con.Error
 }
 
-func (con *DatabaseMock) GetSchemaFiles() []string {
-	return []string{}
+func (con *DatabaseMock) GetSchemas() libovsdb.Schemas {
+	return libovsdb.Schemas{}
 }
 
 func (con *DatabaseMock) GetData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error) {

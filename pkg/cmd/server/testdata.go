@@ -262,7 +262,7 @@ func putlogicalSwitchOnEtcd(ctx context.Context, con *ovsdb.DatabaseEtcd, uuid s
 func loadServerData(con *ovsdb.DatabaseEtcd) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	for schemaName, schema := range con.Schemas {
-		schemaSet, err := libovsdb.NewOvsSet([]string{schema})
+		schemaSet, err := libovsdb.NewOvsSet([]string{schema.String()})
 		if err != nil {
 			cancel = nil
 			return err

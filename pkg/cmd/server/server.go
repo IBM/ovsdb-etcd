@@ -76,11 +76,11 @@ func main() {
 
 	db, _ := ovsdb.NewDatabaseEtcd(cli)
 
-	err = db.AddSchema("_Server", *schemaBasedir+"/_server.ovsschema")
+	err = db.AddSchema(path.Join(*schemaBasedir, "_server.ovsschema"))
 	if err != nil {
 		klog.Fatal(err)
 	}
-	err = db.AddSchema(*schemaName, path.Join(*schemaBasedir, *schemaFile))
+	err = db.AddSchema(path.Join(*schemaBasedir, *schemaFile))
 	if err != nil {
 		klog.Fatal(err)
 	}

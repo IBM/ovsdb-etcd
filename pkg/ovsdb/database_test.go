@@ -28,7 +28,7 @@ func TestMockAddSchema(t *testing.T) {
 	mock := DatabaseMock{
 		Error: expectedError,
 	}
-	actualError := mock.AddSchema("", "")
+	actualError := mock.AddSchema("")
 	assert.Equal(t, expectedError, actualError)
 }
 
