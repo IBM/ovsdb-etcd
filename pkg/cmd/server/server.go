@@ -4,6 +4,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/google/uuid"
+	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
+	"github.com/ibm/ovsdb-etcd/pkg/types/_Server"
 	"net"
 	"os"
 	"os/signal"
@@ -12,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
@@ -35,7 +39,6 @@ var (
 	databasePrefix     = flag.String("database-prefix", "ovsdb", "Database prefix")
 	serviceName        = flag.String("service-name", "", "Deployment service name, e.g. 'nbdb' or 'sbdb'")
 	schemaFile         = flag.String("schema-file", "", "schema-file")
-	schemaName         = flag.String("schema-name", "", "schema-name")
 	loadServerDataFlag = flag.Bool("load-server-data", false, "load-server-data")
 )
 
@@ -45,8 +48,8 @@ func main() {
 
 	//TODO: for development purposes only. will be remove later
 	fmt.Println("start the ovsdb-etcd server with the following arguments:")
-	fmt.Printf("\ttcpAddress:%s\n\tunixAddressress:%s\n\tetcdMembersress:%s\n\tschemaBasedir:%s\n\tmaxTasks:%d\n\tdatabasePrefix:%s\n\tserviceName:%s\n\tschemaFile:%s\n\tschemaName:%s\n\tloadServerData:%v\n",
-		*tcpAddress, *unixAddress, *etcdMembers, *schemaBasedir, *maxTasks, *databasePrefix, *serviceName, *schemaFile, *schemaName, *loadServerDataFlag)
+	fmt.Printf("\ttcpAddress:%s\n\tunixAddressress:%s\n\tetcdMembersress:%s\n\tschemaBasedir:%s\n\tmaxTasks:%d\n\tdatabasePrefix:%s\n\tserviceName:%s\n\tschemaFile:%s\n\tloadServerData:%v\n",
+		*tcpAddress, *unixAddress, *etcdMembers, *schemaBasedir, *maxTasks, *databasePrefix, *serviceName, *schemaFile, *loadServerDataFlag)
 
 	if len(*tcpAddress) == 0 && len(*unixAddress) == 0 {
 		klog.Fatal("You must provide a network-address (TCP and/or UNIX) to listen on")
@@ -80,10 +83,16 @@ func main() {
 	if err != nil {
 		klog.Fatal(err)
 	}
+
 	err = db.AddSchema(path.Join(*schemaBasedir, *schemaFile))
 	if err != nil {
 		klog.Fatal(err)
 	}
+	err = setServerData(&db)
+	if err != nil {
+		klog.Fatal(err)
+	}
+	// TODO for development only, will be remove later
 	if *loadServerDataFlag {
 		err = loadServerData(db.(*ovsdb.DatabaseEtcd))
 		if err != nil {
@@ -203,4 +212,22 @@ func addClientHandlers(handlerMap handler.Map, ch *ovsdb.Handler) *handler.Map {
 	handlerMap["monitor_cond_change"] = handler.New(ch.MonitorCondChange)
 	handlerMap["set_db_change_aware"] = handler.New(ch.SetDbChangeAware)
 	return &handlerMap
+}
+
+func setServerData(con *ovsdb.Databaser) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	for schemaName, schema := range (*con).GetSchemas() {
+		schemaSet, err := libovsdb.NewOvsSet(schema.String())
+		if err != nil {
+			return err
+		}
+		srv := _Server.Database{Model: "standalone", Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
+			Connected: true, Leader: true, Schema: *schemaSet, Version: libovsdb.UUID{GoUUID: uuid.NewString()}}
+		key := common.NewDataKey("_Server", "Database", schemaName)
+		if err := (*con).PutData(ctx, key, srv); err != nil {
+			return err
+		}
+	}
+	return nil
 }
