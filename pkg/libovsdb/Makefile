@@ -30,3 +30,8 @@ vet:
 	@echo "+ $@"
 	@go vet ./...
 
+TEST_PATTERN ?= TestSchema
+
+.PHONY: dlv
+dlv:
+	dlv test --build-flags="-gcflags '-N -l'" -- -test.v -test.run ${TEST_PATTERN}

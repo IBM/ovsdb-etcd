@@ -172,16 +172,25 @@ type ColumnSchema struct {
 	// json message will be parsed manually and Type will indicate the "extended"
 	// type. Depending on its value, more information may be available in TypeObj.
 	// E.g: If Type == TypeEnum, TypeObj.Key.Enum contains the possible values
-	Type      ExtendedType
-	TypeObj   *ColumnType
-	Ephemeral bool
-	Mutable   bool /* FIXME: default if not specified needs to be true */
+	Type      ExtendedType `json:"type"`
+	TypeObj   *ColumnType  `json:"typeObj,omitempty"`
+	Ephemeral *bool        `json:"ephemeral,omitempty"`
+	Mutable   *bool        `json:"mutable,omitempty"`
+}
+
+func NewColumnSchema() *ColumnSchema {
+	t := true
+	f := false
+	return &ColumnSchema{
+		Ephemeral: &f,
+		Mutable:   &t,
+	}
 }
 
 // ColumnType is a type object as per RFC7047
 type ColumnType struct {
-	Key   *BaseType
-	Value *BaseType
+	Key   *BaseType `json:"key,omitempty"`
+	Value *BaseType `json:"value,omitempty"`
 	Min   int
 	// Unlimited is expressed by the const value Unlimited (-1)
 	Max int
@@ -193,15 +202,15 @@ type BaseType struct {
 	// Enum will be parsed manually and set to a slice
 	// of possible values. They must be type-asserted to the
 	// corret type depending on the Type field
-	Enum       []interface{} `json:"_"`
-	MinReal    float64       `json:"minReal,omitempty"`
-	MaxReal    float64       `json:"maxReal,omitempty"`
-	MinInteger int           `json:"minInteger,omitempty"`
-	MaxInteger int           `json:"maxInteger,omitempty"`
-	MinLength  int           `json:"minLength,omitempty"` /* string */
-	MaxLength  int           `json:"maxLength,omitempty"` /* string */
-	RefTable   string        `json:"refTable,omitempty"`  /* UUIDs */
-	RefType    RefType       `json:"refType,omitempty"`
+	Enum       *OvsSet `json:"enum,omitempty"`
+	MinReal    float64 `json:"minReal,omitempty"`
+	MaxReal    float64 `json:"maxReal,omitempty"`
+	MinInteger int     `json:"minInteger,omitempty"`
+	MaxInteger int     `json:"maxInteger,omitempty"`
+	MinLength  int     `json:"minLength,omitempty"` /* string */
+	MaxLength  int     `json:"maxLength,omitempty"` /* string */
+	RefTable   string  `json:"refTable,omitempty"`  /* UUIDs */
+	RefType    RefType `json:"refType,omitempty"`
 }
 
 // String returns a string representation of the (native) column type
@@ -209,10 +218,10 @@ func (column *ColumnSchema) String() string {
 	var flags []string
 	var flagStr string
 	var typeStr string
-	if column.Ephemeral {
+	if *column.Ephemeral {
 		flags = append(flags, "E")
 	}
-	if column.Mutable {
+	if *column.Mutable {
 		flags = append(flags, "M")
 	}
 	if len(flags) > 0 {
@@ -253,8 +262,8 @@ func (column *ColumnSchema) UnmarshalJSON(data []byte) error {
 	// ColumnJSON represents the known json values for a Column
 	type ColumnJSON struct {
 		TypeRawMsg json.RawMessage `json:"type"`
-		Ephemeral  bool            `json:"ephemeral,omitempty"`
-		Mutable    bool            `json:"mutable,omitempty"`
+		Ephemeral  *bool           `json:"ephemeral,omitempty"`
+		Mutable    *bool           `json:"mutable,omitempty"`
 	}
 	var colJSON ColumnJSON
 
@@ -263,8 +272,12 @@ func (column *ColumnSchema) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("cannot parse column object %s", err)
 	}
 
-	column.Ephemeral = colJSON.Ephemeral
-	column.Mutable = colJSON.Mutable
+	if colJSON.Ephemeral != nil && *colJSON.Ephemeral {
+		column.Ephemeral = colJSON.Ephemeral
+	}
+	if colJSON.Mutable != nil && *colJSON.Mutable {
+		column.Mutable = colJSON.Mutable
+	}
 
 	// 'type' can be a string or an object, let's figure it out
 	var typeString string
@@ -365,7 +378,7 @@ func (column *ColumnSchema) UnmarshalJSON(data []byte) error {
 		column.Type = TypeMap
 	} else if column.TypeObj.Min != 1 || column.TypeObj.Max != 1 {
 		column.Type = TypeSet
-	} else if len(column.TypeObj.Key.Enum) > 0 {
+	} else if column.TypeObj.Key.Enum != nil && len(column.TypeObj.Key.Enum.GoSet) > 0 {
 		column.Type = TypeEnum
 	} else {
 		column.Type = column.TypeObj.Key.Type
@@ -395,12 +408,12 @@ func (bt *BaseType) parseEnum(rawData json.RawMessage) error {
 		// it's an OvsSet
 		oSet := enumJSON.Enum.([]interface{})
 		innerSet := oSet[1].([]interface{})
-		bt.Enum = make([]interface{}, len(innerSet))
+		bt.Enum = &OvsSet{GoSet: make([]interface{}, len(innerSet))}
 		for k, val := range innerSet {
-			bt.Enum[k] = val
+			bt.Enum.GoSet[k] = val
 		}
 	default:
-		bt.Enum = []interface{}{enumJSON.Enum}
+		bt.Enum = &OvsSet{GoSet: []interface{}{enumJSON.Enum}}
 	}
 	return nil
 }
@@ -605,7 +618,7 @@ func (baseType *BaseType) ValidateString(value interface{}) bool {
 	if baseType.Enum == nil {
 		return true
 	}
-	for _, v := range baseType.Enum {
+	for _, v := range baseType.Enum.GoSet {
 		enumval, ok := v.(string)
 		if !ok {
 			return false

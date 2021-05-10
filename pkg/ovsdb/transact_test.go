@@ -19,12 +19,10 @@ var testSchemaSimple *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 		"table1": {
 			Columns: map[string]*libovsdb.ColumnSchema{
 				"key1": {
-					Type:    libovsdb.TypeString,
-					Mutable: true,
+					Type: libovsdb.TypeString,
 				},
 				"key2": {
-					Type:    libovsdb.TypeInteger,
-					Mutable: true,
+					Type: libovsdb.TypeInteger,
 				},
 			},
 		},
@@ -38,12 +36,11 @@ var testSchemaMutable *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 		"table1": {
 			Columns: map[string]*libovsdb.ColumnSchema{
 				"mutable": {
-					Type:    libovsdb.TypeInteger,
-					Mutable: true,
+					Type: libovsdb.TypeInteger,
 				},
 				"unmutable": {
 					Type:    libovsdb.TypeInteger,
-					Mutable: false,
+					Mutable: new(bool),
 				},
 			},
 		},
@@ -87,20 +84,18 @@ var testSchemaEnum *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 					TypeObj: &libovsdb.ColumnType{
 						Key: &libovsdb.BaseType{
 							Type: libovsdb.TypeString,
-							Enum: []interface{}{"red", "green", "blue"},
+							Enum: &libovsdb.OvsSet{GoSet: []interface{}{"red", "green", "blue"}},
 						},
 					},
-					Mutable: true,
 				},
 				"animal": {
 					Type: libovsdb.TypeEnum,
 					TypeObj: &libovsdb.ColumnType{
 						Key: &libovsdb.BaseType{
 							Type: libovsdb.TypeString,
-							Enum: []interface{}{"dog", "cat", "mouse"},
+							Enum: &libovsdb.OvsSet{GoSet: []interface{}{"dog", "cat", "mouse"}},
 						},
 					},
-					Mutable: true,
 				},
 			},
 		},
@@ -122,7 +117,6 @@ var testSchemaSet *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 						Max: libovsdb.Unlimited,
 						Min: 0,
 					},
-					Mutable: true,
 				},
 				"integer": {
 					Type: libovsdb.TypeSet,
@@ -133,7 +127,6 @@ var testSchemaSet *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 						Max: 2,
 						Min: 0,
 					},
-					Mutable: true,
 				},
 			},
 		},
@@ -158,7 +151,6 @@ var testSchemaMap *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 						Min: 1,
 						Max: 1,
 					},
-					Mutable: true,
 				},
 			},
 		},
