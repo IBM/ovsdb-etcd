@@ -158,7 +158,7 @@ func TestSchema(t *testing.T) {
 								TypeObj: &ColumnType{
 									Key: &BaseType{
 										Type: "string",
-										Enum: []interface{}{"one", "two"},
+										Enum: &OvsSet{GoSet: []interface{}{"one", "two"}},
 									},
 									Max: Unlimited,
 									Min: 0,
@@ -265,7 +265,7 @@ func TestSchema(t *testing.T) {
 									},
 									Value: &BaseType{
 										Type: "string",
-										Enum: []interface{}{"one", "two"},
+										Enum: &OvsSet{GoSet: []interface{}{"one", "two"}},
 									},
 									Min: 1,
 									Max: 1,

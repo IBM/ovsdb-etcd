@@ -876,7 +876,7 @@ func (m *Mutation) Mutate(row *map[string]interface{}) error {
 	case COL_UUID, COL_VERSION:
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
-	if !m.ColumnSchema.Mutable {
+	if m.ColumnSchema.Mutable != nil && !*m.ColumnSchema.Mutable {
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	switch m.ColumnSchema.Type {
@@ -918,7 +918,7 @@ func RowUpdate(tableSchema *libovsdb.TableSchema, original *map[string]interface
 		case COL_UUID, COL_VERSION:
 			return errors.New(E_CONSTRAINT_VIOLATION)
 		}
-		if !columnSchema.Mutable {
+		if columnSchema.Mutable != nil && !*columnSchema.Mutable {
 			return errors.New(E_CONSTRAINT_VIOLATION)
 		}
 		(*original)[column] = value
