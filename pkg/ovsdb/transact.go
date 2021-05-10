@@ -362,7 +362,11 @@ func NewCondition(tableSchema *libovsdb.TableSchema, condition []interface{}) (*
 	if !ok {
 		return nil, errors.New(E_INTERNAL_ERROR)
 	}
-	columnSchema := tableSchema.LookupColumn(column)
+
+	var columnSchema *libovsdb.ColumnSchema
+	if column != COL_UUID && column != COL_VERSION {
+		columnSchema = tableSchema.LookupColumn(column)
+	}
 
 	fn, ok := condition[1].(string)
 	if !ok {
@@ -551,6 +555,13 @@ func (c *Condition) CompareMap(row *map[string]interface{}) (bool, error) {
 }
 
 func (c *Condition) Compare(row *map[string]interface{}) (bool, error) {
+	switch c.Column {
+	case COL_UUID:
+		return c.CompareUUID(row)
+	case COL_VERSION:
+		return false, errors.New(E_CONSTRAINT_VIOLATION)
+	}
+
 	switch c.ColumnSchema.Type {
 	case libovsdb.TypeInteger:
 		return c.CompareInteger(row)
