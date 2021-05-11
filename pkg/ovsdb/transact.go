@@ -1,18 +1,10 @@
 package ovsdb
 
-// TODO: named-uuid from one operation servces other operation
 // TODO: check that etcd revision of data GOT did not change when PUT
 // TODO: add re-try mechanism for transactions
-// TODO: every operation must be recorded in the journal db/txn/operation (see
-// implementation)
-// TODO: add schema to validate constrains
-// TODO: add schema to validate uniqness "key" columns
-// TODO: add schema to support references (references constrains)
-// TODO: add schema to support GC
 // TODO: Support the "Cancel" method
-// TODO: log errors to klog
-// TODO: set and update _version
-// TODO: https://docs.openvswitch.org/en/latest/ref/ovsdb-server.7/#insert
+// TODO: named-uuid from one operation servces other operation
+//       https://docs.openvswitch.org/en/latest/ref/ovsdb-server.7/#insert
 
 import (
 	"context"
@@ -26,6 +18,7 @@ import (
 	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"k8s.io/klog"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
@@ -270,6 +263,7 @@ func (txn *Transaction) Commit() error {
 		}
 	}
 	if hasSelect && hasOther {
+		klog.Errorf("Can't mix select with other operations")
 		err := errors.New(E_CONSTRAINT_VIOLATION)
 		txn.response.Error = err.Error()
 		return err
@@ -313,6 +307,7 @@ func (txn *Transaction) cacheFixTypesToFitSchema() error {
 			for _, row := range tableCache {
 				err := txn.schemas.Convert(dbname, table, row)
 				if err != nil {
+					klog.Errorf("Failed to convert table %s/%s: %s", dbname, table, err)
 					return errors.New(E_INTEGRITY_VIOLATION)
 				}
 			}
@@ -325,6 +320,7 @@ func (txn *Transaction) cacheFixTypesToFitSchema() error {
 func makeValue(row *map[string]interface{}) (string, error) {
 	b, err := json.Marshal(*row)
 	if err != nil {
+		klog.Errorf("Failed json marshal: %s", err.Error())
 		return "", err
 	}
 	return string(b), nil
@@ -355,11 +351,13 @@ type Condition struct {
 
 func NewCondition(tableSchema *libovsdb.TableSchema, condition []interface{}) (*Condition, error) {
 	if len(condition) != 3 {
+		klog.Errorf("Expected 3 elements in condition: %v", condition)
 		return nil, errors.New(E_INTERNAL_ERROR)
 	}
 
 	column, ok := condition[0].(string)
 	if !ok {
+		klog.Errorf("Failed to convert 1st element to string: %v", condition)
 		return nil, errors.New(E_INTERNAL_ERROR)
 	}
 
@@ -374,6 +372,7 @@ func NewCondition(tableSchema *libovsdb.TableSchema, condition []interface{}) (*
 
 	fn, ok := condition[1].(string)
 	if !ok {
+		klog.Errorf("Failed to convert 2st element to string: %v", condition)
 		return nil, errors.New(E_INTERNAL_ERROR)
 	}
 
@@ -389,11 +388,13 @@ func NewCondition(tableSchema *libovsdb.TableSchema, condition []interface{}) (*
 func (c *Condition) CompareInteger(row *map[string]interface{}) (bool, error) {
 	actual, ok := (*row)[c.Column].(int)
 	if !ok {
+		klog.Errorf("Failed to convert row value: %v", (*row)[c.Column])
 		return false, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	fn := c.Function
 	expected, ok := c.Value.(int)
 	if !ok {
+		klog.Errorf("Failed to convert condition value: %v", c.Value)
 		return false, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	if (fn == FN_EQ || fn == FN_IN) && actual == expected {
@@ -420,11 +421,13 @@ func (c *Condition) CompareInteger(row *map[string]interface{}) (bool, error) {
 func (c *Condition) CompareReal(row *map[string]interface{}) (bool, error) {
 	actual, ok := (*row)[c.Column].(float64)
 	if !ok {
+		klog.Errorf("Failed to convert row value: %v", (*row)[c.Column])
 		return false, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	fn := c.Function
 	expected, ok := c.Value.(float64)
 	if !ok {
+		klog.Errorf("Failed to convert condition value: %v", c.Value)
 		return false, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
@@ -452,11 +455,13 @@ func (c *Condition) CompareReal(row *map[string]interface{}) (bool, error) {
 func (c *Condition) CompareBoolean(row *map[string]interface{}) (bool, error) {
 	actual, ok := (*row)[c.Column].(bool)
 	if !ok {
+		klog.Errorf("Failed to convert row value: %v", (*row)[c.Column])
 		return false, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	fn := c.Function
 	expected, ok := c.Value.(bool)
 	if !ok {
+		klog.Errorf("Failed to convert condition value: %v", c.Value)
 		return false, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
@@ -472,11 +477,13 @@ func (c *Condition) CompareBoolean(row *map[string]interface{}) (bool, error) {
 func (c *Condition) CompareString(row *map[string]interface{}) (bool, error) {
 	actual, ok := (*row)[c.Column].(string)
 	if !ok {
+		klog.Errorf("Failed to convert row value: %v", (*row)[c.Column])
 		return false, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	fn := c.Function
 	expected, ok := c.Value.(string)
 	if !ok {
+		klog.Errorf("Failed to convert condition value: %v", c.Value)
 		return false, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
@@ -492,11 +499,13 @@ func (c *Condition) CompareString(row *map[string]interface{}) (bool, error) {
 func (c *Condition) CompareUUID(row *map[string]interface{}) (bool, error) {
 	actual, ok := (*row)[c.Column].(libovsdb.UUID)
 	if !ok {
+		klog.Errorf("Failed to convert row value: %v", (*row)[c.Column])
 		return false, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	fn := c.Function
 	expected, ok := c.Value.(libovsdb.UUID)
 	if !ok {
+		klog.Errorf("Failed to convert condition value: %v", c.Value)
 		return false, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
@@ -521,11 +530,13 @@ func (c *Condition) CompareEnum(row *map[string]interface{}) (bool, error) {
 func (c *Condition) CompareSet(row *map[string]interface{}) (bool, error) {
 	actual, ok := (*row)[c.Column].(libovsdb.OvsSet)
 	if !ok {
+		klog.Errorf("Failed to convert row value: %v", (*row)[c.Column])
 		return false, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	fn := c.Function
 	expected, ok := c.Value.(libovsdb.OvsSet)
 	if !ok {
+		klog.Errorf("Failed to convert condition value: %v", c.Value)
 		return false, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
@@ -541,11 +552,13 @@ func (c *Condition) CompareSet(row *map[string]interface{}) (bool, error) {
 func (c *Condition) CompareMap(row *map[string]interface{}) (bool, error) {
 	actual, ok := (*row)[c.Column].(libovsdb.OvsMap)
 	if !ok {
+		klog.Errorf("Failed to convert row value: %v", (*row)[c.Column])
 		return false, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	fn := c.Function
 	expected, ok := c.Value.(libovsdb.OvsMap)
 	if !ok {
+		klog.Errorf("Failed to convert condition value: %v", c.Value)
 		return false, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
@@ -563,6 +576,7 @@ func (c *Condition) Compare(row *map[string]interface{}) (bool, error) {
 	case COL_UUID:
 		return c.CompareUUID(row)
 	case COL_VERSION:
+		klog.Errorf("Unsupported field comparison: %s", COL_VERSION)
 		return false, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
@@ -584,6 +598,7 @@ func (c *Condition) Compare(row *map[string]interface{}) (bool, error) {
 	case libovsdb.TypeMap:
 		return c.CompareMap(row)
 	default:
+		klog.Errorf("Usupported type comparison: %s", c.ColumnSchema.Type)
 		return false, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 }
@@ -591,6 +606,7 @@ func (c *Condition) Compare(row *map[string]interface{}) (bool, error) {
 func getUUIDIfExists(tableSchema *libovsdb.TableSchema, cond1 interface{}) (string, error) {
 	cond2, ok := cond1.([]interface{})
 	if !ok {
+		klog.Errorf("Failed to convert row value: %v", cond1)
 		return "", errors.New(E_INTERNAL_ERROR)
 	}
 	condition, err := NewCondition(tableSchema, cond2)
@@ -605,10 +621,12 @@ func getUUIDIfExists(tableSchema *libovsdb.TableSchema, cond1 interface{}) (stri
 	}
 	ovsUUID, ok := condition.Value.(libovsdb.UUID)
 	if !ok {
+		klog.Errorf("Failed to convert condition value: %v", condition.Value)
 		return "", errors.New(E_INTERNAL_ERROR)
 	}
 	err = ovsUUID.ValidateUUID()
 	if err != nil {
+		klog.Errorf("Failed uuid validation: %s", err.Error())
 		return "", err
 	}
 	return ovsUUID.GoUUID, err
@@ -618,6 +636,7 @@ func doesWhereContainCondTypeUUID(tableSchema *libovsdb.TableSchema, where []int
 	for _, c := range where {
 		cond, ok := c.([]interface{})
 		if !ok {
+			klog.Errorf("Failed to convert row value: %v", c)
 			return "", errors.New(E_INTERNAL_ERROR)
 		}
 		uuid, err := getUUIDIfExists(tableSchema, cond)
@@ -636,6 +655,7 @@ func isRowSelectedByWhere(tableSchema *libovsdb.TableSchema, row *map[string]int
 	for _, c := range where {
 		cond, ok := c.([]interface{})
 		if !ok {
+			klog.Errorf("Failed to convert condition value: %v", c)
 			return false, errors.New(E_INTERNAL_ERROR)
 		}
 		ok, err := isRowSelectedByCond(tableSchema, row, cond)
@@ -685,11 +705,13 @@ type Mutation struct {
 
 func NewMutation(tableSchema *libovsdb.TableSchema, mutation []interface{}) (*Mutation, error) {
 	if len(mutation) != 3 {
+		klog.Errorf("Expected 3 items in mutation object: %v", mutation)
 		return nil, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
 	column, ok := mutation[0].(string)
 	if !ok {
+		klog.Errorf("Can't convert mutation column: %v", mutation[0])
 		return nil, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
@@ -700,6 +722,7 @@ func NewMutation(tableSchema *libovsdb.TableSchema, mutation []interface{}) (*Mu
 
 	mt, ok := mutation[1].(string)
 	if !ok {
+		klog.Errorf("Can't convert mutation mutator: %v", mutation[1])
 		return nil, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
@@ -716,6 +739,7 @@ func (m *Mutation) MutateInteger(row *map[string]interface{}) error {
 	original := (*row)[m.Column].(int)
 	value, ok := m.Value.(int)
 	if !ok {
+		klog.Errorf("Can't convert mutation value: %v", m.Value)
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	mutated := original
@@ -731,12 +755,14 @@ func (m *Mutation) MutateInteger(row *map[string]interface{}) error {
 		if value != 0 {
 			mutated /= value
 		} else {
+			klog.Errorf("Can't devide by 0")
 			err = errors.New(E_DOMAIN_ERROR)
 		}
 	case MT_REMAINDER:
 		if value != 0 {
 			mutated %= value
 		} else {
+			klog.Errorf("Can't modulo by 0")
 			err = errors.New(E_DOMAIN_ERROR)
 		}
 	default:
@@ -750,6 +776,7 @@ func (m *Mutation) MutateReal(row *map[string]interface{}) error {
 	original := (*row)[m.Column].(float64)
 	value, ok := m.Value.(float64)
 	if !ok {
+		klog.Errorf("Failed to convert mutation value: %v", m.Value)
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	mutated := original
@@ -765,6 +792,7 @@ func (m *Mutation) MutateReal(row *map[string]interface{}) error {
 		if value != 0 {
 			mutated /= value
 		} else {
+			klog.Errorf("Can't devide by 0")
 			err = errors.New(E_DOMAIN_ERROR)
 		}
 	default:
@@ -777,6 +805,7 @@ func (m *Mutation) MutateReal(row *map[string]interface{}) error {
 func insertToSet(original *libovsdb.OvsSet, toInsert interface{}) (*libovsdb.OvsSet, error) {
 	toInsertSet, ok := toInsert.(libovsdb.OvsSet)
 	if !ok {
+		klog.Errorf("Failed to convert mutation value: %v", toInsert)
 		return nil, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	mutated := new(libovsdb.OvsSet)
@@ -790,6 +819,7 @@ func insertToSet(original *libovsdb.OvsSet, toInsert interface{}) (*libovsdb.Ovs
 func deleteFromSet(original *libovsdb.OvsSet, toDelete interface{}) (*libovsdb.OvsSet, error) {
 	toDeleteSet, ok := toDelete.(libovsdb.OvsSet)
 	if !ok {
+		klog.Errorf("Failed to convert mutation value: %v", toDelete)
 		return nil, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	mutated := new(libovsdb.OvsSet)
@@ -818,6 +848,7 @@ func (m *Mutation) MutateSet(row *map[string]interface{}) error {
 	case MT_DELETE:
 		mutated, err = deleteFromSet(&original, m.Value)
 	default:
+		klog.Errorf("Unsupported mutation mutator: %s", m.Mutator)
 		err = errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	if err != nil {
@@ -836,6 +867,7 @@ func insertToMap(original *libovsdb.OvsMap, toInsert interface{}) (*libovsdb.Ovs
 			mutated.GoMap[k] = v
 		}
 	default:
+		klog.Errorf("Unsupported mutator value type: %+v", toInsert)
 		return nil, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	return mutated, nil
@@ -869,6 +901,7 @@ func (m *Mutation) MutateMap(row *map[string]interface{}) error {
 	case MT_DELETE:
 		mutated, err = deleteFromMap(&original, m.Value)
 	default:
+		klog.Errorf("Unsupported mutation mutator: %s", m.Mutator)
 		err = errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	if err != nil {
@@ -881,9 +914,11 @@ func (m *Mutation) MutateMap(row *map[string]interface{}) error {
 func (m *Mutation) Mutate(row *map[string]interface{}) error {
 	switch m.Column {
 	case COL_UUID, COL_VERSION:
+		klog.Errorf("Can't mutate column: %s", m.Column)
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	if m.ColumnSchema.Mutable != nil && !*m.ColumnSchema.Mutable {
+		klog.Errorf("Can't mutate unmutable column: %s", m.Column)
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	switch m.ColumnSchema.Type {
@@ -926,9 +961,11 @@ func RowUpdate(tableSchema *libovsdb.TableSchema, original *map[string]interface
 		}
 		switch column {
 		case COL_UUID, COL_VERSION:
+			klog.Errorf("Can't update column: %s", column)
 			return errors.New(E_CONSTRAINT_VIOLATION)
 		}
 		if columnSchema.Mutable != nil && !*columnSchema.Mutable {
+			klog.Errorf("Can't update unmutable column: %s", column)
 			return errors.New(E_CONSTRAINT_VIOLATION)
 		}
 		(*original)[column] = value
@@ -1008,6 +1045,7 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 
 	ok, err := txn.schemas.Validate(txn.request.DBName, ovsOp.Table, &ovsOp.Row)
 	if !ok || err != nil {
+		klog.Errorf("Failed to validate table %s/%s", txn.request.DBName, ovsOp.Table)
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
@@ -1145,7 +1183,8 @@ func doDelete(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 /* wait */
 func preWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
 	if ovsOp.Timeout != 0 {
-		return fmt.Errorf("only support timeout 0")
+		klog.Errorf("only support timeout 0")
+		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	return etcdGetByWhere(txn, ovsOp, ovsResult)
 }
