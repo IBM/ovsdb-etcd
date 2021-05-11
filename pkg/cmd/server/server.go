@@ -49,8 +49,8 @@ func main() {
 	flag.Parse()
 	defer klog.Flush()
 
-	fmt.Println("start the ovsdb-etcd server with the following arguments:")
-	fmt.Printf("\ttcpAddress: %s\n\tunixAddressress: %s\n\tetcdMembersress: %s\n\tschemaBasedir: %s\n\tmaxTasks: %d\n\tdatabasePrefix: %s\n\tserviceName: %s\n\tschemaFile: %s\n\tloadServerData: %v\n\tpid_file: %s\n",
+	klog.Infof("start the ovsdb-etcd server with the following arguments:")
+	klog.Infof("\ttcpAddress: %s\n\tunixAddressress: %s\n\tetcdMembersress: %s\n\tschemaBasedir: %s\n\tmaxTasks: %d\n\tdatabasePrefix: %s\n\tserviceName: %s\n\tschemaFile: %s\n\tloadServerData: %v\n\tpid_file: %s\n",
 		*tcpAddress, *unixAddress, *etcdMembers, *schemaBasedir, *maxTasks, *databasePrefix, *serviceName, *schemaFile, *loadServerDataFlag, *pidfile)
 
 	if len(*tcpAddress) == 0 && len(*unixAddress) == 0 {

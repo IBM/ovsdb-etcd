@@ -1,4 +1,4 @@
-docker tag server roytman/server
-docker tag etcd roytman/etcd
-docker push roytman/server
-docker push roytman/etcd
+docker tag server omerbh/server
+docker tag etcd omerbh/etcd
+docker push omerbh/server
+docker push omerbh/etcd

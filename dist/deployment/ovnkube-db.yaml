@@ -67,16 +67,16 @@ spec:
 
       # etcd
       - name: etcd
-        image: "roytman/etcd"
+        image: "omerbh/etcd"
         imagePullPolicy: "Always"
-        command: ["/usr/local/bin/etcd","--data-dir", "/etc/openvswitch/" ,"--listen-peer-urls", "http://localhost:2480", "--listen-client-urls", "http://localhost:2479" , "--advertise-client-urls", "http://localhost:2479" ]
+        command: ["/root/etcd","--data-dir", "/etc/openvswitch/" ,"--listen-peer-urls", "http://localhost:2480", "--listen-client-urls", "http://localhost:2479" , "--advertise-client-urls", "http://localhost:2479" ]
 
       # nb-ovsdb - v3
       - name: nb-ovsdb
-        image: "roytman/server"
+        image: "omerbh/server"
         imagePullPolicy: "Always"
 
-        command: ["/usr/local/bin/server","-logtostderr=false","-log_file=/var/log/openvswitch/nb-ovsdb.log","-v=3","-tcp-address","6641","-unix-address","/etc/ovn/ovnnb_db.db","-etcd-members","localhost:2479","-schema-basedir","./schemas","-database-prefix","ovsdb","-service-name","nb","-schema-file","ovn-nb.ovsschema","-schema-name","OVN_Northbound","-load-server-data","true"]
+        command: ["/root/server","-logtostderr=false","-log_file=/var/log/openvswitch/nb-ovsdb.log","-v=3","-tcp-address","6641","-unix-address","/etc/ovn/ovnnb_db.db","-etcd-members","localhost:2479","-schema-basedir","/root/etcd-ovsdb/schemas","-database-prefix","ovsdb","-service-name","nb","-schema-file","ovn-nb.ovsschema", "-load-server-data","true"]
 
         securityContext:
           runAsUser: 0
@@ -138,10 +138,10 @@ spec:
 
       # sb-ovsdb - v3
       - name: sb-ovsdb
-        image: "roytman/server"
+        image: "omerbh/server"
         imagePullPolicy: "Always"
 
-        command: ["/usr/local/bin/server","-logtostderr=false","-log_file=/var/log/openvswitch/sb-ovsdb.log","-v=3","-tcp-address","6642","-unix-address","/etc/ovn/ovnsb_db.db","-etcd-members","localhost:2479","-schema-basedir","./schemas","-database-prefix","ovsdb","-service-name","sb","-schema-file","ovn-sb.ovsschema","-schema-name","OVN_Southbound","-load-server-data","true"]
+        command: ["/root/server","-logtostderr=false","-log_file=/var/log/openvswitch/sb-ovsdb.log","-v=3","-tcp-address","6642","-unix-address","/etc/ovn/ovnsb_db.db","-etcd-members","localhost:2479","-schema-basedir","/root/etcd-ovsdb/schemas","-database-prefix","ovsdb","-service-name","sb","-schema-file","ovn-sb.ovsschema", "-load-server-data","true"]
 
         securityContext:
           runAsUser: 0
