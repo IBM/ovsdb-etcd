@@ -540,7 +540,7 @@ func (tableSchema *TableSchema) Convert(row *map[string]interface{}) error {
 func (databaseSchema *DatabaseSchema) Convert(table string, row *map[string]interface{}) error {
 	tableSchema, ok := databaseSchema.Tables[table]
 	if !ok {
-		panic(fmt.Sprintf("Missing schema for table %s", table))
+		return fmt.Errorf("Missing schema for table %s", table)
 	}
 	return tableSchema.Convert(row)
 }
@@ -548,48 +548,48 @@ func (databaseSchema *DatabaseSchema) Convert(table string, row *map[string]inte
 func (schemas *Schemas) Convert(dbname, table string, row *map[string]interface{}) error {
 	databaseSchema, ok := (*schemas)[dbname]
 	if !ok {
-		panic(fmt.Sprintf("Missing schema for database %s", table))
+		return fmt.Errorf("Missing schema for database %s", table)
 	}
 	return databaseSchema.Convert(table, row)
 }
 
 /* lookup */
-func (tableSchema *TableSchema) LookupColumn(column string) *ColumnSchema {
+func (tableSchema *TableSchema) LookupColumn(column string) (*ColumnSchema, error) {
 	columnSchema, ok := tableSchema.Columns[column]
 	if !ok {
-		panic(fmt.Sprintf("Missing schema for column %s", column))
+		return nil, fmt.Errorf("Missing schema for column %s", column)
 	}
-	return columnSchema
+	return columnSchema, nil
 }
 
-func (databaseSchema *DatabaseSchema) LookupColumn(table, column string) *ColumnSchema {
+func (databaseSchema *DatabaseSchema) LookupColumn(table, column string) (*ColumnSchema, error) {
 	tableSchema, ok := databaseSchema.Tables[table]
 	if !ok {
-		panic(fmt.Sprintf("Missing schema for table %s", table))
+		return nil, fmt.Errorf("Missing schema for table %s", table)
 	}
 	return tableSchema.LookupColumn(column)
 }
 
-func (schemas *Schemas) LookupColumn(dbname, table, column string) *ColumnSchema {
+func (schemas *Schemas) LookupColumn(dbname, table, column string) (*ColumnSchema, error) {
 	databaseSchema, ok := (*schemas)[dbname]
 	if !ok {
-		panic(fmt.Sprintf("Missing schema for database %s", dbname))
+		return nil, fmt.Errorf("Missing schema for database %s", dbname)
 	}
 	return databaseSchema.LookupColumn(table, column)
 }
 
-func (databaseSchema *DatabaseSchema) LookupTable(table string) *TableSchema {
+func (databaseSchema *DatabaseSchema) LookupTable(table string) (*TableSchema, error) {
 	tableSchema, ok := databaseSchema.Tables[table]
 	if !ok {
-		panic(fmt.Sprintf("Missing schema for table %s", table))
+		return nil, fmt.Errorf("Missing schema for table %s", table)
 	}
-	return &tableSchema
+	return &tableSchema, nil
 }
 
-func (schemas *Schemas) LookupTable(dbname, table string) *TableSchema {
+func (schemas *Schemas) LookupTable(dbname, table string) (*TableSchema, error) {
 	databaseSchema, ok := (*schemas)[dbname]
 	if !ok {
-		panic(fmt.Sprintf("Missing schema for database %s", dbname))
+		return nil, fmt.Errorf("Missing schema for database %s", dbname)
 	}
 	return databaseSchema.LookupTable(table)
 }
@@ -761,29 +761,34 @@ func (columnSchema *ColumnSchema) Validate(value interface{}) bool {
 	}
 }
 
-func (tableSchema *TableSchema) Validate(row *map[string]interface{}) bool {
-	for column, columnSchema := range tableSchema.Columns {
-		if _, ok := (*row)[column]; ok {
-			if ok = columnSchema.Validate((*row)[column]); !ok {
-				return false
-			}
+func (tableSchema *TableSchema) Validate(row *map[string]interface{}) (bool, error) {
+	for column, value := range *row {
+		if column == "_uuid" || column == "_version" {
+			continue
+		}
+		columnSchema, ok := tableSchema.Columns[column]
+		if !ok {
+			return false, fmt.Errorf("Missing schema for column %s", column)
+		}
+		if ok = columnSchema.Validate(value); !ok {
+			return false, nil
 		}
 	}
-	return true
+	return true, nil
 }
 
-func (databaseSchema *DatabaseSchema) Validate(table string, row *map[string]interface{}) bool {
+func (databaseSchema *DatabaseSchema) Validate(table string, row *map[string]interface{}) (bool, error) {
 	tableSchema, ok := databaseSchema.Tables[table]
 	if !ok {
-		panic(fmt.Sprintf("Missing schema for table %s", table))
+		return false, fmt.Errorf("Missing schema for table %s", table)
 	}
 	return tableSchema.Validate(row)
 }
 
-func (schemas *Schemas) Validate(dbname, table string, row *map[string]interface{}) bool {
+func (schemas *Schemas) Validate(dbname, table string, row *map[string]interface{}) (bool, error) {
 	databaseSchema, ok := (*schemas)[dbname]
 	if !ok {
-		panic(fmt.Sprintf("Missing schema for database %s", table))
+		return false, fmt.Errorf("Missing schema for database %s", table)
 	}
 	return databaseSchema.Validate(table, row)
 }
