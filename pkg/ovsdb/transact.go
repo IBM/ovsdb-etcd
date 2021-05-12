@@ -1,10 +1,6 @@
 package ovsdb
 
-// TODO: check that etcd revision of data GOT did not change when PUT
-// TODO: add re-try mechanism for transactions
-// TODO: Support the "Cancel" method
-// TODO: named-uuid from one operation servces other operation
-//       https://docs.openvswitch.org/en/latest/ref/ovsdb-server.7/#insert
+// TODO: named-uuid from one operation services other operation
 
 import (
 	"context"
@@ -41,6 +37,7 @@ const (
 	E_IO_ERROR            = "I/O error"
 
 	/* ovsdb extention */
+	E_DUP_UUID         = "duplicate uuid"
 	E_INTERNAL_ERROR   = "internal error"
 	E_OVSDB_ERROR      = "ovsdb error"
 	E_PERMISSION_ERROR = "permission error"
@@ -1035,11 +1032,14 @@ func preInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 }
 
 func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
-	if ovsOp.UUIDName != "" {
-		for _, row := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
-			if (*row)[COL_UUIDNAME] == ovsOp.UUIDName {
-				return errors.New(E_DUP_UUIDNAME)
-			}
+	for uuid, row := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
+		if ovsOp.UUIDName != "" && (*row)[COL_UUIDNAME] == ovsOp.UUIDName {
+			klog.Errorf("Duplicate uuid-name: %s", ovsOp.UUIDName)
+			return errors.New(E_DUP_UUIDNAME)
+		}
+		if ovsOp.UUID != nil && uuid == ovsOp.UUID.GoUUID {
+			klog.Errorf("Duplicate uuid: %s", ovsOp.UUID)
+			return errors.New(E_DUP_UUID)
 		}
 	}
 
@@ -1050,6 +1050,9 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 	}
 
 	key := common.GenerateDataKey(txn.request.DBName, ovsOp.Table) /* generate RFC4122 UUID */
+	if ovsOp.UUID != nil {
+		key.UUID = ovsOp.UUID.GoUUID
+	}
 	ovsResult.InitUUID(key.UUID)
 	row := txn.cache.Row(key)
 	*row = ovsOp.Row

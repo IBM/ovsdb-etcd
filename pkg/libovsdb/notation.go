@@ -17,6 +17,7 @@ type Operation struct {
 	Where     []interface{}            `json:"where,omitempty"`
 	Until     string                   `json:"until,omitempty"`
 	UUIDName  string                   `json:"uuid-name,omitempty"`
+	UUID      *UUID                    `json:"uuid,omitempty"`
 	Comment   string                   `json:"comment,omitempty"`
 	Durable   bool                     `json:"durable,omitempty"`
 }

@@ -272,6 +272,29 @@ func TestTransactInsertSimple(t *testing.T) {
 	assert.Equal(t, int(0), dump["key2"])
 }
 
+func TestTransactInsertSimpleWithUUID(t *testing.T) {
+	req := &libovsdb.Transact{
+		DBName: "simple",
+		Operations: []libovsdb.Operation{
+			{
+				Op:    OP_INSERT,
+				Table: "table1",
+				Row: map[string]interface{}{
+					"key1": "val1",
+				},
+				UUID: &libovsdb.UUID{GoUUID: "00000000-0000-0000-0000-000000000001"},
+			},
+		},
+	}
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t, "simple", "table1")
+	resp, txn := testTransact(t, req)
+	assert.Equal(t, "", resp.Error)
+	dump := testTransactDump(t, txn, "simple", "table1")
+	assert.Equal(t, "val1", dump["key1"])
+	assert.Equal(t, int(0), dump["key2"])
+}
+
 func TestTransactInsertEnumOk(t *testing.T) {
 	req := &libovsdb.Transact{
 		DBName: "enum",
