@@ -213,6 +213,7 @@ type Transaction struct {
 }
 
 func NewTransaction(cli *clientv3.Client, request *libovsdb.Transact) *Transaction {
+	klog.Infof("create new transaction with request params: %+v", request)
 	txn := new(Transaction)
 	txn.cache = Cache{}
 	txn.schemas = libovsdb.Schemas{}
@@ -1044,8 +1045,12 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 	}
 
 	ok, err := txn.schemas.Validate(txn.request.DBName, ovsOp.Table, &ovsOp.Row)
-	if !ok || err != nil {
-		klog.Errorf("Failed to validate table %s/%s", txn.request.DBName, ovsOp.Table)
+	if err != nil {
+		klog.Errorf("failed to validate table %s/%s: %s", txn.request.DBName, ovsOp.Table, err.Error())
+		return errors.New(E_CONSTRAINT_VIOLATION)
+	}
+	if !ok {
+		klog.Errorf("row in table %s/%s is invalid", txn.request.DBName, ovsOp.Table)
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
