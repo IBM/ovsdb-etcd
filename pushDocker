@@ -1,0 +1,4 @@
+docker tag server omerbh/server
+docker tag etcd omerbh/etcd
+docker push omerbh/server
+docker push omerbh/etcd
