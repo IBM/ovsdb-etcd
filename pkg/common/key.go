@@ -82,9 +82,14 @@ func (k *Key) ToTableKey() Key {
 	return Key{Prefix: k.Prefix, DBName: k.DBName, TableName: k.TableName}
 }
 
+/* GenerateUUID generate RFC4122 UUID */
+func GenerateUUID() string {
+	return guuid.NewString()
+}
+
 // Creates a new data key with a generated uuid
 func GenerateDataKey(dbName, tableName string) Key {
-	return NewDataKey(dbName, tableName, guuid.NewString()) /* generate RFC4122 UUID */
+	return NewDataKey(dbName, tableName, GenerateUUID())
 }
 
 // Returns a new Data key. If the given uuid is an empty string, the return key will point to the entire table, and the
