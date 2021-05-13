@@ -1,12 +1,13 @@
 ROOT_DIR := .
-SERVER_EXECUTEBLE=$(ROOT_DIR)/pkg/cmd/server/server
+SERVER_EXECUTEBLE := "$(ROOT_DIR)/pkg/cmd/server/server"
 
-OVN_KUBERNETES_ROOT := \
-	~/work/src/github.com/ovn-org/ovn-kubernetes
+OVN_KUBERNETES_ROOT ?= $(ROOT_DIR)/../../ovn-org/ovn-kubernetes
 
 SERVER_FILES := \
 	$(ROOT_DIR)/pkg/cmd/server/server.go \
 	$(ROOT_DIR)/pkg/cmd/server/testdata.go
+
+
 
 .PHONY: install-tools
 install-tools:
@@ -73,20 +74,18 @@ tests:
 
 .PHONY: image-etcd
 image-etcd:
-	docker build . -t etcd -f dist/images/etcd/Dockerfile
+	docker build . -t etcd -f dist/images/Dockerfile.etcd
 
 .PHONY: image-server
 image-server: build
-	docker build . -t server -f dist/images/server/Dockerfile
+	docker build . -t server -f dist/images/Dockerfile.ovsdb-etcd
 
 .PHONY: ovn-kubernetes-build
 ovn-kubernetes-build:
 	$(MAKE) build
 	$(MAKE) image-server
 	$(MAKE) image-etcd
-	./pushDocker
-	cp dist/deployment/ovnkube-db.yaml $(OVN_KUBERNETES_ROOT)/dist/yaml/
-	cp dist/ovn-kubernetes/dist/images/ovndb-raft-functions.sh $(OVN_KUBERNETES_ROOT)/dist/images/
-	cp dist/ovn-kubernetes/dist/images/ovnkube.sh $(OVN_KUBERNETES_ROOT)/dist/images/
-	cp dist/ovn-kubernetes/dist/templates/ovnkube-db.etcd.yaml.j2 $(OVN_KUBERNETES_ROOT)/dist/templates
-	cp dist/ovn-kubernetes/dist/templates/ovnkube-db.yaml.j2 $(OVN_KUBERNETES_ROOT)/dist/templates
+	./scripts/pushDocker
+	cp dist/ovn-kubernetes/dist/images/ovndb-raft-functions.sh ${OVN_KUBERNETES_ROOT}/dist/images/
+	cp dist/ovn-kubernetes/dist/images/ovnkube.sh ${OVN_KUBERNETES_ROOT}/dist/images/
+	awk '{sub("XXREPO","${OVSDB_ETCD_REPOSITORY}")}1' dist/ovn-kubernetes/dist/templates/ovnkube-db.yaml.j2  > ${OVN_KUBERNETES_ROOT}/dist/templates/ovnkube-db.yaml.j2

@@ -67,7 +67,7 @@ spec:
 
       # etcd
       - name: etcd
-        image: "omerbh/etcd"
+        image: "docker.io/XXREPO/etcd:latest"
         imagePullPolicy: "Always"
         command: ["/root/ovnkube.sh", "etcd" ]
         terminationMessagePolicy: FallbackToLogsOnError
@@ -125,11 +125,11 @@ spec:
 
       # nb-ovsdb - v3
       - name: nb-ovsdb
-        image: "omerbh/server"
+        image: "docker.io/XXREPO/ovsdb-etcd:latest"
         imagePullPolicy: "Always"
 
       #  command: ["/usr/local/bin/server","-log_file=/var/log/openvswitch/nb-ovsdb.log","-v=6","-tcp-address=:6641","-unix-address=/var/run/ovn/ovnnb_db.sock","-etcd-members=localhost:2479","-schema-basedir=./schemas","-database-prefix=ovsdb","-service-name=nb","-schema-file=ovn-nb.ovsschema","-schema-name=OVN_Northbound","-load-server-data=false"]
-        command: ["/root/ovnkube.sh", "etcd-nb" ]
+        command: ["/root/ovnkube.sh", "nb-ovsdb-etcd" ]
 
         securityContext:
           runAsUser: 0
@@ -191,11 +191,11 @@ spec:
 
       # sb-ovsdb - v3
       - name: sb-ovsdb
-        image: "omerbh/server"
+        image: "docker.io/XXREPO/ovsdb-etcd:latest"
         imagePullPolicy: "Always"
 
       # command: ["/usr/local/bin/server","-log_file=/var/log/openvswitch/sb-ovsdb.log","-v=6","-tcp-address=:6642","-unix-address=/var/run/ovn/ovnsb_db.sock","-etcd-members=localhost:2479","-schema-basedir=./schemas","-database-prefix=ovsdb","-service-name=sb","-schema-file=ovn-sb.ovsschema","-schema-name=OVN_Southbound","-load-server-data=false"]
-        command: ["/root/ovnkube.sh", "etcd-sb" ]
+        command: ["/root/ovnkube.sh", "sb-ovsdb-etcd" ]
 
         securityContext:
           runAsUser: 0
