@@ -1,7 +1,5 @@
 package ovsdb
 
-// TODO: named-uuid from one operation services other operation
-
 import (
 	"context"
 	"encoding/json"
@@ -66,9 +64,8 @@ func isEqual(a, b interface{}) bool {
 
 // XXX: move to libovsdb
 const (
-	COL_UUID     = "_uuid"
-	COL_VERSION  = "_version"
-	COL_UUIDNAME = "uuid-name"
+	COL_UUID    = "_uuid"
+	COL_VERSION = "_version"
 )
 
 // XXX: move to libovsdb
@@ -195,6 +192,61 @@ func (c *Cache) PopulateFromKV(kvs []*mvccpb.KeyValue) error {
 	return nil
 }
 
+type MapUUID map[string]string
+
+func (mapUUID MapUUID) UUIDFixNamedUUID(value interface{}) (interface{}, error) {
+	namedUuid, _ := value.(libovsdb.UUID)
+	if namedUuid.GoUUID != "" && namedUuid.ValidateUUID() != nil {
+		uuid, ok := mapUUID[namedUuid.GoUUID]
+		if !ok {
+			klog.Errorf("Can't resolve named-uuid: %s", namedUuid.GoUUID)
+			return nil, errors.New(E_CONSTRAINT_VIOLATION)
+		}
+		value = libovsdb.UUID{GoUUID: uuid}
+	}
+
+	return value, nil
+}
+
+func (mapUUID MapUUID) SetFixNamedUUID(value interface{}) (interface{}, error) {
+	oldset, _ := value.(libovsdb.OvsSet)
+	newset := libovsdb.OvsSet{}
+	for _, oldval := range oldset.GoSet {
+		newval, err := mapUUID.UUIDFixNamedUUID(oldval)
+		if err != nil {
+			return nil, err
+		}
+		newset.GoSet = append(newset.GoSet, newval)
+	}
+	return newset, nil
+}
+
+func (mapUUID MapUUID) MapFixNamedUUID(value interface{}) (interface{}, error) {
+	oldmap, _ := value.(libovsdb.OvsMap)
+	newmap := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}
+	for key, oldval := range oldmap.GoMap {
+		newval, err := mapUUID.UUIDFixNamedUUID(oldval)
+		if err != nil {
+			return nil, err
+		}
+		newmap.GoMap[key] = newval
+	}
+	return newmap, nil
+}
+
+func (mapUUID MapUUID) FixNamedUUID(value interface{}) (interface{}, error) {
+	switch value.(type) {
+	case libovsdb.UUID:
+		return mapUUID.UUIDFixNamedUUID(value)
+	case libovsdb.OvsSet:
+		return mapUUID.SetFixNamedUUID(value)
+	case libovsdb.OvsMap:
+		return mapUUID.MapFixNamedUUID(value)
+	default:
+		return value, nil
+	}
+}
+
 type Transaction struct {
 	/* ovs */
 	schemas  libovsdb.Schemas
@@ -202,7 +254,8 @@ type Transaction struct {
 	response libovsdb.TransactResponse
 
 	/* cache */
-	cache Cache
+	cache   Cache
+	mapUUID MapUUID
 
 	/* etcd */
 	etcdCli  *clientv3.Client
@@ -216,6 +269,7 @@ func NewTransaction(cli *clientv3.Client, request *libovsdb.Transact) *Transacti
 	klog.Infof("create new transaction with request params: %+v", request)
 	txn := new(Transaction)
 	txn.cache = Cache{}
+	txn.mapUUID = MapUUID{}
 	txn.schemas = libovsdb.Schemas{}
 	txn.request = *request
 	txn.response.Result = make([]libovsdb.OperationResult, len(request.Operations))
@@ -951,7 +1005,7 @@ func RowMutate(tableSchema *libovsdb.TableSchema, original *map[string]interface
 	return nil
 }
 
-func RowUpdate(tableSchema *libovsdb.TableSchema, original *map[string]interface{}, update map[string]interface{}) error {
+func RowUpdate(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, original *map[string]interface{}, update map[string]interface{}) error {
 	for column, value := range update {
 		columnSchema, err := tableSchema.LookupColumn(column)
 		if err != nil {
@@ -964,6 +1018,11 @@ func RowUpdate(tableSchema *libovsdb.TableSchema, original *map[string]interface
 		}
 		if columnSchema.Mutable != nil && !*columnSchema.Mutable {
 			klog.Errorf("Can't update unmutable column: %s", column)
+			return errors.New(E_CONSTRAINT_VIOLATION)
+		}
+		value, err = mapUUID.FixNamedUUID(value)
+		if err != nil {
+			klog.Errorf("Can't fix namedUUID column %s: %s", column, err.Error())
 			return errors.New(E_CONSTRAINT_VIOLATION)
 		}
 		(*original)[column] = value
@@ -1033,11 +1092,20 @@ func preInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 }
 
 func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
-	for uuid, row := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
-		if ovsOp.UUIDName != "" && (*row)[COL_UUIDNAME] == ovsOp.UUIDName {
+	uuid := common.GenerateUUID()
+	if ovsOp.UUID != nil {
+		uuid = ovsOp.UUID.GoUUID
+	}
+
+	if ovsOp.UUIDName != "" {
+		if _, ok := txn.mapUUID[ovsOp.UUIDName]; ok {
 			klog.Errorf("Duplicate uuid-name: %s", ovsOp.UUIDName)
 			return errors.New(E_DUP_UUIDNAME)
 		}
+		txn.mapUUID[ovsOp.UUIDName] = uuid
+	}
+
+	for uuid, _ := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
 		if ovsOp.UUID != nil && uuid == ovsOp.UUID.GoUUID {
 			klog.Errorf("Duplicate uuid: %s", ovsOp.UUID)
 			return errors.New(E_DUP_UUID)
@@ -1050,10 +1118,7 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
-	key := common.GenerateDataKey(txn.request.DBName, ovsOp.Table) /* generate RFC4122 UUID */
-	if ovsOp.UUID != nil {
-		key.UUID = ovsOp.UUID.GoUUID
-	}
+	key := common.NewDataKey(txn.request.DBName, ovsOp.Table, uuid)
 	ovsResult.InitUUID(key.UUID)
 	row := txn.cache.Row(key)
 	*row = ovsOp.Row
@@ -1116,7 +1181,7 @@ func doUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 			return errors.New(E_CONSTRAINT_VIOLATION)
 		}
 
-		err = RowUpdate(tableSchema, row, ovsOp.Row)
+		err = RowUpdate(tableSchema, txn.mapUUID, row, ovsOp.Row)
 		if err != nil {
 			return err
 		}
