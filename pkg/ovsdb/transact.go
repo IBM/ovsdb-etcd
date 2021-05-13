@@ -1044,13 +1044,9 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		}
 	}
 
-	ok, err := txn.schemas.Validate(txn.request.DBName, ovsOp.Table, &ovsOp.Row)
+	err := txn.schemas.Validate(txn.request.DBName, ovsOp.Table, &ovsOp.Row)
 	if err != nil {
-		klog.Errorf("failed to validate table %s/%s: %s", txn.request.DBName, ovsOp.Table, err.Error())
-		return errors.New(E_CONSTRAINT_VIOLATION)
-	}
-	if !ok {
-		klog.Errorf("row in table %s/%s is invalid", txn.request.DBName, ovsOp.Table)
+		klog.Errorf("failed validation of table %s/%s: %s", txn.request.DBName, ovsOp.Table, err.Error())
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
@@ -1114,8 +1110,9 @@ func doUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 			continue
 		}
 
-		ok, err = txn.schemas.Validate(txn.request.DBName, ovsOp.Table, &ovsOp.Row)
-		if !ok || err != nil {
+		err = txn.schemas.Validate(txn.request.DBName, ovsOp.Table, &ovsOp.Row)
+		if err != nil {
+			klog.Errorf("failed validation of table %s/%s: %s", txn.request.DBName, ovsOp.Table, err.Error())
 			return errors.New(E_CONSTRAINT_VIOLATION)
 		}
 

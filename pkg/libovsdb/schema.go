@@ -761,34 +761,34 @@ func (columnSchema *ColumnSchema) Validate(value interface{}) bool {
 	}
 }
 
-func (tableSchema *TableSchema) Validate(row *map[string]interface{}) (bool, error) {
+func (tableSchema *TableSchema) Validate(row *map[string]interface{}) error {
 	for column, value := range *row {
 		if column == "_uuid" || column == "_version" {
 			continue
 		}
 		columnSchema, ok := tableSchema.Columns[column]
 		if !ok {
-			return false, fmt.Errorf("Missing schema for column %s", column)
+			return fmt.Errorf("Missing schema for column %s", column)
 		}
 		if ok = columnSchema.Validate(value); !ok {
-			return false, nil
+			return fmt.Errorf("Value is invalid for column %s", column)
 		}
 	}
-	return true, nil
+	return nil
 }
 
-func (databaseSchema *DatabaseSchema) Validate(table string, row *map[string]interface{}) (bool, error) {
+func (databaseSchema *DatabaseSchema) Validate(table string, row *map[string]interface{}) error {
 	tableSchema, ok := databaseSchema.Tables[table]
 	if !ok {
-		return false, fmt.Errorf("Missing schema for table %s", table)
+		return fmt.Errorf("Missing schema for table %s", table)
 	}
 	return tableSchema.Validate(row)
 }
 
-func (schemas *Schemas) Validate(dbname, table string, row *map[string]interface{}) (bool, error) {
+func (schemas *Schemas) Validate(dbname, table string, row *map[string]interface{}) error {
 	databaseSchema, ok := (*schemas)[dbname]
 	if !ok {
-		return false, fmt.Errorf("Missing schema for database %s", table)
+		return fmt.Errorf("Missing schema for database %s", table)
 	}
 	return databaseSchema.Validate(table, row)
 }
