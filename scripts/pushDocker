@@ -1,5 +1,0 @@
-
-docker tag server ${OVSDB_ETCD_REPOSITORY}/ovsdb-etcd
-docker tag etcd ${OVSDB_ETCD_REPOSITORY}/etcd
-docker push ${OVSDB_ETCD_REPOSITORY}/ovsdb-etcd
-docker push ${OVSDB_ETCD_REPOSITORY}/etcd
