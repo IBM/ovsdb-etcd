@@ -12,7 +12,7 @@ import (
 	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
@@ -266,7 +266,7 @@ type Transaction struct {
 }
 
 func NewTransaction(cli *clientv3.Client, request *libovsdb.Transact) *Transaction {
-	klog.Infof("create new transaction with request params: %+v", request)
+	klog.V(6).Infof("create new transaction with request params: %+v", request)
 	txn := new(Transaction)
 	txn.cache = Cache{}
 	txn.mapUUID = MapUUID{}
