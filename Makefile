@@ -51,8 +51,9 @@ etcd:
 	$(MAKE) -C tests/e2e/ etcd &
 
 .PHONY: build
+build: GIT_COMMIT := "$(shell git rev-list -1 HEAD)"
 build:
-	CGO_ENABLED=0 go build -o $(SERVER_EXECUTEBLE) $(SERVER_FILES)
+	CGO_ENABLED=0 go build -ldflags "-X main.GitCommit=$(GIT_COMMIT)" -o $(SERVER_EXECUTEBLE) $(SERVER_FILES)
 
 .PHONY: server
 server:
