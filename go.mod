@@ -19,7 +19,6 @@ require (
 	go.etcd.io/etcd/client/v3 v3.5.0-alpha.0
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	google.golang.org/genproto v0.0.0-20201210142538-e3217bee35cc // indirect
-	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.6.0
 )
 

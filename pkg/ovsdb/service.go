@@ -223,7 +223,7 @@ type Service struct {
 }
 
 func (s *Service) ListDbs(ctx context.Context, param interface{}) ([]string, error) {
-	klog.V(5).Infof("ListDbs request")
+	klog.V(5).Info("ListDbs request")
 	resp, err := s.db.GetData(common.NewTableKey(INT_SERVER, INT_DATABASES), true)
 	if err != nil {
 		return nil, err
@@ -236,6 +236,7 @@ func (s *Service) ListDbs(ctx context.Context, param interface{}) ([]string, err
 		}
 		dbs = append(dbs, key.UUID)
 	}
+	klog.V(5).Infof("ListDbs returned %v", dbs)
 	return dbs, nil
 }
 
@@ -277,7 +278,7 @@ func (s *Service) Convert(ctx context.Context, param interface{}) (interface{}, 
 }
 
 func (s *Service) Echo(ctx context.Context, param interface{}) interface{} {
-	klog.V(5).Infof("Echo request, parameters %v", param)
+	klog.V(7).Infof("Echo request, parameters %v", param)
 	return param
 }
 
