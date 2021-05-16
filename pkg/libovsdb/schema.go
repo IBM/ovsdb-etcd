@@ -481,44 +481,104 @@ func (schemas *Schemas) Default(dbname, table string, row *map[string]interface{
 }
 
 /* convert types */
-func (columnSchema *ColumnSchema) Unmarshal(from interface{}) (interface{}, error) {
+func UnmarshalInteger(from interface{}) (interface{}, error) {
 	data, err := json.Marshal(from)
 	if err != nil {
 		return nil, err
 	}
+	var to int
+	json.Unmarshal(data, &to)
+	return to, nil
+}
+
+func UnmarshalReal(from interface{}) (interface{}, error) {
+	data, err := json.Marshal(from)
+	if err != nil {
+		return nil, err
+	}
+	var to float64
+	json.Unmarshal(data, &to)
+	return to, nil
+}
+
+func UnmarshalString(from interface{}) (interface{}, error) {
+	data, err := json.Marshal(from)
+	if err != nil {
+		return nil, err
+	}
+	var to string
+	json.Unmarshal(data, &to)
+	return to, nil
+}
+
+func UnmarshalBoolean(from interface{}) (interface{}, error) {
+	data, err := json.Marshal(from)
+	if err != nil {
+		return nil, err
+	}
+	var to bool
+	json.Unmarshal(data, &to)
+	return to, nil
+}
+
+func UnmarshalUUID(from interface{}) (interface{}, error) {
+	data, err := json.Marshal(from)
+	if err != nil {
+		return nil, err
+	}
+	var to UUID
+	json.Unmarshal(data, &to)
+	return to, nil
+}
+
+func UnmarshalEnum(from interface{}) (interface{}, error) {
+	data, err := json.Marshal(from)
+	if err != nil {
+		return nil, err
+	}
+	var to interface{}
+	json.Unmarshal(data, &to)
+	return to, nil
+}
+
+func UnmarshalSet(from interface{}) (interface{}, error) {
+	data, err := json.Marshal(from)
+	if err != nil {
+		return nil, err
+	}
+	var to OvsSet
+	json.Unmarshal(data, &to)
+	return to, nil
+}
+
+func UnmarshalMap(from interface{}) (interface{}, error) {
+	data, err := json.Marshal(from)
+	if err != nil {
+		return nil, err
+	}
+	var to OvsMap
+	json.Unmarshal(data, &to)
+	return to, nil
+}
+
+func (columnSchema *ColumnSchema) Unmarshal(from interface{}) (interface{}, error) {
 	switch columnSchema.Type {
 	case TypeInteger:
-		var to int
-		json.Unmarshal(data, &to)
-		return to, nil
+		return UnmarshalInteger(from)
 	case TypeReal:
-		var to float64
-		json.Unmarshal(data, &to)
-		return to, nil
+		return UnmarshalReal(from)
 	case TypeBoolean:
-		var to bool
-		json.Unmarshal(data, &to)
-		return to, nil
+		return UnmarshalBoolean(from)
 	case TypeString:
-		var to string
-		json.Unmarshal(data, &to)
-		return to, nil
+		return UnmarshalString(from)
 	case TypeUUID:
-		var to UUID
-		json.Unmarshal(data, &to)
-		return to, nil
+		return UnmarshalUUID(from)
 	case TypeEnum:
-		var to interface{}
-		json.Unmarshal(data, &to)
-		return to, nil
+		return UnmarshalEnum(from)
 	case TypeSet:
-		var to OvsSet
-		json.Unmarshal(data, &to)
-		return to, nil
+		return UnmarshalSet(from)
 	case TypeMap:
-		var to OvsMap
-		json.Unmarshal(data, &to)
-		return to, nil
+		return UnmarshalMap(from)
 	default:
 		panic(fmt.Sprintf("unsupported type %s", columnSchema.Type))
 	}

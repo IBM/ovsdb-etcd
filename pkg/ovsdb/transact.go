@@ -409,7 +409,7 @@ func NewCondition(tableSchema *libovsdb.TableSchema, condition []interface{}) (*
 
 	column, ok := condition[0].(string)
 	if !ok {
-		klog.Errorf("Failed to convert 1st element to string: %v", condition)
+		klog.Errorf("Failed to convert column to string: %v", condition)
 		return nil, errors.New(E_INTERNAL_ERROR)
 	}
 
@@ -424,11 +424,25 @@ func NewCondition(tableSchema *libovsdb.TableSchema, condition []interface{}) (*
 
 	fn, ok := condition[1].(string)
 	if !ok {
-		klog.Errorf("Failed to convert 2st element to string: %v", condition)
+		klog.Errorf("Failed to convert function to string: %v", condition)
 		return nil, errors.New(E_INTERNAL_ERROR)
 	}
 
 	value := condition[2]
+	if columnSchema != nil {
+		value, err = columnSchema.Unmarshal(value)
+		if err != nil {
+			klog.Errorf("Failed to unmarsahl condition (columne %s, type %s, value %s)", column, columnSchema.Type, condition[2])
+			return nil, errors.New(E_INTERNAL_ERROR)
+		}
+	} else if column == COL_UUID {
+		value, err = libovsdb.UnmarshalUUID(value)
+		if err != nil {
+			klog.Errorf("Failed to unamrshal condition (columne %s, type %s, value %s)", COL_UUID, "uuid", condition[2])
+			return nil, errors.New(E_INTERNAL_ERROR)
+		}
+	}
+
 	return &Condition{
 		Column:       column,
 		Function:     fn,
