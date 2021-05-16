@@ -44,14 +44,18 @@ var (
 	pidfile            = flag.String("pid-file", "", "Name of file that will hold the pid")
 )
 
+var GitCommit string
+
 func main() {
 	klog.InitFlags(nil)
 	flag.Parse()
 	defer klog.Flush()
 
-	klog.Infof("start the ovsdb-etcd server with the following arguments:")
-	klog.Infof("\ttcpAddress: %s\n\tunixAddressress: %s\n\tetcdMembersress: %s\n\tschemaBasedir: %s\n\tmaxTasks: %d\n\tdatabasePrefix: %s\n\tserviceName: %s\n\tschemaFile: %s\n\tloadServerData: %v\n\tpid_file: %s\n",
-		*tcpAddress, *unixAddress, *etcdMembers, *schemaBasedir, *maxTasks, *databasePrefix, *serviceName, *schemaFile, *loadServerDataFlag, *pidfile)
+	klog.V(3).Infof("Start the ovsdb-etcd server \n the last commit: %s\n arguments:\n"+
+		"\ttcpAddress: %s\n\tunixAddressress: %s\n\tetcdMembersress: %s\n\tschemaBasedir: %s\n\tmaxTasks: %d\n"+
+		"\tdatabasePrefix: %s\n\tserviceName: %s\n\tschemaFile: %s\n\tloadServerData: %v\n\tpid_file: %s\n",
+		GitCommit, *tcpAddress, *unixAddress, *etcdMembers, *schemaBasedir, *maxTasks, *databasePrefix, *serviceName,
+		*schemaFile, *loadServerDataFlag, *pidfile)
 
 	if len(*tcpAddress) == 0 && len(*unixAddress) == 0 {
 		klog.Fatal("You must provide a network-address (TCP and/or UNIX) to listen on")

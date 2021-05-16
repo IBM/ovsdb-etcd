@@ -414,7 +414,6 @@ process_healthy() {
 # $1 is the name of the process
 # $2 is the process pid
 check_health() {
-  echo "check_health $ 1 = $1 $ 2 = $2"
   ctl_file=""
   case ${1} in
   "ovnkube" | "ovnkube-master" | "ovn-dbchecker" | "ovnnb_etcd" | "ovnsb_etcd")
@@ -438,9 +437,6 @@ check_health() {
   if [[ ${ctl_file} == "" ]]; then
     # no control file, so just do the PID check
     pid=${2}
-    echo "====================ps========================"
-    ps ax
-    echo "++++++++++++++++++++ps========================"
     pidTest=$(ps ax | awk '{ print $1 }' | grep "^${pid:-XX}$")
     if [[ ${pid:-XX} == ${pidTest} ]]; then
       return 0
@@ -1234,10 +1230,9 @@ nb-ovsdb-etcd () {
   -database-prefix=${ovsdb_etcd_prefix} -service-name=nb -schema-file=ovn-nb.ovsschema -pid-file=${pid_file} \
   -load-server-data=false &
 
-  sleep 10
+  sleep 5
   ovn_tail_pid=$(<"${pid_file}")
 
-  echo "process_healthy ovnnb_etcd ${ovn_tail_pid}"
   process_healthy ovnnb_etcd ${ovn_tail_pid}
   echo "=============== run nb-ovsdb-etcd ========== terminated"
 }
@@ -1255,6 +1250,7 @@ sb-ovsdb-etcd () {
   -database-prefix=${ovsdb_etcd_prefix} -service-name=sb -schema-file=ovn-sb.ovsschema -pid-file=${pid_file} \
   -load-server-data=false &
 
+  sleep 5
   ovn_tail_pid=$(<"${pid_file}")
   # create the ovnkube-db endpoints
   wait_for_event attempts=10 check_ovnkube_db_ep ${ovn_db_host} ${ovn_nb_port}
