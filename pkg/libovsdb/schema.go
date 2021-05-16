@@ -481,7 +481,7 @@ func (schemas *Schemas) Default(dbname, table string, row *map[string]interface{
 }
 
 /* convert types */
-func (columnSchema *ColumnSchema) Convert(from interface{}) (interface{}, error) {
+func (columnSchema *ColumnSchema) Unmarshal(from interface{}) (interface{}, error) {
 	data, err := json.Marshal(from)
 	if err != nil {
 		return nil, err
@@ -520,16 +520,16 @@ func (columnSchema *ColumnSchema) Convert(from interface{}) (interface{}, error)
 		json.Unmarshal(data, &to)
 		return to, nil
 	default:
-		panic(fmt.Sprintf("Unsupported type %s", columnSchema.Type))
+		panic(fmt.Sprintf("unsupported type %s", columnSchema.Type))
 	}
 }
 
-func (tableSchema *TableSchema) Convert(row *map[string]interface{}) error {
+func (tableSchema *TableSchema) Unmarshal(row *map[string]interface{}) error {
 	for column, columnSchema := range tableSchema.Columns {
 		if _, ok := (*row)[column]; ok {
-			to, err := columnSchema.Convert((*row)[column])
+			to, err := columnSchema.Unmarshal((*row)[column])
 			if err != nil {
-				return err
+				return fmt.Errorf("[column %s] %s", column, err.Error())
 			}
 			(*row)[column] = to
 		}
@@ -537,20 +537,28 @@ func (tableSchema *TableSchema) Convert(row *map[string]interface{}) error {
 	return nil
 }
 
-func (databaseSchema *DatabaseSchema) Convert(table string, row *map[string]interface{}) error {
+func (databaseSchema *DatabaseSchema) Unmarshal(table string, row *map[string]interface{}) error {
 	tableSchema, ok := databaseSchema.Tables[table]
 	if !ok {
-		return fmt.Errorf("Missing schema for table %s", table)
+		return fmt.Errorf("missing schema for table %s", table)
 	}
-	return tableSchema.Convert(row)
+	err := tableSchema.Unmarshal(row)
+	if err != nil {
+		return fmt.Errorf("[table %s] %s", table, err)
+	}
+	return nil
 }
 
-func (schemas *Schemas) Convert(dbname, table string, row *map[string]interface{}) error {
+func (schemas *Schemas) Unmarshal(dbname, table string, row *map[string]interface{}) error {
 	databaseSchema, ok := (*schemas)[dbname]
 	if !ok {
-		return fmt.Errorf("Missing schema for database %s", table)
+		return fmt.Errorf("missing schema for database %s", dbname)
 	}
-	return databaseSchema.Convert(table, row)
+	err := databaseSchema.Unmarshal(table, row)
+	if err != nil {
+		return fmt.Errorf("[database %s] %s", dbname, err)
+	}
+	return nil
 }
 
 /* lookup */

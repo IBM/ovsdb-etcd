@@ -106,7 +106,7 @@ func (txn *Transaction) etcdTranaction() (*clientv3.TxnResponse, error) {
 	}
 
 	// fix cache values
-	err = txn.cacheFixTypesToFitSchema()
+	err = txn.cache.Unmarshal(txn.schemas)
 	if err != nil {
 		return nil, err
 	}
@@ -188,6 +188,21 @@ func (c *Cache) PopulateFromKV(kvs []*mvccpb.KeyValue) error {
 		}
 		row := c.Row(kv.Key)
 		(*row) = kv.Value
+	}
+	return nil
+}
+
+func (cache *Cache) Unmarshal(schemas libovsdb.Schemas) error {
+	for dbname, databaseCache := range *cache {
+		for table, tableCache := range databaseCache {
+			for _, row := range tableCache {
+				err := schemas.Unmarshal(dbname, table, row)
+				if err != nil {
+					klog.Errorf("Failed to convert table %s/%s: %s", dbname, table, err)
+					return errors.New(E_INTEGRITY_VIOLATION)
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -350,21 +365,6 @@ func (txn *Transaction) Commit() error {
 		return err
 	}
 
-	return nil
-}
-
-func (txn *Transaction) cacheFixTypesToFitSchema() error {
-	for dbname, databaseCache := range txn.cache {
-		for table, tableCache := range databaseCache {
-			for _, row := range tableCache {
-				err := txn.schemas.Convert(dbname, table, row)
-				if err != nil {
-					klog.Errorf("Failed to convert table %s/%s: %s", dbname, table, err)
-					return errors.New(E_INTEGRITY_VIOLATION)
-				}
-			}
-		}
-	}
 	return nil
 }
 
@@ -1112,9 +1112,14 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		}
 	}
 
-	err := txn.schemas.Validate(txn.request.DBName, ovsOp.Table, &ovsOp.Row)
+	err := txn.schemas.Unmarshal(txn.request.DBName, ovsOp.Table, &ovsOp.Row)
 	if err != nil {
-		klog.Errorf("failed validation of table %s/%s: %s", txn.request.DBName, ovsOp.Table, err.Error())
+		klog.Errorf("%s", err.Error())
+		return errors.New(E_CONSTRAINT_VIOLATION)
+	}
+	err = txn.schemas.Validate(txn.request.DBName, ovsOp.Table, &ovsOp.Row)
+	if err != nil {
+		klog.Errorf("%s", err.Error())
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
@@ -1175,9 +1180,14 @@ func doUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 			continue
 		}
 
+		err = txn.schemas.Unmarshal(txn.request.DBName, ovsOp.Table, &ovsOp.Row)
+		if err != nil {
+			klog.Errorf("%s", err.Error())
+			return errors.New(E_CONSTRAINT_VIOLATION)
+		}
 		err = txn.schemas.Validate(txn.request.DBName, ovsOp.Table, &ovsOp.Row)
 		if err != nil {
-			klog.Errorf("failed validation of table %s/%s: %s", txn.request.DBName, ovsOp.Table, err.Error())
+			klog.Errorf("%s", err.Error())
 			return errors.New(E_CONSTRAINT_VIOLATION)
 		}
 
