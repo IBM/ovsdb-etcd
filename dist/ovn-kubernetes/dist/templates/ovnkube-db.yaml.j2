@@ -61,15 +61,12 @@ spec:
       serviceAccountName: ovn
       hostNetwork: true
       containers:
-      # firewall rules for ovn - assumed to be setup
-      # iptables -A OS_FIREWALL_ALLOW -p tcp -m state --state NEW -m tcp --dport 6641 -j ACCEPT
-      # iptables -A OS_FIREWALL_ALLOW -p tcp -m state --state NEW -m tcp --dport 6642 -j ACCEPT
 
       # etcd
       - name: etcd
-        image: "omerbh/etcd"
+        image: "XXREPO/etcd:latest"
         imagePullPolicy: "Always"
-        command: ["/root/ovnkube.sh", "etcd" ]
+        command: ["/root/ovnkube.sh", "etcd"]
         terminationMessagePolicy: FallbackToLogsOnError
         volumeMounts:
         # ovn db is stored in the pod in /etc/openvswitch
@@ -125,12 +122,9 @@ spec:
 
       # nb-ovsdb - v3
       - name: nb-ovsdb
-        image: "omerbh/server"
+        image: "XXREPO/ovsdb-etcd:latest"
         imagePullPolicy: "Always"
-
-      #  command: ["/usr/local/bin/server","-log_file=/var/log/openvswitch/nb-ovsdb.log","-v=6","-tcp-address=:6641","-unix-address=/var/run/ovn/ovnnb_db.sock","-etcd-members=localhost:2479","-schema-basedir=./schemas","-database-prefix=ovsdb","-service-name=nb","-schema-file=ovn-nb.ovsschema","-schema-name=OVN_Northbound","-load-server-data=false"]
-        command: ["/root/ovnkube.sh", "etcd-nb" ]
-
+        command: ["/root/ovnkube.sh", "nb-ovsdb-etcd"]
         securityContext:
           runAsUser: 0
           capabilities:
@@ -138,9 +132,6 @@ spec:
 
         terminationMessagePolicy: FallbackToLogsOnError
         volumeMounts:
-        # ovn db is stored in the pod in /etc/openvswitch
-        # (or in /etc/ovn if OVN from new repository is used)
-        # and on the host in /var/lib/openvswitch/
         - mountPath: /etc/openvswitch/
           name: host-var-lib-ovs
         - mountPath: /etc/ovn/
@@ -191,12 +182,9 @@ spec:
 
       # sb-ovsdb - v3
       - name: sb-ovsdb
-        image: "omerbh/server"
+        image: "XXREPO/ovsdb-etcd:latest"
         imagePullPolicy: "Always"
-
-      # command: ["/usr/local/bin/server","-log_file=/var/log/openvswitch/sb-ovsdb.log","-v=6","-tcp-address=:6642","-unix-address=/var/run/ovn/ovnsb_db.sock","-etcd-members=localhost:2479","-schema-basedir=./schemas","-database-prefix=ovsdb","-service-name=sb","-schema-file=ovn-sb.ovsschema","-schema-name=OVN_Southbound","-load-server-data=false"]
-        command: ["/root/ovnkube.sh", "etcd-sb" ]
-
+        command: ["/root/ovnkube.sh", "sb-ovsdb-etcd"]
         securityContext:
           runAsUser: 0
           capabilities:
@@ -204,9 +192,6 @@ spec:
 
         terminationMessagePolicy: FallbackToLogsOnError
         volumeMounts:
-        # ovn db is stored in the pod in /etc/openvswitch
-        # (or in /etc/ovn if OVN from new repository is used)
-        # and on the host in /var/lib/openvswitch/
         - mountPath: /etc/openvswitch/
           name: host-var-lib-ovs
         - mountPath: /etc/ovn/

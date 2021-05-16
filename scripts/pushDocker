@@ -1,0 +1,12 @@
+#! /bin/bash
+
+# we don't have to distinguish between unset and "set to the empty string"
+if [ -z ${OVSDB_ETCD_REPOSITORY} ];
+then 
+	echo "OVSDB_ETCD_REPOSITORY is not set"
+	exit 1
+fi
+docker tag server ${OVSDB_ETCD_REPOSITORY}/ovsdb-etcd
+docker tag etcd ${OVSDB_ETCD_REPOSITORY}/etcd
+docker push ${OVSDB_ETCD_REPOSITORY}/ovsdb-etcd
+docker push ${OVSDB_ETCD_REPOSITORY}/etcd
