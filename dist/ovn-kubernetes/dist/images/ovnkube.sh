@@ -215,6 +215,8 @@ ovn_encap_ip=${OVN_ENCAP_IP:-}
 ovsdb_etcd_members=${OVSDB_ETCD_MEMBERS:-"localhost:2479"}
 ovsdb_etcd_schemas_dir=${OVSDB_ETCD_SCHEMAS_DIR:-/root/ovsdb-etcd/schemas}
 ovsdb_etcd_prefix=${OVSDB_ETCD_PREFIX:-"ovsdb"}
+ovsdb_etcd_nb_log_level=${OVSDB_ETCD_NB_LOG_LEVEL:-"5"}
+ovsdb_etcd_sb_log_level=${OVSDB_ETCD_SB_LOG_LEVEL:-"5"}
 
 # Determine the ovn rundir.
 if [[ -f /usr/bin/ovn-appctl ]]; then
@@ -1225,7 +1227,7 @@ nb-ovsdb-etcd () {
   echo "=============== run-nb-ovsdb-etcd (wait for etcd_ready)"
   wait_for_event etcd_ready
   echo "================= start nb-ovsdb-etcd server ============================ "
-  /root/server -logtostderr=false -log_file=${OVN_LOGDIR}/nb-ovsdb-etcd.log -v=6 -tcp-address=:${ovn_nb_port} \
+  /root/server -logtostderr=false -log_file=${OVN_LOGDIR}/nb-ovsdb-etcd.log -v=${ovsdb_etcd_nb_log_level} -tcp-address=:${ovn_nb_port} \
   -etcd-members=${ovsdb_etcd_members} -schema-basedir=${ovsdb_etcd_schemas_dir} \
   -database-prefix=${ovsdb_etcd_prefix} -service-name=nb -schema-file=ovn-nb.ovsschema -pid-file=${pid_file} \
   -load-server-data=false &
@@ -1245,7 +1247,7 @@ sb-ovsdb-etcd () {
   echo "=============== run-sb-ovsdb-etcd (wait for etcd_ready)"
   wait_for_event etcd_ready
   echo "================= start sb-ovsdb-etcd server ============================ "
-  /root/server -logtostderr=false -log_file=${OVN_LOGDIR}/sb-ovsdb-etcd.log -v=6 -tcp-address=:${ovn_sb_port} \
+  /root/server -logtostderr=false -log_file=${OVN_LOGDIR}/sb-ovsdb-etcd.log -v=${ovsdb_etcd_sb_log_level} -tcp-address=:${ovn_sb_port} \
   -etcd-members=${ovsdb_etcd_members} -schema-basedir=${ovsdb_etcd_schemas_dir} \
   -database-prefix=${ovsdb_etcd_prefix} -service-name=sb -schema-file=ovn-sb.ovsschema -pid-file=${pid_file} \
   -load-server-data=false &

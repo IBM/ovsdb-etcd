@@ -155,8 +155,9 @@ spec:
         env:
         - name: OVN_DAEMONSET_VERSION
           value: "3"
-        - name: OVN_LOGLEVEL_NB
-          value: "{{ ovn_loglevel_nb }}"
+        - name: OVSDB_ETCD_NB_LOG_LEVEL
+          # value: "{{ ovn_loglevel_nb }}"
+          value: "6"
         - name: K8S_APISERVER
           valueFrom:
             configMapKeyRef:
@@ -215,8 +216,8 @@ spec:
         env:
         - name: OVN_DAEMONSET_VERSION
           value: "3"
-        - name: OVN_LOGLEVEL_SB
-          value: "{{ ovn_loglevel_sb }}"
+        - name: OVSDB_ETCD_SB_LOG_LEVEL
+          value: "6"
         - name: K8S_APISERVER
           valueFrom:
             configMapKeyRef:

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 )
