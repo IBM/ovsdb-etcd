@@ -586,8 +586,17 @@ func (columnSchema *ColumnSchema) Unmarshal(from interface{}) (interface{}, erro
 
 func (tableSchema *TableSchema) Unmarshal(row *map[string]interface{}) error {
 	for column, columnSchema := range tableSchema.Columns {
-		if _, ok := (*row)[column]; ok {
-			to, err := columnSchema.Unmarshal((*row)[column])
+		if value, ok := (*row)[column]; ok {
+			var to interface{}
+			var err error
+			switch column {
+			case "_uuid":
+				to, err = UnmarshalUUID(value)
+			case "_version":
+				to, err = UnmarshalString(value)
+			default:
+				to, err = columnSchema.Unmarshal((*row)[column])
+			}
 			if err != nil {
 				return fmt.Errorf("[column %s] %s", column, err.Error())
 			}
