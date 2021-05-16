@@ -209,7 +209,7 @@ func (cache *Cache) Unmarshal(schemas libovsdb.Schemas) error {
 
 type MapUUID map[string]string
 
-func (mapUUID MapUUID) UUIDFixNamedUUID(value interface{}) (interface{}, error) {
+func (mapUUID MapUUID) ResolveUUID(value interface{}) (interface{}, error) {
 	namedUuid, _ := value.(libovsdb.UUID)
 	if namedUuid.GoUUID != "" && namedUuid.ValidateUUID() != nil {
 		uuid, ok := mapUUID[namedUuid.GoUUID]
@@ -223,11 +223,11 @@ func (mapUUID MapUUID) UUIDFixNamedUUID(value interface{}) (interface{}, error) 
 	return value, nil
 }
 
-func (mapUUID MapUUID) SetFixNamedUUID(value interface{}) (interface{}, error) {
+func (mapUUID MapUUID) ResolveSet(value interface{}) (interface{}, error) {
 	oldset, _ := value.(libovsdb.OvsSet)
 	newset := libovsdb.OvsSet{}
 	for _, oldval := range oldset.GoSet {
-		newval, err := mapUUID.UUIDFixNamedUUID(oldval)
+		newval, err := mapUUID.ResolveUUID(oldval)
 		if err != nil {
 			return nil, err
 		}
@@ -236,11 +236,11 @@ func (mapUUID MapUUID) SetFixNamedUUID(value interface{}) (interface{}, error) {
 	return newset, nil
 }
 
-func (mapUUID MapUUID) MapFixNamedUUID(value interface{}) (interface{}, error) {
+func (mapUUID MapUUID) ResolveMap(value interface{}) (interface{}, error) {
 	oldmap, _ := value.(libovsdb.OvsMap)
 	newmap := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}
 	for key, oldval := range oldmap.GoMap {
-		newval, err := mapUUID.UUIDFixNamedUUID(oldval)
+		newval, err := mapUUID.ResolveUUID(oldval)
 		if err != nil {
 			return nil, err
 		}
@@ -249,14 +249,14 @@ func (mapUUID MapUUID) MapFixNamedUUID(value interface{}) (interface{}, error) {
 	return newmap, nil
 }
 
-func (mapUUID MapUUID) FixNamedUUID(value interface{}) (interface{}, error) {
+func (mapUUID MapUUID) Resolve(value interface{}) (interface{}, error) {
 	switch value.(type) {
 	case libovsdb.UUID:
-		return mapUUID.UUIDFixNamedUUID(value)
+		return mapUUID.ResolveUUID(value)
 	case libovsdb.OvsSet:
-		return mapUUID.SetFixNamedUUID(value)
+		return mapUUID.ResolveSet(value)
 	case libovsdb.OvsMap:
-		return mapUUID.MapFixNamedUUID(value)
+		return mapUUID.ResolveMap(value)
 	default:
 		return value, nil
 	}
@@ -401,7 +401,7 @@ type Condition struct {
 	ColumnSchema *libovsdb.ColumnSchema
 }
 
-func NewCondition(tableSchema *libovsdb.TableSchema, condition []interface{}) (*Condition, error) {
+func NewCondition(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, condition []interface{}) (*Condition, error) {
 	if len(condition) != 3 {
 		klog.Errorf("Expected 3 elements in condition: %v", condition)
 		return nil, errors.New(E_INTERNAL_ERROR)
@@ -430,18 +430,27 @@ func NewCondition(tableSchema *libovsdb.TableSchema, condition []interface{}) (*
 
 	value := condition[2]
 	if columnSchema != nil {
-		value, err = columnSchema.Unmarshal(value)
+		tmp, err := columnSchema.Unmarshal(value)
 		if err != nil {
-			klog.Errorf("Failed to unmarsahl condition (columne %s, type %s, value %s)", column, columnSchema.Type, condition[2])
+			klog.Errorf("Failed to unmarsahl condition (columne %s, type %s, value %s)", column, columnSchema.Type, value)
 			return nil, errors.New(E_INTERNAL_ERROR)
 		}
+		value = tmp
 	} else if column == COL_UUID {
-		value, err = libovsdb.UnmarshalUUID(value)
+		tmp, err := libovsdb.UnmarshalUUID(value)
 		if err != nil {
-			klog.Errorf("Failed to unamrshal condition (columne %s, type %s, value %s)", COL_UUID, "uuid", condition[2])
+			klog.Errorf("Failed to unamrshal condition (columne %s, type %s, value %s)", column, "uuid", value)
 			return nil, errors.New(E_INTERNAL_ERROR)
 		}
+		value = tmp
 	}
+
+	tmp, err := mapUUID.Resolve(value)
+	if err != nil {
+		klog.Errorf("Failed to resolve named-uuid condition (columne %s, value %s)", column, value)
+		return nil, errors.New(E_INTERNAL_ERROR)
+	}
+	value = tmp
 
 	return &Condition{
 		Column:       column,
@@ -669,13 +678,13 @@ func (c *Condition) Compare(row *map[string]interface{}) (bool, error) {
 	}
 }
 
-func getUUIDIfExists(tableSchema *libovsdb.TableSchema, cond1 interface{}) (string, error) {
+func getUUIDIfExists(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, cond1 interface{}) (string, error) {
 	cond2, ok := cond1.([]interface{})
 	if !ok {
 		klog.Errorf("Failed to convert row value: %v", cond1)
 		return "", errors.New(E_INTERNAL_ERROR)
 	}
-	condition, err := NewCondition(tableSchema, cond2)
+	condition, err := NewCondition(tableSchema, mapUUID, cond2)
 	if err != nil {
 		return "", err
 	}
@@ -698,14 +707,14 @@ func getUUIDIfExists(tableSchema *libovsdb.TableSchema, cond1 interface{}) (stri
 	return ovsUUID.GoUUID, err
 }
 
-func doesWhereContainCondTypeUUID(tableSchema *libovsdb.TableSchema, where []interface{}) (string, error) {
+func doesWhereContainCondTypeUUID(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, where []interface{}) (string, error) {
 	for _, c := range where {
 		cond, ok := c.([]interface{})
 		if !ok {
 			klog.Errorf("Failed to convert row value: %v", c)
 			return "", errors.New(E_INTERNAL_ERROR)
 		}
-		uuid, err := getUUIDIfExists(tableSchema, cond)
+		uuid, err := getUUIDIfExists(tableSchema, mapUUID, cond)
 		if err != nil {
 			return "", err
 		}
@@ -717,14 +726,14 @@ func doesWhereContainCondTypeUUID(tableSchema *libovsdb.TableSchema, where []int
 
 }
 
-func isRowSelectedByWhere(tableSchema *libovsdb.TableSchema, row *map[string]interface{}, where []interface{}) (bool, error) {
+func isRowSelectedByWhere(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, row *map[string]interface{}, where []interface{}) (bool, error) {
 	for _, c := range where {
 		cond, ok := c.([]interface{})
 		if !ok {
 			klog.Errorf("Failed to convert condition value: %v", c)
 			return false, errors.New(E_INTERNAL_ERROR)
 		}
-		ok, err := isRowSelectedByCond(tableSchema, row, cond)
+		ok, err := isRowSelectedByCond(tableSchema, mapUUID, row, cond)
 		if err != nil {
 			return false, err
 		}
@@ -735,8 +744,8 @@ func isRowSelectedByWhere(tableSchema *libovsdb.TableSchema, row *map[string]int
 	return true, nil
 }
 
-func isRowSelectedByCond(tableSchema *libovsdb.TableSchema, row *map[string]interface{}, cond []interface{}) (bool, error) {
-	condition, err := NewCondition(tableSchema, cond)
+func isRowSelectedByCond(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, row *map[string]interface{}, cond []interface{}) (bool, error) {
+	condition, err := NewCondition(tableSchema, mapUUID, cond)
 	if err != nil {
 		return false, err
 	}
@@ -1034,7 +1043,7 @@ func RowUpdate(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, original *map
 			klog.Errorf("Can't update unmutable column: %s", column)
 			return errors.New(E_CONSTRAINT_VIOLATION)
 		}
-		value, err = mapUUID.FixNamedUUID(value)
+		value, err = mapUUID.Resolve(value)
 		if err != nil {
 			klog.Errorf("Can't fix namedUUID column %s: %s", column, err.Error())
 			return errors.New(E_CONSTRAINT_VIOLATION)
@@ -1055,7 +1064,7 @@ func etcdGetByWhere(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libo
 	if err != nil {
 		return err
 	}
-	uuid, err := doesWhereContainCondTypeUUID(tableSchema, ovsOp.Where)
+	uuid, err := doesWhereContainCondTypeUUID(tableSchema, txn.mapUUID, ovsOp.Where)
 	if err != nil {
 		return err
 	}
@@ -1119,7 +1128,7 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		txn.mapUUID[ovsOp.UUIDName] = uuid
 	}
 
-	for uuid, _ := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
+	for uuid := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
 		if ovsOp.UUID != nil && uuid == ovsOp.UUID.GoUUID {
 			klog.Errorf("Duplicate uuid: %s", ovsOp.UUID)
 			return errors.New(E_DUP_UUID)
@@ -1158,7 +1167,7 @@ func doSelect(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 	}
 
 	for _, row := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
-		ok, err := isRowSelectedByWhere(tableSchema, row, ovsOp.Where)
+		ok, err := isRowSelectedByWhere(tableSchema, txn.mapUUID, row, ovsOp.Where)
 		if err != nil {
 			return err
 		}
@@ -1186,7 +1195,7 @@ func doUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		return err
 	}
 	for uuid, row := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
-		ok, err := isRowSelectedByWhere(tableSchema, row, ovsOp.Where)
+		ok, err := isRowSelectedByWhere(tableSchema, txn.mapUUID, row, ovsOp.Where)
 		if err != nil {
 			return err
 		}
@@ -1229,7 +1238,7 @@ func doMutate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		return err
 	}
 	for uuid, row := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
-		ok, err := isRowSelectedByWhere(tableSchema, row, ovsOp.Where)
+		ok, err := isRowSelectedByWhere(tableSchema, txn.mapUUID, row, ovsOp.Where)
 		if err != nil {
 			return err
 		}
@@ -1260,7 +1269,7 @@ func doDelete(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		return err
 	}
 	for uuid, row := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
-		ok, err := isRowSelectedByWhere(tableSchema, row, ovsOp.Where)
+		ok, err := isRowSelectedByWhere(tableSchema, txn.mapUUID, row, ovsOp.Where)
 		if err != nil {
 			return err
 		}
@@ -1290,7 +1299,7 @@ func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Ope
 		return err
 	}
 	for _, row := range txn.cache.Table(txn.request.DBName, ovsOp.Table) {
-		ok, err := isRowSelectedByWhere(tableSchema, row, ovsOp.Where)
+		ok, err := isRowSelectedByWhere(tableSchema, txn.mapUUID, row, ovsOp.Where)
 		if err != nil {
 			return err
 		}
