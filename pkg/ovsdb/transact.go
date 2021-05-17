@@ -105,8 +105,12 @@ func (txn *Transaction) etcdTranaction() (*clientv3.TxnResponse, error) {
 		}
 	}
 
-	// fix cache values
 	err = txn.cache.Unmarshal(txn.schemas)
+	if err != nil {
+		return nil, err
+	}
+
+	err = txn.cache.Validate(txn.schemas)
 	if err != nil {
 		return nil, err
 	}
@@ -193,12 +197,27 @@ func (c *Cache) PopulateFromKV(kvs []*mvccpb.KeyValue) error {
 }
 
 func (cache *Cache) Unmarshal(schemas libovsdb.Schemas) error {
-	for dbname, databaseCache := range *cache {
+	for database, databaseCache := range *cache {
 		for table, tableCache := range databaseCache {
 			for _, row := range tableCache {
-				err := schemas.Unmarshal(dbname, table, row)
+				err := schemas.Unmarshal(database, table, row)
 				if err != nil {
-					klog.Errorf("Failed to convert table %s/%s: %s", dbname, table, err)
+					klog.Errorf("%s", err)
+					return errors.New(E_INTEGRITY_VIOLATION)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (cache *Cache) Validate(schemas libovsdb.Schemas) error {
+	for database, databaseCache := range *cache {
+		for table, tableCache := range databaseCache {
+			for _, row := range tableCache {
+				err := schemas.Validate(database, table, row)
+				if err != nil {
+					klog.Errorf("%s", err)
 					return errors.New(E_INTEGRITY_VIOLATION)
 				}
 			}
@@ -338,10 +357,15 @@ func (txn *Transaction) Commit() error {
 
 	/* fetch needed data from database needed to perform the operation */
 	for i, ovsOp := range txn.request.Operations {
-		if err = ovsOpCallbackMap[ovsOp.Op][0](txn, &ovsOp, &txn.response.Result[i]); err != nil {
+		err := ovsOpCallbackMap[ovsOp.Op][0](txn, &ovsOp, &txn.response.Result[i])
+		if err != nil {
 			txn.response.Result[i].SetError(err.Error())
 			txn.response.Error = err.Error()
 			return err
+		}
+
+		if err = txn.cache.Validate(txn.schemas); err != nil {
+			panic(fmt.Sprintf("validation of %+v failed: %s", ovsOp, err.Error()))
 		}
 	}
 	_, err = txn.etcdTranaction()
@@ -357,6 +381,10 @@ func (txn *Transaction) Commit() error {
 			txn.response.Result[i].SetError(err.Error())
 			txn.response.Error = err.Error()
 			return err
+		}
+
+		if err = txn.cache.Validate(txn.schemas); err != nil {
+			panic(fmt.Sprintf("validation of %+v failed: %s", ovsOp, err.Error()))
 		}
 	}
 	_, err = txn.etcdTranaction()
@@ -574,13 +602,13 @@ func (c *Condition) CompareString(row *map[string]interface{}) (bool, error) {
 func (c *Condition) CompareUUID(row *map[string]interface{}) (bool, error) {
 	actual, ok := (*row)[c.Column].(libovsdb.UUID)
 	if !ok {
-		klog.Errorf("Failed to convert row value: %v", (*row)[c.Column])
+		klog.Errorf("Failed to convert row value: %+v", (*row)[c.Column])
 		return false, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	fn := c.Function
 	expected, ok := c.Value.(libovsdb.UUID)
 	if !ok {
-		klog.Errorf("Failed to convert condition value: %v", c.Value)
+		klog.Errorf("Failed to convert condition value: %+v", c.Value)
 		return false, errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
@@ -730,7 +758,7 @@ func isRowSelectedByWhere(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, ro
 	for _, c := range where {
 		cond, ok := c.([]interface{})
 		if !ok {
-			klog.Errorf("Failed to convert condition value: %v", c)
+			klog.Errorf("Failed to convert condition value: %+v", c)
 			return false, errors.New(E_INTERNAL_ERROR)
 		}
 		ok, err := isRowSelectedByCond(tableSchema, mapUUID, row, cond)
@@ -1135,22 +1163,24 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		}
 	}
 
+	key := common.NewDataKey(txn.request.DBName, ovsOp.Table, uuid)
+	ovsResult.InitUUID(key.UUID)
+	row := txn.cache.Row(key)
+	*row = ovsOp.Row
+	txn.schemas.Default(txn.request.DBName, ovsOp.Table, row)
+
 	err := txn.schemas.Unmarshal(txn.request.DBName, ovsOp.Table, &ovsOp.Row)
 	if err != nil {
 		klog.Errorf("%s", err.Error())
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
+
 	err = txn.schemas.Validate(txn.request.DBName, ovsOp.Table, &ovsOp.Row)
 	if err != nil {
 		klog.Errorf("%s", err.Error())
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
-	key := common.NewDataKey(txn.request.DBName, ovsOp.Table, uuid)
-	ovsResult.InitUUID(key.UUID)
-	row := txn.cache.Row(key)
-	*row = ovsOp.Row
-	txn.schemas.Default(txn.request.DBName, ovsOp.Table, row)
 	return etcdPutRow(txn, &key, row)
 }
 

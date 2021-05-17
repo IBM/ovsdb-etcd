@@ -704,6 +704,9 @@ func (baseType *BaseType) ValidateString(value interface{}) error {
 	if baseType.Enum == nil {
 		return nil
 	}
+	if typeval == "" {
+		return nil
+	}
 	for _, v := range baseType.Enum.GoSet {
 		enumval, ok := v.(string)
 		if !ok {
