@@ -729,7 +729,7 @@ func (baseType *BaseType) ValidateUUID(value interface{}) error {
 
 func (baseType *BaseType) Validate(value interface{}) error {
 	if baseType == nil {
-		panic(fmt.Sprintf("nil base type"))
+		panic(fmt.Sprintf("nil base type, value = %v", value))
 	}
 	switch baseType.Type {
 	case TypeInteger:
@@ -805,7 +805,7 @@ func (columnSchema *ColumnSchema) ValidateSet(value interface{}) error {
 		return fmt.Errorf("set breaks max limit: %+v", value)
 	}
 	for _, val := range setval.GoSet {
-		err := columnSchema.TypeObj.Value.Validate(val)
+		err := columnSchema.TypeObj.Key.Validate(val)
 		if err != nil {
 			return fmt.Errorf("set inner value invalid: %s", err.Error())
 		}
