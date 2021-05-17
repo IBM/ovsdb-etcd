@@ -806,7 +806,7 @@ type Mutation struct {
 	ColumnSchema *libovsdb.ColumnSchema
 }
 
-func NewMutation(tableSchema *libovsdb.TableSchema, mutation []interface{}) (*Mutation, error) {
+func NewMutation(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, mutation []interface{}) (*Mutation, error) {
 	if len(mutation) != 3 {
 		klog.Errorf("Expected 3 items in mutation object: %v", mutation)
 		return nil, errors.New(E_CONSTRAINT_VIOLATION)
@@ -830,6 +830,13 @@ func NewMutation(tableSchema *libovsdb.TableSchema, mutation []interface{}) (*Mu
 	}
 
 	value := mutation[2]
+	tmp, err := mapUUID.Resolve(value)
+	if err != nil {
+		klog.Errorf("Failed to resolve named-uuid mutation (columne %s, value %s)", column, value)
+		return nil, errors.New(E_INTERNAL_ERROR)
+	}
+	value = tmp
+
 	return &Mutation{
 		Column:       column,
 		Mutator:      mt,
@@ -1038,12 +1045,12 @@ func (m *Mutation) Mutate(row *map[string]interface{}) error {
 	}
 }
 
-func RowMutate(tableSchema *libovsdb.TableSchema, original *map[string]interface{}, mutations []interface{}) error {
+func RowMutate(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, original *map[string]interface{}, mutations []interface{}) error {
 	// XXX(alexey): can we just run on original ?
 	mutated := &map[string]interface{}{}
 	copier.Copy(mutated, original)
 	for _, mt := range mutations {
-		mutation, err := NewMutation(tableSchema, mt.([]interface{}))
+		mutation, err := NewMutation(tableSchema, mapUUID, mt.([]interface{}))
 		if err != nil {
 			return err
 		}
@@ -1275,7 +1282,7 @@ func doMutate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		if !ok {
 			continue
 		}
-		err = RowMutate(tableSchema, row, ovsOp.Mutations)
+		err = RowMutate(tableSchema, txn.mapUUID, row, ovsOp.Mutations)
 		if err != nil {
 			return err
 		}
