@@ -623,39 +623,6 @@ func TestTransactMutateSimple(t *testing.T) {
 	assert.Equal(t, float64(2), dump["key2"])
 }
 
-func TestTransactMutateSimpleValidationError(t *testing.T) {
-	table := "table1"
-	row := map[string]interface{}{
-		"key2": int(1),
-	}
-	mutations := []interface{}{
-		[]interface{}{
-			"key2",
-			"+=",
-			float64(1),
-		},
-	}
-	req := &libovsdb.Transact{
-		DBName: "simple",
-		Operations: []libovsdb.Operation{
-			{
-				Op:    OP_INSERT,
-				Table: &table,
-				Row:   &row,
-			},
-			{
-				Op:        OP_MUTATE,
-				Table:     &table,
-				Mutations: &mutations,
-			},
-		},
-	}
-	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "simple", "table1")
-	resp, _ := testTransact(t, req)
-	assert.NotEqual(t, "", resp.Error)
-}
-
 func TestTransactMutateUnmutableError(t *testing.T) {
 	table := "table1"
 	row := map[string]interface{}{
