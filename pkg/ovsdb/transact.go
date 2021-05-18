@@ -839,12 +839,28 @@ func NewMutation(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, mutation []
 	}
 
 	value := mutation[2]
-	tmp, err := mapUUID.Resolv(value)
+
+	// FIXME: we will fail currently in the case the schema is a OvsMap and
+	// I get an OvsSet (indicating which keys should be deleted from the
+	// OvsMap)
+
+	value, err = columnSchema.Unmarshal(value)
 	if err != nil {
-		klog.Errorf("Failed to resolve named-uuid mutation (columne %s, value %s)", column, value)
-		return nil, errors.New(E_INTERNAL_ERROR)
+		klog.Errorf("failed unmarshal of column %s: %s", column, err.Error())
+		return nil, errors.New(E_CONSTRAINT_VIOLATION)
 	}
-	value = tmp
+
+	value, err = mapUUID.Resolv(value)
+	if err != nil {
+		klog.Errorf("failed resolv-namedUUID of column %s: %s", column, err.Error())
+		return nil, errors.New(E_CONSTRAINT_VIOLATION)
+	}
+
+	err = columnSchema.Validate(value)
+	if err != nil {
+		klog.Errorf("failed validate of column %s: %s", column, err.Error())
+		return nil, errors.New(E_CONSTRAINT_VIOLATION)
+	}
 
 	return &Mutation{
 		Column:       column,
