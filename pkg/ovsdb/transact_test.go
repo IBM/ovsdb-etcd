@@ -111,7 +111,7 @@ var testSchemaSet *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 				"string": {
 					Type: libovsdb.TypeSet,
 					TypeObj: &libovsdb.ColumnType{
-						Value: &libovsdb.BaseType{
+						Key: &libovsdb.BaseType{
 							Type: libovsdb.TypeString,
 						},
 						Max: libovsdb.Unlimited,
@@ -121,7 +121,7 @@ var testSchemaSet *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 				"integer": {
 					Type: libovsdb.TypeSet,
 					TypeObj: &libovsdb.ColumnType{
-						Value: &libovsdb.BaseType{
+						Key: &libovsdb.BaseType{
 							Type: libovsdb.TypeString,
 						},
 						Max: 2,
