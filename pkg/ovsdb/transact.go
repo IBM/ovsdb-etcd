@@ -840,10 +840,6 @@ func NewMutation(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, mutation []
 
 	value := mutation[2]
 
-	// FIXME: we will fail currently in the case the schema is a OvsMap and
-	// I get an OvsSet (indicating which keys should be deleted from the
-	// OvsMap)
-
 	value, err = columnSchema.Unmarshal(value)
 	if err != nil {
 		klog.Errorf("failed unmarshal of column %s: %s", column, err.Error())
