@@ -41,6 +41,7 @@ func play(ovs *libovsdb.OvsdbClient) {
 }
 
 func createBridge(ovs *libovsdb.OvsdbClient, bridgeName string) {
+	table1 := "Bridge"
 	namedUUID := "gopher"
 	// bridge row to insert
 	bridge := make(map[string]interface{})
@@ -49,9 +50,9 @@ func createBridge(ovs *libovsdb.OvsdbClient, bridgeName string) {
 	// simple insert operation
 	insertOp := libovsdb.Operation{
 		Op:       "insert",
-		Table:    "Bridge",
-		Row:      bridge,
-		UUIDName: namedUUID,
+		Table:    &table1,
+		Row:      &bridge,
+		UUIDName: &namedUUID,
 	}
 
 	// Inserting a Bridge row in Bridge table requires mutating the open_vswitch table.
@@ -62,11 +63,14 @@ func createBridge(ovs *libovsdb.OvsdbClient, bridgeName string) {
 	condition := libovsdb.NewCondition("_uuid", "==", uuidParameter)
 
 	// simple mutate operation
+	table2 := "Open_vSwitch"
+	mutations := []interface{}{mutation}
+	where := []interface{}{condition}
 	mutateOp := libovsdb.Operation{
 		Op:        "mutate",
-		Table:     "Open_vSwitch",
-		Mutations: []interface{}{mutation},
-		Where:     []interface{}{condition},
+		Table:     &table2,
+		Mutations: &mutations,
+		Where:     &where,
 	}
 
 	operations := []libovsdb.Operation{insertOp, mutateOp}

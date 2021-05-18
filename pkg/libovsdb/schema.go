@@ -72,16 +72,16 @@ func (schema DatabaseSchema) Print(w io.Writer) {
 // Basic validation for operations against Database Schema
 func (schema DatabaseSchema) validateOperations(operations ...Operation) bool {
 	for _, op := range operations {
-		table, ok := schema.Tables[op.Table]
+		table, ok := schema.Tables[*op.Table]
 		if ok {
-			for column := range op.Row {
+			for column := range *op.Row {
 				if _, ok := table.Columns[column]; !ok {
 					if column != "_uuid" && column != "_version" {
 						return false
 					}
 				}
 			}
-			for _, row := range op.Rows {
+			for _, row := range *op.Rows {
 				for column := range row {
 					if _, ok := table.Columns[column]; !ok {
 						if column != "_uuid" && column != "_version" {
@@ -90,7 +90,7 @@ func (schema DatabaseSchema) validateOperations(operations ...Operation) bool {
 					}
 				}
 			}
-			for _, column := range op.Columns {
+			for _, column := range *op.Columns {
 				if _, ok := table.Columns[column]; !ok {
 					if column != "_uuid" && column != "_version" {
 						return false
