@@ -3,23 +3,24 @@ package libovsdb
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 )
 
 // Operation represents an operation according to RFC7047 section 5.2
 type Operation struct {
-	Op        string                   `json:"op"`
-	Table     string                   `json:"table"`
-	Row       map[string]interface{}   `json:"row,omitempty"`
-	Rows      []map[string]interface{} `json:"rows,omitempty"`
-	Columns   []string                 `json:"columns,omitempty"`
-	Mutations []interface{}            `json:"mutations,omitempty"`
-	Timeout   int                      `json:"timeout,omitempty"`
-	Where     []interface{}            `json:"where,omitempty"`
-	Until     string                   `json:"until,omitempty"`
-	UUIDName  string                   `json:"uuid-name,omitempty"`
-	UUID      *UUID                    `json:"uuid,omitempty"`
-	Comment   string                   `json:"comment,omitempty"`
-	Durable   bool                     `json:"durable,omitempty"`
+	Op        string                    `json:"op"`
+	Table     *string                   `json:"table,omitempty"`
+	Row       *map[string]interface{}   `json:"row,omitempty"`
+	Rows      *[]map[string]interface{} `json:"rows,omitempty"`
+	Columns   *[]string                 `json:"columns,omitempty"`
+	Mutations *[]interface{}            `json:"mutations,omitempty"`
+	Timeout   *int                      `json:"timeout,omitempty"`
+	Where     *[]interface{}            `json:"where,omitempty"`
+	Until     *string                   `json:"until,omitempty"`
+	UUIDName  *string                   `json:"uuid-name,omitempty"`
+	UUID      *UUID                     `json:"uuid,omitempty"`
+	Comment   *string                   `json:"comment,omitempty"`
+	Durable   *bool                     `json:"durable,omitempty"`
 }
 
 // MarshalJSON marshalls 'Operation' to a byte array
@@ -31,10 +32,11 @@ func (o Operation) MarshalJSON() ([]byte, error) {
 	case "select":
 		where := o.Where
 		if where == nil {
-			where = make([]interface{}, 0, 0)
+			whereval := make([]interface{}, 0, 0)
+			where = &whereval
 		}
 		return json.Marshal(&struct {
-			Where []interface{} `json:"where"`
+			Where *[]interface{} `json:"where,omitempty"`
 			OpAlias
 		}{
 			Where:   where,
@@ -113,8 +115,17 @@ func NewMutation(column string, mutator string, value interface{}) []interface{}
 
 // Transact represents the request of a Transact call
 type Transact struct {
-	DBName     string
-	Operations []Operation
+	DBName     string      `json:"dbname"`
+	Operations []Operation `json:"operations"`
+}
+
+// String, serialize Transact
+func (t *Transact) String() string {
+	buf, err := json.Marshal(t)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal transaction"))
+	}
+	return string(buf)
 }
 
 func NewTransact(params []interface{}) (*Transact, error) {

@@ -18,7 +18,8 @@ func TestNewGetSchemaArgs(t *testing.T) {
 
 func TestNewTransactArgs(t *testing.T) {
 	database := "Open_vSwitch"
-	operation := Operation{Op: "insert", Table: "Bridge"}
+	table := "Bridge"
+	operation := Operation{Op: "insert", Table: &table}
 	args := NewTransactArgs(database, operation)
 	argString, _ := json.Marshal(args)
 	expected := `["Open_vSwitch",{"op":"insert","table":"Bridge"}]`
@@ -29,8 +30,9 @@ func TestNewTransactArgs(t *testing.T) {
 
 func TestNewMultipleTransactArgs(t *testing.T) {
 	database := "Open_vSwitch"
-	operation1 := Operation{Op: "insert", Table: "Bridge"}
-	operation2 := Operation{Op: "delete", Table: "Bridge"}
+	table := "Bridge"
+	operation1 := Operation{Op: "insert", Table: &table}
+	operation2 := Operation{Op: "delete", Table: &table}
 	args := NewTransactArgs(database, operation1, operation2)
 	argString, _ := json.Marshal(args)
 	expected := `["Open_vSwitch",{"op":"insert","table":"Bridge"},{"op":"delete","table":"Bridge"}]`

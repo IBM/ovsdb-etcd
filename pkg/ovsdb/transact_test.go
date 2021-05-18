@@ -251,15 +251,17 @@ func testTransactDump(t *testing.T, txn *Transaction, dbname, table string) map[
 }
 
 func TestTransactInsertSimple(t *testing.T) {
+	table := "table1"
+	row := map[string]interface{}{
+		"key1": "val1",
+	}
 	req := &libovsdb.Transact{
 		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_INSERT,
-				Table: "table1",
-				Row: map[string]interface{}{
-					"key1": "val1",
-				},
+				Table: &table,
+				Row:   &row,
 			},
 		},
 	}
@@ -273,16 +275,18 @@ func TestTransactInsertSimple(t *testing.T) {
 }
 
 func TestTransactInsertSimpleWithUUID(t *testing.T) {
+	table := "table1"
+	row := map[string]interface{}{
+		"key1": "val1",
+	}
 	req := &libovsdb.Transact{
 		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_INSERT,
-				Table: "table1",
-				Row: map[string]interface{}{
-					"key1": "val1",
-				},
-				UUID: &libovsdb.UUID{GoUUID: "00000000-0000-0000-0000-000000000001"},
+				Table: &table,
+				Row:   &row,
+				UUID:  &libovsdb.UUID{GoUUID: "00000000-0000-0000-0000-000000000001"},
 			},
 		},
 	}
@@ -296,16 +300,19 @@ func TestTransactInsertSimpleWithUUID(t *testing.T) {
 }
 
 func TestTransactInsertSimpleWithUUIDName(t *testing.T) {
+	table := "table1"
+	row := map[string]interface{}{
+		"key1": "val1",
+	}
+	uuidName := "myuuid"
 	req := &libovsdb.Transact{
 		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
-				Op:    OP_INSERT,
-				Table: "table1",
-				Row: map[string]interface{}{
-					"key1": "val1",
-				},
-				UUIDName: "myuuid",
+				Op:       OP_INSERT,
+				Table:    &table,
+				Row:      &row,
+				UUIDName: &uuidName,
 			},
 		},
 	}
@@ -319,24 +326,25 @@ func TestTransactInsertSimpleWithUUIDName(t *testing.T) {
 }
 
 func TestTransactInsertSimpleWithUUIDNameDupError(t *testing.T) {
+	table := "table1"
+	row := map[string]interface{}{
+		"key1": "val1",
+	}
+	uuidName := "myuuid"
 	req := &libovsdb.Transact{
 		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
-				Op:    OP_INSERT,
-				Table: "table1",
-				Row: map[string]interface{}{
-					"key1": "val1",
-				},
-				UUIDName: "myuuid",
+				Op:       OP_INSERT,
+				Table:    &table,
+				Row:      &row,
+				UUIDName: &uuidName,
 			},
 			{
-				Op:    OP_INSERT,
-				Table: "table1",
-				Row: map[string]interface{}{
-					"key1": "val1",
-				},
-				UUIDName: "myuuid",
+				Op:       OP_INSERT,
+				Table:    &table,
+				Row:      &row,
+				UUIDName: &uuidName,
 			},
 		},
 	}
@@ -347,15 +355,17 @@ func TestTransactInsertSimpleWithUUIDNameDupError(t *testing.T) {
 }
 
 func TestTransactInsertEnumOk(t *testing.T) {
+	table := "table1"
+	row := map[string]interface{}{
+		"color": "red",
+	}
 	req := &libovsdb.Transact{
 		DBName: "enum",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_INSERT,
-				Table: "table1",
-				Row: map[string]interface{}{
-					"color": "red",
-				},
+				Table: &table,
+				Row:   &row,
 			},
 		},
 	}
@@ -368,15 +378,17 @@ func TestTransactInsertEnumOk(t *testing.T) {
 }
 
 func TestTransactInsertEnumError(t *testing.T) {
+	table := "table1"
+	row := map[string]interface{}{
+		"animal": "red",
+	}
 	req := &libovsdb.Transact{
 		DBName: "enum",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_INSERT,
-				Table: "table1",
-				Row: map[string]interface{}{
-					"animal": "red",
-				},
+				Table: &table,
+				Row:   &row,
 			},
 		},
 	}
@@ -387,15 +399,17 @@ func TestTransactInsertEnumError(t *testing.T) {
 }
 
 func TestTransactInsertSetOk(t *testing.T) {
+	table := "table1"
+	row := map[string]interface{}{
+		"string": libovsdb.OvsSet{GoSet: []interface{}{"a", "b", "c"}},
+	}
 	req := &libovsdb.Transact{
 		DBName: "set",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_INSERT,
-				Table: "table1",
-				Row: map[string]interface{}{
-					"string": libovsdb.OvsSet{GoSet: []interface{}{"a", "b", "c"}},
-				},
+				Table: &table,
+				Row:   &row,
 			},
 		},
 	}
@@ -408,15 +422,17 @@ func TestTransactInsertSetOk(t *testing.T) {
 }
 
 func TestTransactInsertSetError(t *testing.T) {
+	table := "table1"
+	row := map[string]interface{}{
+		"string": libovsdb.OvsSet{GoSet: []interface{}{1, 2, 3}},
+	}
 	req := &libovsdb.Transact{
 		DBName: "set",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_INSERT,
-				Table: "table1",
-				Row: map[string]interface{}{
-					"string": libovsdb.OvsSet{GoSet: []interface{}{1, 2, 3}},
-				},
+				Table: &table,
+				Row:   &row,
 			},
 		},
 	}
@@ -427,12 +443,13 @@ func TestTransactInsertSetError(t *testing.T) {
 }
 
 func TestTransactSelect(t *testing.T) {
+	table := "table1"
 	req := &libovsdb.Transact{
 		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_SELECT,
-				Table: "table1",
+				Table: &table,
 			},
 		},
 	}
@@ -450,22 +467,25 @@ func TestTransactSelect(t *testing.T) {
 }
 
 func TestTransactUpdateSimple(t *testing.T) {
+	table := "table1"
+	row1 := map[string]interface{}{
+		"key1": "val1",
+	}
+	row2 := map[string]interface{}{
+		"key1": "val2",
+	}
 	req := &libovsdb.Transact{
 		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_INSERT,
-				Table: "table1",
-				Row: map[string]interface{}{
-					"key1": "val1",
-				},
+				Table: &table,
+				Row:   &row1,
 			},
 			{
 				Op:    OP_UPDATE,
-				Table: "table1",
-				Row: map[string]interface{}{
-					"key1": "val2",
-				},
+				Table: &table,
+				Row:   &row2,
 			},
 		},
 	}
@@ -478,22 +498,25 @@ func TestTransactUpdateSimple(t *testing.T) {
 }
 
 func TestTransactUpdateMapOk(t *testing.T) {
+	table := "table1"
+	row1 := map[string]interface{}{
+		"string": libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "value1"}},
+	}
+	row2 := map[string]interface{}{
+		"string": libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "value2"}},
+	}
 	req := &libovsdb.Transact{
 		DBName: "map",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_INSERT,
-				Table: "table1",
-				Row: map[string]interface{}{
-					"string": libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "value1"}},
-				},
+				Table: &table,
+				Row:   &row1,
 			},
 			{
 				Op:    OP_UPDATE,
-				Table: "table1",
-				Row: map[string]interface{}{
-					"string": libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "value2"}},
-				},
+				Table: &table,
+				Row:   &row2,
 			},
 		},
 	}
@@ -506,22 +529,25 @@ func TestTransactUpdateMapOk(t *testing.T) {
 }
 
 func TestTransactUpdateMapError(t *testing.T) {
+	table := "table1"
+	row1 := map[string]interface{}{
+		"string": libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "value1"}},
+	}
+	row2 := map[string]interface{}{
+		"string": libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": int(2) /* error */}},
+	}
 	req := &libovsdb.Transact{
 		DBName: "map",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_INSERT,
-				Table: "table1",
-				Row: map[string]interface{}{
-					"string": libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "value1"}},
-				},
+				Table: &table,
+				Row:   &row1,
 			},
 			{
 				Op:    OP_UPDATE,
-				Table: "table1",
-				Row: map[string]interface{}{
-					"string": libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": int(2) /* error */}},
-				},
+				Table: &table,
+				Row:   &row2,
 			},
 		},
 	}
@@ -532,24 +558,27 @@ func TestTransactUpdateMapError(t *testing.T) {
 }
 
 func TestTransactUpdateUnmutableError(t *testing.T) {
+	table := "table1"
+	row1 := map[string]interface{}{
+		"mutable":   1,
+		"unmutable": 1,
+	}
+	row2 := map[string]interface{}{
+		"mutable":   2,
+		"unmutable": 2,
+	}
 	req := &libovsdb.Transact{
 		DBName: "mutable",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_INSERT,
-				Table: "table1",
-				Row: map[string]interface{}{
-					"mutable":   1,
-					"unmutable": 1,
-				},
+				Table: &table,
+				Row:   &row1,
 			},
 			{
 				Op:    OP_UPDATE,
-				Table: "table1",
-				Row: map[string]interface{}{
-					"mutable":   2,
-					"unmutable": 2,
-				},
+				Table: &table,
+				Row:   &row2,
 			},
 		},
 	}
@@ -560,26 +589,29 @@ func TestTransactUpdateUnmutableError(t *testing.T) {
 }
 
 func TestTransactMutateSimple(t *testing.T) {
+	table := "table1"
+	row1 := map[string]interface{}{
+		"key2": int(1),
+	}
+	mutations := []interface{}{
+		[]interface{}{
+			"key2",
+			"+=",
+			int(1),
+		},
+	}
 	req := &libovsdb.Transact{
 		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_INSERT,
-				Table: "table1",
-				Row: map[string]interface{}{
-					"key2": int(1),
-				},
+				Table: &table,
+				Row:   &row1,
 			},
 			{
-				Op:    OP_MUTATE,
-				Table: "table1",
-				Mutations: []interface{}{
-					[]interface{}{
-						"key2",
-						"+=",
-						int(1),
-					},
-				},
+				Op:        OP_MUTATE,
+				Table:     &table,
+				Mutations: &mutations,
 			},
 		},
 	}
@@ -592,26 +624,29 @@ func TestTransactMutateSimple(t *testing.T) {
 }
 
 func TestTransactMutateSimpleValidationError(t *testing.T) {
+	table := "table1"
+	row := map[string]interface{}{
+		"key2": int(1),
+	}
+	mutations := []interface{}{
+		[]interface{}{
+			"key2",
+			"+=",
+			float64(1),
+		},
+	}
 	req := &libovsdb.Transact{
 		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_INSERT,
-				Table: "table1",
-				Row: map[string]interface{}{
-					"key2": int(1),
-				},
+				Table: &table,
+				Row:   &row,
 			},
 			{
-				Op:    OP_MUTATE,
-				Table: "table1",
-				Mutations: []interface{}{
-					[]interface{}{
-						"key2",
-						"+=",
-						float64(1),
-					},
-				},
+				Op:        OP_MUTATE,
+				Table:     &table,
+				Mutations: &mutations,
 			},
 		},
 	}
@@ -622,32 +657,35 @@ func TestTransactMutateSimpleValidationError(t *testing.T) {
 }
 
 func TestTransactMutateUnmutableError(t *testing.T) {
+	table := "table1"
+	row := map[string]interface{}{
+		"mutable":   int(1),
+		"unmutable": int(1),
+	}
+	mutations := []interface{}{
+		[]interface{}{
+			"mutable",
+			"+=",
+			int(1),
+		},
+		[]interface{}{
+			"unmutable",
+			"+=",
+			int(1),
+		},
+	}
 	req := &libovsdb.Transact{
 		DBName: "mutable",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_INSERT,
-				Table: "table1",
-				Row: map[string]interface{}{
-					"mutable":   int(1),
-					"unmutable": int(1),
-				},
+				Table: &table,
+				Row:   &row,
 			},
 			{
-				Op:    OP_MUTATE,
-				Table: "table1",
-				Mutations: []interface{}{
-					[]interface{}{
-						"mutable",
-						"+=",
-						int(1),
-					},
-					[]interface{}{
-						"unmutable",
-						"+=",
-						int(1),
-					},
-				},
+				Op:        OP_MUTATE,
+				Table:     &table,
+				Mutations: &mutations,
 			},
 		},
 	}
@@ -658,12 +696,13 @@ func TestTransactMutateUnmutableError(t *testing.T) {
 }
 
 func TestTransactDelete(t *testing.T) {
+	table := "table1"
 	req := &libovsdb.Transact{
 		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_DELETE,
-				Table: "table1",
+				Table: &table,
 			},
 		},
 	}
@@ -681,12 +720,13 @@ func TestTransactDelete(t *testing.T) {
 }
 
 func TestTransactWait(t *testing.T) {
+	table := "table1"
 	req := &libovsdb.Transact{
 		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
 				Op:    OP_WAIT,
-				Table: "table1",
+				Table: &table,
 			},
 		},
 	}
@@ -696,12 +736,13 @@ func TestTransactWait(t *testing.T) {
 }
 
 func TestTransactCommit(t *testing.T) {
+	durable := true
 	req := &libovsdb.Transact{
 		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
 				Op:      OP_COMMIT,
-				Durable: true,
+				Durable: &durable,
 			},
 		},
 	}
@@ -725,12 +766,13 @@ func TestTransactAbort(t *testing.T) {
 }
 
 func TestTransactComment(t *testing.T) {
+	comment := "ovs-vsctl add-br br0"
 	req := &libovsdb.Transact{
 		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
 				Op:      OP_COMMENT,
-				Comment: "ovs-vsctl add-br br0",
+				Comment: &comment,
 			},
 		},
 	}

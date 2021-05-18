@@ -7,13 +7,15 @@ import (
 )
 
 func TestOpRowSerialization(t *testing.T) {
+	table := "Bridge"
 	operation := Operation{
 		Op:    "insert",
-		Table: "Bridge",
+		Table: &table,
 	}
 
-	operation.Row = make(map[string]interface{})
-	operation.Row["name"] = "docker-ovs"
+	row := make(map[string]interface{})
+	operation.Row = &row
+	(*operation.Row)["name"] = "docker-ovs"
 
 	str, err := json.Marshal(operation)
 
@@ -29,9 +31,10 @@ func TestOpRowSerialization(t *testing.T) {
 }
 
 func TestOpRowsSerialization(t *testing.T) {
+	iface := "Interface"
 	operation := Operation{
 		Op:    "insert",
-		Table: "Interface",
+		Table: &iface,
 	}
 
 	iface1 := make(map[string]interface{})
@@ -44,7 +47,8 @@ func TestOpRowsSerialization(t *testing.T) {
 	iface2["mac"] = "0000ffaabb"
 	iface2["ofport"] = 2
 
-	operation.Rows = []map[string]interface{}{iface1, iface2}
+	rows := []map[string]interface{}{iface1, iface2}
+	operation.Rows = &rows
 
 	str, err := json.Marshal(operation)
 
