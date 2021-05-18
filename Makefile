@@ -1,8 +1,6 @@
 ROOT_DIR := .
 SERVER_EXECUTEBLE := "$(ROOT_DIR)/pkg/cmd/server/server"
 
-OVN_KUBERNETES_ROOT ?= $(ROOT_DIR)/../../ovn-org/ovn-kubernetes
-
 SERVER_FILES := \
 	$(ROOT_DIR)/pkg/cmd/server/server.go \
 	$(ROOT_DIR)/pkg/cmd/server/testdata.go
@@ -79,13 +77,34 @@ image-etcd:
 image-server: build
 	docker build . -t server -f dist/images/Dockerfile.ovsdb-etcd
 
-.PHONY: ovn-kubernetes-build
-ovn-kubernetes-build:
+.PHONY: ovnk
+ovnk: ovnk-build ovnk-push ovnk-deploy
+
+ovnk-root:
+	@[ -n "${OVN_KUBERNETES_ROOT}" ] || echo "missing OVN_KUBERNETES_ROOT"
+	@[ -n "${OVN_KUBERNETES_ROOT}" ]
+
+.PHONY: ovnk-build
+ovnk-build:
 	$(MAKE) build
 	$(MAKE) image-server
 	$(MAKE) image-etcd
+
+.PHONY: ovnk-push
+ovnk-push: ovnk-root
 	./scripts/pushDocker
 	cp dist/ovn-kubernetes/dist/images/ovndb-raft-functions.sh ${OVN_KUBERNETES_ROOT}/dist/images/
 	cp dist/ovn-kubernetes/dist/images/ovnkube.sh ${OVN_KUBERNETES_ROOT}/dist/images/
 	awk '{sub("XXREPO","${OVSDB_ETCD_REPOSITORY}")}1' dist/ovn-kubernetes/dist/templates/ovnkube-db.yaml.j2  > ${OVN_KUBERNETES_ROOT}/dist/templates/ovnkube-db.yaml.j2
 	cp  dist/ovn-kubernetes/dist/templates/ovnkube-node.yaml.j2  ${OVN_KUBERNETES_ROOT}/dist/templates/ovnkube-node.yaml.j2
+
+export KUBECONFIG=${HOME}/admin.conf
+
+.PHONY: ovnk-deploy
+ovnk-deploy: ovnk-root
+	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh --delete || true
+	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh -ml 7 -nl 7 -dbl 7 -ndl  '-vconsole:dbg -vfile:dbg' -dl '-vconsole:dbg -vfile:dbg' -cl '-vconsole:dbg -vfile:dbg'
+
+.PHONY: ovnk-status
+ovnk-status:
+	kubectl --kubeconfig=${KUBECONFIG} -n=ovn-kubernetes get pods
