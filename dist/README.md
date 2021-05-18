@@ -7,6 +7,7 @@ In order to deploy [OVN kubernetes](https://github.com/ovn-org/ovn-kubernetes) w
 		# Clone ovn-kubernetes repo
 		git clone https://github.com/ovn-org/ovn-kubernetes
 		cd ovn-kubernetes
+		git checkout e567a39c76930a26bdf1f312c36fa716f18df9a7
 		```
 	- build the OVN kubernetes container image.
 		```bash
@@ -52,3 +53,4 @@ In order to deploy [OVN kubernetes](https://github.com/ovn-org/ovn-kubernetes) w
 	```bash
 	kubectl --kubeconfig=$KUBECONFIG -n=ovn-kubernetes get pods
 	```
+The ovn-kubernetes files are from commit e567a39c76930a26bdf1f312c36fa716f18df9a7
