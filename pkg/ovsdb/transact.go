@@ -228,7 +228,7 @@ func (cache *Cache) Validate(schemas libovsdb.Schemas) error {
 
 type MapUUID map[string]string
 
-func (mapUUID MapUUID) ResolveUUID(value interface{}) (interface{}, error) {
+func (mapUUID MapUUID) ResolvUUID(value interface{}) (interface{}, error) {
 	namedUuid, _ := value.(libovsdb.UUID)
 	if namedUuid.GoUUID != "" && namedUuid.ValidateUUID() != nil {
 		uuid, ok := mapUUID[namedUuid.GoUUID]
@@ -242,11 +242,11 @@ func (mapUUID MapUUID) ResolveUUID(value interface{}) (interface{}, error) {
 	return value, nil
 }
 
-func (mapUUID MapUUID) ResolveSet(value interface{}) (interface{}, error) {
+func (mapUUID MapUUID) ResolvSet(value interface{}) (interface{}, error) {
 	oldset, _ := value.(libovsdb.OvsSet)
 	newset := libovsdb.OvsSet{}
 	for _, oldval := range oldset.GoSet {
-		newval, err := mapUUID.ResolveUUID(oldval)
+		newval, err := mapUUID.ResolvUUID(oldval)
 		if err != nil {
 			return nil, err
 		}
@@ -255,11 +255,11 @@ func (mapUUID MapUUID) ResolveSet(value interface{}) (interface{}, error) {
 	return newset, nil
 }
 
-func (mapUUID MapUUID) ResolveMap(value interface{}) (interface{}, error) {
+func (mapUUID MapUUID) ResolvMap(value interface{}) (interface{}, error) {
 	oldmap, _ := value.(libovsdb.OvsMap)
 	newmap := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}
 	for key, oldval := range oldmap.GoMap {
-		newval, err := mapUUID.ResolveUUID(oldval)
+		newval, err := mapUUID.ResolvUUID(oldval)
 		if err != nil {
 			return nil, err
 		}
@@ -268,14 +268,14 @@ func (mapUUID MapUUID) ResolveMap(value interface{}) (interface{}, error) {
 	return newmap, nil
 }
 
-func (mapUUID MapUUID) Resolve(value interface{}) (interface{}, error) {
+func (mapUUID MapUUID) Resolv(value interface{}) (interface{}, error) {
 	switch value.(type) {
 	case libovsdb.UUID:
-		return mapUUID.ResolveUUID(value)
+		return mapUUID.ResolvUUID(value)
 	case libovsdb.OvsSet:
-		return mapUUID.ResolveSet(value)
+		return mapUUID.ResolvSet(value)
 	case libovsdb.OvsMap:
-		return mapUUID.ResolveMap(value)
+		return mapUUID.ResolvMap(value)
 	default:
 		return value, nil
 	}
@@ -473,7 +473,7 @@ func NewCondition(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, condition 
 		value = tmp
 	}
 
-	tmp, err := mapUUID.Resolve(value)
+	tmp, err := mapUUID.Resolv(value)
 	if err != nil {
 		klog.Errorf("Failed to resolve named-uuid condition (columne %s, value %s)", column, value)
 		return nil, errors.New(E_INTERNAL_ERROR)
@@ -839,7 +839,7 @@ func NewMutation(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, mutation []
 	}
 
 	value := mutation[2]
-	tmp, err := mapUUID.Resolve(value)
+	tmp, err := mapUUID.Resolv(value)
 	if err != nil {
 		klog.Errorf("Failed to resolve named-uuid mutation (columne %s, value %s)", column, value)
 		return nil, errors.New(E_INTERNAL_ERROR)
@@ -1079,18 +1079,32 @@ func RowUpdate(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, original *map
 		}
 		switch column {
 		case COL_UUID, COL_VERSION:
-			klog.Errorf("Can't update column: %s", column)
+			klog.Errorf("failed update of column: %s", column)
 			return errors.New(E_CONSTRAINT_VIOLATION)
 		}
 		if columnSchema.Mutable != nil && !*columnSchema.Mutable {
-			klog.Errorf("Can't update unmutable column: %s", column)
+			klog.Errorf("failed update of unmutable column: %s", column)
 			return errors.New(E_CONSTRAINT_VIOLATION)
 		}
-		value, err = mapUUID.Resolve(value)
+
+		value, err = columnSchema.Unmarshal(value)
 		if err != nil {
-			klog.Errorf("Can't fix namedUUID column %s: %s", column, err.Error())
+			klog.Errorf("failed unmarshal of column %s: %s", column, err.Error())
 			return errors.New(E_CONSTRAINT_VIOLATION)
 		}
+
+		value, err = mapUUID.Resolv(value)
+		if err != nil {
+			klog.Errorf("failed resolv-namedUUID of column %s: %s", column, err.Error())
+			return errors.New(E_CONSTRAINT_VIOLATION)
+		}
+
+		err = columnSchema.Validate(value)
+		if err != nil {
+			klog.Errorf("failed validate of column %s: %s", column, err.Error())
+			return errors.New(E_CONSTRAINT_VIOLATION)
+		}
+
 		(*original)[column] = value
 	}
 	return nil
