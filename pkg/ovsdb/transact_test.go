@@ -47,32 +47,6 @@ var testSchemaMutable *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 	},
 }
 
-var testSchemaAtomic *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
-	Name:    "atomic",
-	Version: "0.0.0",
-	Tables: map[string]libovsdb.TableSchema{
-		"table1": {
-			Columns: map[string]*libovsdb.ColumnSchema{
-				"string": {
-					Type: libovsdb.TypeString,
-				},
-				"boolean": {
-					Type: libovsdb.TypeBoolean,
-				},
-				"integer": {
-					Type: libovsdb.TypeInteger,
-				},
-				"real": {
-					Type: libovsdb.TypeInteger,
-				},
-				"uuid": {
-					Type: libovsdb.TypeInteger,
-				},
-			},
-		},
-	},
-}
-
 var testSchemaEnum *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 	Name:    "enum",
 	Version: "0.0.0.0",
@@ -157,6 +131,37 @@ var testSchemaMap *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 	},
 }
 
+var testSchemaUUID *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
+	Name:    "uuid",
+	Version: "0.0.0.0",
+	Tables: map[string]libovsdb.TableSchema{
+		"table1": {
+			Columns: map[string]*libovsdb.ColumnSchema{
+				"uuid": {
+					Type: libovsdb.TypeUUID,
+				},
+			},
+		},
+		"table2": {
+			Columns: map[string]*libovsdb.ColumnSchema{
+				"map": {
+					Type: libovsdb.TypeMap,
+					TypeObj: &libovsdb.ColumnType{
+						Key: &libovsdb.BaseType{
+							Type: libovsdb.TypeString,
+						},
+						Value: &libovsdb.BaseType{
+							Type: libovsdb.TypeUUID,
+						},
+						Min: 1,
+						Max: libovsdb.Unlimited,
+					},
+				},
+			},
+		},
+	},
+}
+
 func testEtcdNewCli() (*clientv3.Client, error) {
 	endpoints := []string{"http://127.0.0.1:2379"}
 	return NewEtcdClient(endpoints)
@@ -225,10 +230,10 @@ func testTransact(t *testing.T, req *libovsdb.Transact) (*libovsdb.TransactRespo
 	txn := NewTransaction(cli, req)
 	txn.AddSchema(testSchemaSimple)
 	txn.AddSchema(testSchemaMutable)
-	txn.AddSchema(testSchemaAtomic)
 	txn.AddSchema(testSchemaEnum)
 	txn.AddSchema(testSchemaSet)
 	txn.AddSchema(testSchemaMap)
+	txn.AddSchema(testSchemaUUID)
 	txn.Commit()
 	return &txn.response, txn
 }
@@ -621,6 +626,64 @@ func TestTransactMutateSimple(t *testing.T) {
 	assert.Equal(t, "", resp.Error)
 	dump := testEtcdDump(t, "simple", "table1")
 	assert.Equal(t, float64(2), dump["key2"])
+}
+
+func TestTransactMutateMapNamedUUID(t *testing.T) {
+	namedUUID1 := "myuuid1"
+	namedUUID2 := "myuuid2"
+
+	table1 := "table1"
+	table1row1 := map[string]interface{}{}
+
+	table2 := "table2"
+	table2row1 := map[string]interface{}{
+		"map": libovsdb.OvsMap{GoMap: map[interface{}]interface{}{
+			"uuid1": libovsdb.UUID{GoUUID: namedUUID1},
+		}},
+	}
+	mutations := []interface{}{
+		[]interface{}{
+			"map",
+			MT_INSERT,
+			libovsdb.OvsMap{GoMap: map[interface{}]interface{}{
+				"uuid2": libovsdb.UUID{GoUUID: namedUUID2},
+			}},
+		},
+	}
+
+	req := &libovsdb.Transact{
+		DBName: "uuid",
+		Operations: []libovsdb.Operation{
+			/* table1 */
+			{
+				Op:       OP_INSERT,
+				Table:    &table1,
+				Row:      &table1row1,
+				UUIDName: &namedUUID1,
+			},
+			{
+				Op:       OP_INSERT,
+				Table:    &table1,
+				Row:      &table1row1,
+				UUIDName: &namedUUID2,
+			},
+			/* table2 */
+			{
+				Op:    OP_INSERT,
+				Table: &table2,
+				Row:   &table2row1,
+			},
+			{
+				Op:        OP_MUTATE,
+				Table:     &table2,
+				Mutations: &mutations,
+			},
+		},
+	}
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t, "uuid", "table1")
+	resp, _ := testTransact(t, req)
+	assert.Equal(t, "", resp.Error)
 }
 
 func TestTransactMutateUnmutableError(t *testing.T) {

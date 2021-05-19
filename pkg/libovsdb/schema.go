@@ -487,8 +487,8 @@ func UnmarshalInteger(from interface{}) (interface{}, error) {
 		return nil, err
 	}
 	var to int
-	json.Unmarshal(data, &to)
-	return to, nil
+	err = json.Unmarshal(data, &to)
+	return to, err
 }
 
 func UnmarshalReal(from interface{}) (interface{}, error) {
@@ -497,8 +497,8 @@ func UnmarshalReal(from interface{}) (interface{}, error) {
 		return nil, err
 	}
 	var to float64
-	json.Unmarshal(data, &to)
-	return to, nil
+	err = json.Unmarshal(data, &to)
+	return to, err
 }
 
 func UnmarshalString(from interface{}) (interface{}, error) {
@@ -507,8 +507,8 @@ func UnmarshalString(from interface{}) (interface{}, error) {
 		return nil, err
 	}
 	var to string
-	json.Unmarshal(data, &to)
-	return to, nil
+	err = json.Unmarshal(data, &to)
+	return to, err
 }
 
 func UnmarshalBoolean(from interface{}) (interface{}, error) {
@@ -517,8 +517,8 @@ func UnmarshalBoolean(from interface{}) (interface{}, error) {
 		return nil, err
 	}
 	var to bool
-	json.Unmarshal(data, &to)
-	return to, nil
+	err = json.Unmarshal(data, &to)
+	return to, err
 }
 
 func UnmarshalUUID(from interface{}) (interface{}, error) {
@@ -527,8 +527,8 @@ func UnmarshalUUID(from interface{}) (interface{}, error) {
 		return nil, err
 	}
 	var to UUID
-	json.Unmarshal(data, &to)
-	return to, nil
+	err = json.Unmarshal(data, &to)
+	return to, err
 }
 
 func UnmarshalEnum(from interface{}) (interface{}, error) {
@@ -537,28 +537,78 @@ func UnmarshalEnum(from interface{}) (interface{}, error) {
 		return nil, err
 	}
 	var to interface{}
-	json.Unmarshal(data, &to)
-	return to, nil
+	err = json.Unmarshal(data, &to)
+	return to, err
 }
 
-func UnmarshalSet(from interface{}) (interface{}, error) {
+func (baseType *BaseType) Unmarshal(from interface{}) (interface{}, error) {
+	if baseType == nil {
+		panic(fmt.Sprintf("nil base type, value = %v", from))
+	}
+	switch baseType.Type {
+	case TypeInteger:
+		return UnmarshalInteger(from)
+	case TypeString:
+		return UnmarshalString(from)
+	case TypeBoolean:
+		return UnmarshalBoolean(from)
+	case TypeReal:
+		return UnmarshalReal(from)
+	case TypeUUID:
+		return UnmarshalUUID(from)
+	default:
+		panic(fmt.Sprintf("unsupported value type %s", baseType.Type))
+	}
+}
+
+func (columnSchema *ColumnSchema) UnmarshalSet(from interface{}) (interface{}, error) {
 	data, err := json.Marshal(from)
 	if err != nil {
 		return nil, err
 	}
-	var to OvsSet
-	json.Unmarshal(data, &to)
-	return to, nil
+	var to1 OvsSet
+	err = json.Unmarshal(data, &to1)
+	if err != nil {
+		return nil, err
+	}
+
+	var to2 OvsSet
+	for _, val1 := range to1.GoSet {
+		val2, err := columnSchema.TypeObj.Value.Unmarshal(val1)
+		if err != nil {
+			return nil, err
+		}
+		to2.GoSet = append(to2.GoSet, val2)
+	}
+
+	return to2, nil
 }
 
-func UnmarshalMap(from interface{}) (interface{}, error) {
+func (columnSchema *ColumnSchema) UnmarshalMap(from interface{}) (interface{}, error) {
 	data, err := json.Marshal(from)
 	if err != nil {
 		return nil, err
 	}
-	var to OvsMap
-	json.Unmarshal(data, &to)
-	return to, nil
+	var to1 OvsMap
+	err = json.Unmarshal(data, &to1)
+	if err != nil {
+		return nil, err
+	}
+
+	to2 := OvsMap{GoMap: map[interface{}]interface{}{}}
+	for key1, val1 := range to1.GoMap {
+		key2, err := columnSchema.TypeObj.Key.Unmarshal(key1)
+		if err != nil {
+			return nil, err
+		}
+		val2, err := columnSchema.TypeObj.Value.Unmarshal(val1)
+		if err != nil {
+			return nil, err
+		}
+		to2.GoMap[key2] = val2
+	}
+
+	return to2, nil
 }
 
 func (columnSchema *ColumnSchema) Unmarshal(from interface{}) (interface{}, error) {
@@ -576,12 +626,16 @@ func (columnSchema *ColumnSchema) Unmarshal(from interface{}) (interface{}, erro
 	case TypeEnum:
 		return UnmarshalEnum(from)
 	case TypeSet:
-		return UnmarshalSet(from)
+		return columnSchema.UnmarshalSet(from)
 	case TypeMap:
-		if to, err := UnmarshalMap(from); err == nil {
-			return to, nil
+		toMap, errMap := columnSchema.UnmarshalMap(from)
+		if errMap == nil {
+			return toMap, nil
 		}
-		return UnmarshalSet(from)
+		if toSet, errSet := columnSchema.UnmarshalSet(from); errSet == nil {
+			return toSet, nil
+		}
+		return nil, errMap
 	default:
 		panic(fmt.Sprintf("unsupported type %s", columnSchema.Type))
 	}
@@ -598,7 +652,7 @@ func (tableSchema *TableSchema) Unmarshal(row *map[string]interface{}) error {
 			case "_version":
 				to, err = UnmarshalString(value)
 			default:
-				to, err = columnSchema.Unmarshal((*row)[column])
+				to, err = columnSchema.Unmarshal(value)
 			}
 			if err != nil {
 				return fmt.Errorf("[column %s] %s", column, err.Error())
@@ -865,10 +919,14 @@ func (columnSchema *ColumnSchema) Validate(value interface{}) error {
 	case TypeSet:
 		return columnSchema.ValidateSet(value)
 	case TypeMap:
-		if columnSchema.ValidateMap(value) == nil {
+		errMap := columnSchema.ValidateMap(value)
+		if errMap == nil {
 			return nil
 		}
-		return columnSchema.ValidateSet(value)
+		if errSet := columnSchema.ValidateSet(value); errSet == nil {
+			return nil
+		}
+		return errMap
 	default:
 		panic(fmt.Sprintf("unsupported type %s", columnSchema.Type))
 	}

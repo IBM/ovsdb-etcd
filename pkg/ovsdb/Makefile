@@ -6,4 +6,5 @@ go:
 
 .PHONY: dlv
 dlv:
-	dlv test --build-flags="-gcflags '-N -l'" -- -test.run ${TEST_PATTERN}
+	#dlv test --build-flags="-gcflags '-N -l'" -- -test.v -test.run ${TEST_PATTERN}
+	dlv test -- -test.v -test.run ${TEST_PATTERN}
