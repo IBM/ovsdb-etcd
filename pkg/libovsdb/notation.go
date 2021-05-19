@@ -23,6 +23,15 @@ type Operation struct {
 	Durable   *bool                     `json:"durable,omitempty"`
 }
 
+// String, serialize Transact
+func (o Operation) String() string {
+	buf, err := json.Marshal(o)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal operation"))
+	}
+	return string(buf)
+}
+
 // MarshalJSON marshalls 'Operation' to a byte array
 // For 'select' operations, we dont omit the 'Where' field
 // to allow selecting all rows of a table
