@@ -233,13 +233,21 @@ func (mapUUID MapUUID) Set(uuidName, uuid string) {
 	mapUUID[uuidName] = uuid
 }
 
+func (mapUUID MapUUID) Get(uuidName string) (string, error) {
+	uuid, ok := mapUUID[uuidName]
+	if !ok {
+		klog.Errorf("Can't get named-uuid %s", uuidName)
+		return "", errors.New(E_CONSTRAINT_VIOLATION)
+	}
+	return uuid, nil
+}
+
 func (mapUUID MapUUID) ResolvUUID(value interface{}) (interface{}, error) {
 	namedUuid, _ := value.(libovsdb.UUID)
 	if namedUuid.GoUUID != "" && namedUuid.ValidateUUID() != nil {
-		uuid, ok := mapUUID[namedUuid.GoUUID]
-		if !ok {
-			klog.Errorf("Can't resolv named-uuid: %s", namedUuid.GoUUID)
-			return nil, errors.New(E_CONSTRAINT_VIOLATION)
+		uuid, err := mapUUID.Get(namedUuid.GoUUID)
+		if err != nil {
+			return nil, err
 		}
 		value = libovsdb.UUID{GoUUID: uuid}
 	}
@@ -1182,6 +1190,16 @@ func preInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 	if ovsOp.UUIDName == nil {
 		return nil
 	}
+
+	if ovsOp.UUIDName != nil {
+		uuid := common.GenerateUUID()
+		if _, ok := txn.mapUUID[*ovsOp.UUIDName]; ok {
+			klog.Errorf("Duplicate uuid-name: %s", *ovsOp.UUIDName)
+			return errors.New(E_DUP_UUIDNAME)
+		}
+		txn.mapUUID.Set(*ovsOp.UUIDName, uuid)
+	}
+
 	key := common.NewTableKey(txn.request.DBName, *ovsOp.Table)
 	etcdGetData(txn, &key)
 	return nil
@@ -1189,16 +1207,17 @@ func preInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 
 func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
 	uuid := common.GenerateUUID()
+	var err error
+
 	if ovsOp.UUID != nil {
 		uuid = ovsOp.UUID.GoUUID
 	}
 
 	if ovsOp.UUIDName != nil {
-		if _, ok := txn.mapUUID[*ovsOp.UUIDName]; ok {
-			klog.Errorf("Duplicate uuid-name: %s", *ovsOp.UUIDName)
-			return errors.New(E_DUP_UUIDNAME)
+		uuid, err = txn.mapUUID.Get(*ovsOp.UUIDName)
+		if err != nil {
+			return err
 		}
-		txn.mapUUID.Set(*ovsOp.UUIDName, uuid)
 	}
 
 	for uuid := range txn.cache.Table(txn.request.DBName, *ovsOp.Table) {
@@ -1215,7 +1234,7 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 	*row = *ovsOp.Row
 	txn.schemas.Default(txn.request.DBName, *ovsOp.Table, row)
 
-	err := txn.schemas.Unmarshal(txn.request.DBName, *ovsOp.Table, row)
+	err = txn.schemas.Unmarshal(txn.request.DBName, *ovsOp.Table, row)
 	if err != nil {
 		klog.Errorf("%s", err.Error())
 		return errors.New(E_CONSTRAINT_VIOLATION)
