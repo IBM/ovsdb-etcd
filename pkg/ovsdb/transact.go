@@ -228,17 +228,29 @@ func (cache *Cache) Validate(schemas libovsdb.Schemas) error {
 
 type MapUUID map[string]string
 
+func (mapUUID MapUUID) Set(uuidName, uuid string) {
+	klog.Infof("setting named-uuid %s to uuid %s", uuidName, uuid)
+	mapUUID[uuidName] = uuid
+}
+
+func (mapUUID MapUUID) Get(uuidName string) (string, error) {
+	uuid, ok := mapUUID[uuidName]
+	if !ok {
+		klog.Errorf("Can't get named-uuid %s", uuidName)
+		return "", errors.New(E_CONSTRAINT_VIOLATION)
+	}
+	return uuid, nil
+}
+
 func (mapUUID MapUUID) ResolvUUID(value interface{}) (interface{}, error) {
 	namedUuid, _ := value.(libovsdb.UUID)
 	if namedUuid.GoUUID != "" && namedUuid.ValidateUUID() != nil {
-		uuid, ok := mapUUID[namedUuid.GoUUID]
-		if !ok {
-			klog.Errorf("Can't resolve named-uuid: %s", namedUuid.GoUUID)
-			return nil, errors.New(E_CONSTRAINT_VIOLATION)
+		uuid, err := mapUUID.Get(namedUuid.GoUUID)
+		if err != nil {
+			return nil, err
 		}
 		value = libovsdb.UUID{GoUUID: uuid}
 	}
-
 	return value, nil
 }
 
@@ -384,7 +396,7 @@ func (txn *Transaction) Commit() error {
 		}
 
 		if err = txn.cache.Validate(txn.schemas); err != nil {
-			panic(fmt.Sprintf("validation of %+v failed: %s", ovsOp, err.Error()))
+			panic(fmt.Sprintf("validation of %s failed: %s", ovsOp, err.Error()))
 		}
 	}
 	_, err = txn.etcdTranaction()
@@ -475,7 +487,7 @@ func NewCondition(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, condition 
 
 	tmp, err := mapUUID.Resolv(value)
 	if err != nil {
-		klog.Errorf("Failed to resolve named-uuid condition (columne %s, value %s)", column, value)
+		klog.Errorf("Failed to resolve named-uuid condition (column %s, value %s)", column, value)
 		return nil, errors.New(E_INTERNAL_ERROR)
 	}
 	value = tmp
@@ -1038,7 +1050,7 @@ func (m *Mutation) MutateMap(row *map[string]interface{}) error {
 	if err != nil {
 		return err
 	}
-	(*row)[m.Column] = mutated
+	(*row)[m.Column] = *mutated
 	return nil
 }
 
@@ -1178,6 +1190,16 @@ func preInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 	if ovsOp.UUIDName == nil {
 		return nil
 	}
+
+	if ovsOp.UUIDName != nil {
+		uuid := common.GenerateUUID()
+		if _, ok := txn.mapUUID[*ovsOp.UUIDName]; ok {
+			klog.Errorf("Duplicate uuid-name: %s", *ovsOp.UUIDName)
+			return errors.New(E_DUP_UUIDNAME)
+		}
+		txn.mapUUID.Set(*ovsOp.UUIDName, uuid)
+	}
+
 	key := common.NewTableKey(txn.request.DBName, *ovsOp.Table)
 	etcdGetData(txn, &key)
 	return nil
@@ -1185,16 +1207,17 @@ func preInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 
 func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
 	uuid := common.GenerateUUID()
+	var err error
+
 	if ovsOp.UUID != nil {
 		uuid = ovsOp.UUID.GoUUID
 	}
 
 	if ovsOp.UUIDName != nil {
-		if _, ok := txn.mapUUID[*ovsOp.UUIDName]; ok {
-			klog.Errorf("Duplicate uuid-name: %s", *ovsOp.UUIDName)
-			return errors.New(E_DUP_UUIDNAME)
+		uuid, err = txn.mapUUID.Get(*ovsOp.UUIDName)
+		if err != nil {
+			return err
 		}
-		txn.mapUUID[*ovsOp.UUIDName] = uuid
 	}
 
 	for uuid := range txn.cache.Table(txn.request.DBName, *ovsOp.Table) {
@@ -1206,17 +1229,18 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 
 	key := common.NewDataKey(txn.request.DBName, *ovsOp.Table, uuid)
 	ovsResult.InitUUID(key.UUID)
+
 	row := txn.cache.Row(key)
 	*row = *ovsOp.Row
 	txn.schemas.Default(txn.request.DBName, *ovsOp.Table, row)
 
-	err := txn.schemas.Unmarshal(txn.request.DBName, *ovsOp.Table, ovsOp.Row)
+	err = txn.schemas.Unmarshal(txn.request.DBName, *ovsOp.Table, row)
 	if err != nil {
 		klog.Errorf("%s", err.Error())
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
-	err = txn.schemas.Validate(txn.request.DBName, *ovsOp.Table, ovsOp.Row)
+	err = txn.schemas.Validate(txn.request.DBName, *ovsOp.Table, row)
 	if err != nil {
 		klog.Errorf("%s", err.Error())
 		return errors.New(E_CONSTRAINT_VIOLATION)
