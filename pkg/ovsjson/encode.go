@@ -44,27 +44,27 @@ func (s Set) MarshalJSON() ([]byte, error) {
 func (cmr *CondMonitorParameters) UnmarshalJSON(p []byte) error {
 	var tmp []json.RawMessage
 	if err := json.Unmarshal(p, &tmp); err != nil {
-		return fmt.Errorf("Unmarshal json message: %s", err)
+		return fmt.Errorf("unmarshal json message: %s", err)
 	}
 	if err := json.Unmarshal(tmp[0], &cmr.DatabaseName); err != nil {
-		return fmt.Errorf("Unmarshal database_name: %s", err)
+		return fmt.Errorf("unmarshal database_name: %s", err)
 	}
 	l := len(tmp)
 	if l < 2 || l > 4 {
-		return fmt.Errorf("Wrong monitor conditions lenght: %d", l)
-	}
-	if len(tmp) == 2 {
-		// we don't have JsonValue and LastTxnID
-		if err := json.Unmarshal(tmp[1], &cmr.MonitorCondRequests); err != nil {
-			return fmt.Errorf("Unmarshal monitor conditions: %s", err)
-		}
-		return nil
+		return fmt.Errorf("wrong monitor conditions lenght: %d", l)
 	}
 	if err := json.Unmarshal(tmp[1], &cmr.JsonValue); err != nil {
-		return fmt.Errorf("Unmarshal json value: %s", err)
+		return fmt.Errorf("unmarshal json value: %s", err)
 	}
 	if err := json.Unmarshal(tmp[2], &cmr.MonitorCondRequests); err != nil {
-		return fmt.Errorf("Unmarshal monitor conditions: %s", err)
+		obj := map[string]MonitorCondRequest{}
+		if err := json.Unmarshal(tmp[2], &obj); err != nil {
+			return fmt.Errorf("unmarshal json value into interfaces map: %s", err)
+		}
+		cmr.MonitorCondRequests = map[string][]MonitorCondRequest{}
+		for k, v := range obj {
+			cmr.MonitorCondRequests[k] = []MonitorCondRequest{v}
+		}
 	}
 	if l == 4 {
 		if err := json.Unmarshal(tmp[3], &cmr.LastTxnID); err != nil {
