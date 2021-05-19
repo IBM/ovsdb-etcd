@@ -578,7 +578,10 @@ func (columnSchema *ColumnSchema) Unmarshal(from interface{}) (interface{}, erro
 	case TypeSet:
 		return UnmarshalSet(from)
 	case TypeMap:
-		return UnmarshalMap(from)
+		if to, err := UnmarshalMap(from); err == nil {
+			return to, nil
+		}
+		return UnmarshalSet(from)
 	default:
 		panic(fmt.Sprintf("unsupported type %s", columnSchema.Type))
 	}
@@ -862,7 +865,10 @@ func (columnSchema *ColumnSchema) Validate(value interface{}) error {
 	case TypeSet:
 		return columnSchema.ValidateSet(value)
 	case TypeMap:
-		return columnSchema.ValidateMap(value)
+		if columnSchema.ValidateMap(value) == nil {
+			return nil
+		}
+		return columnSchema.ValidateSet(value)
 	default:
 		panic(fmt.Sprintf("unsupported type %s", columnSchema.Type))
 	}
