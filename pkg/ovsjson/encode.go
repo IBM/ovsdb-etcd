@@ -49,13 +49,24 @@ func (cmr *CondMonitorParameters) UnmarshalJSON(p []byte) error {
 	if err := json.Unmarshal(tmp[0], &cmr.DatabaseName); err != nil {
 		return fmt.Errorf("Unmarshal database_name: %s", err)
 	}
+	l := len(tmp)
+	if l < 2 || l > 4 {
+		return fmt.Errorf("Wrong monitor conditions lenght: %d", l)
+	}
+	if len(tmp) == 2 {
+		// we don't have JsonValue and LastTxnID
+		if err := json.Unmarshal(tmp[1], &cmr.MonitorCondRequests); err != nil {
+			return fmt.Errorf("Unmarshal monitor conditions: %s", err)
+		}
+		return nil
+	}
 	if err := json.Unmarshal(tmp[1], &cmr.JsonValue); err != nil {
 		return fmt.Errorf("Unmarshal json value: %s", err)
 	}
 	if err := json.Unmarshal(tmp[2], &cmr.MonitorCondRequests); err != nil {
 		return fmt.Errorf("Unmarshal monitor conditions: %s", err)
 	}
-	if len(tmp) > 4 {
+	if l == 4 {
 		if err := json.Unmarshal(tmp[3], &cmr.LastTxnID); err != nil {
 			return fmt.Errorf("Unmarshal last transaction ID: %s", err)
 		}

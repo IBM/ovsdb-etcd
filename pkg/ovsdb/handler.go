@@ -58,6 +58,7 @@ func (ch *Handler) Monitor(ctx context.Context, param ovsjson.CondMonitorParamet
 	klog.V(5).Infof("Monitor request, parameters %v", param)
 	updatersMap, err := ch.monitor(param, ovsjson.Update)
 	if err != nil {
+		klog.Errorf("Monitor: %s", err)
 		return nil, err
 	}
 	return ch.getMonitoredData(updatersMap, true)
@@ -156,6 +157,7 @@ func (ch *Handler) MonitorCond(ctx context.Context, param ovsjson.CondMonitorPar
 	klog.V(5).Infof("MonitorCond request, parameters %v", param)
 	updatersMap, err := ch.monitor(param, ovsjson.Update2)
 	if err != nil {
+		klog.Errorf("MonitorCond: %s", err)
 		return nil, err
 	}
 	return ch.getMonitoredData(updatersMap, false)
@@ -171,6 +173,7 @@ func (ch *Handler) MonitorCondSince(ctx context.Context, param ovsjson.CondMonit
 	klog.V(5).Infof("MonitorCondSince request, parameters %v", param)
 	updatersMap, err := ch.monitor(param, ovsjson.Update3)
 	if err != nil {
+		klog.Errorf("MonitorCondSince: %s", err)
 		return nil, err
 	}
 	data, err := ch.getMonitoredData(updatersMap, false)
@@ -295,12 +298,10 @@ func (ch *Handler) getMonitoredData(updatersMap Key2Updaters, isV1 bool) (ovsjso
 		}
 		d1 := ovsjson.TableUpdate{}
 		for _, kv := range resp.Kvs {
-			if err != nil {
-				return nil, err
-			}
 			for _, updater := range updaters {
 				row, uuid, err := updater.prepareCreateRowInitial(&kv.Value)
 				if err != nil {
+					klog.Errorf("prepareCreateRowInitial returned %s", err)
 					return nil, err
 				}
 				// TODO merge
@@ -309,6 +310,7 @@ func (ch *Handler) getMonitoredData(updatersMap Key2Updaters, isV1 bool) (ovsjso
 		}
 		returnData[tableKey.TableName] = d1
 	}
+	klog.V(6).Infof("getMonitoredData: %v", returnData)
 	return returnData, nil
 }
 
