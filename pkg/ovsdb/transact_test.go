@@ -2,6 +2,7 @@ package ovsdb
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,6 +24,32 @@ var testSchemaSimple *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 				},
 				"key2": {
 					Type: libovsdb.TypeInteger,
+				},
+			},
+		},
+	},
+}
+
+var testSchemaAtomic *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
+	Name:    "atomic",
+	Version: "0.0.0",
+	Tables: map[string]libovsdb.TableSchema{
+		"table1": {
+			Columns: map[string]*libovsdb.ColumnSchema{
+				"string": {
+					Type: libovsdb.TypeString,
+				},
+				"integer": {
+					Type: libovsdb.TypeInteger,
+				},
+				"real": {
+					Type: libovsdb.TypeReal,
+				},
+				"boolean": {
+					Type: libovsdb.TypeBoolean,
+				},
+				"uuid": {
+					Type: libovsdb.TypeUUID,
 				},
 			},
 		},
@@ -229,6 +256,7 @@ func testTransact(t *testing.T, req *libovsdb.Transact) (*libovsdb.TransactRespo
 	defer cli.Close()
 	txn := NewTransaction(cli, req)
 	txn.AddSchema(testSchemaSimple)
+	txn.AddSchema(testSchemaAtomic)
 	txn.AddSchema(testSchemaMutable)
 	txn.AddSchema(testSchemaEnum)
 	txn.AddSchema(testSchemaSet)
@@ -500,6 +528,61 @@ func TestTransactUpdateSimple(t *testing.T) {
 	assert.Equal(t, "", resp.Error)
 	dump := testEtcdDump(t, "simple", "table1")
 	assert.Equal(t, "val2", dump["key1"])
+}
+
+func TestTransactUpdateWhere(t *testing.T) {
+	table := "table1"
+	uuid1 := libovsdb.UUID{GoUUID: "00000000-0000-0000-0000-000000000001"}
+	uuid1buf, err := json.Marshal(uuid1)
+	assert.Nil(t, err)
+	uuid1array := []interface{}{}
+	err = json.Unmarshal(uuid1buf, &uuid1array)
+	assert.Nil(t, err)
+
+	row1 := map[string]interface{}{
+		"string": "val1",
+		"uuid":   &uuid1array,
+	}
+	req1 := &libovsdb.Transact{
+		DBName: "atomic",
+		Operations: []libovsdb.Operation{
+			{
+				Op:    OP_INSERT,
+				Table: &table,
+				Row:   &row1,
+			},
+		},
+	}
+
+	row2 := map[string]interface{}{
+		"string": "val2",
+	}
+
+	where2 := []interface{}{
+		[]interface{}{"uuid", "==", uuid1array},
+	}
+	req2 := &libovsdb.Transact{
+		DBName: "atomic",
+		Operations: []libovsdb.Operation{
+			{
+				Op:    OP_UPDATE,
+				Table: &table,
+				Row:   &row2,
+				Where: &where2,
+			},
+		},
+	}
+
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t, "atomic", "table1")
+
+	resp, _ := testTransact(t, req1)
+	assert.Equal(t, "", resp.Error)
+	resp, _ = testTransact(t, req2)
+	assert.Equal(t, "", resp.Error)
+
+	dump := testEtcdDump(t, "atomic", "table1")
+	assert.Equal(t, "val2", dump["string"])
 }
 
 func TestTransactUpdateMapOk(t *testing.T) {
