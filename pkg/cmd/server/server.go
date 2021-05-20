@@ -4,10 +4,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
-	"github.com/ibm/ovsdb-etcd/pkg/types/_Server"
+	"github.com/creachadair/jrpc2"
+	"github.com/creachadair/jrpc2/channel"
+	"github.com/creachadair/jrpc2/handler"
+	"github.com/creachadair/jrpc2/metrics"
 	"io/ioutil"
+	"k8s.io/klog/v2"
 	"net"
 	"os"
 	"os/signal"
@@ -16,13 +18,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
-
-	"github.com/creachadair/jrpc2"
-	"github.com/creachadair/jrpc2/channel"
-	"github.com/creachadair/jrpc2/handler"
-	"github.com/creachadair/jrpc2/metrics"
-	"k8s.io/klog/v2"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/ovsdb"
@@ -98,10 +93,6 @@ func main() {
 	}
 
 	err = db.AddSchema(path.Join(*schemaBasedir, *schemaFile))
-	if err != nil {
-		klog.Fatal(err)
-	}
-	err = setServerData(&db)
 	if err != nil {
 		klog.Fatal(err)
 	}
@@ -225,24 +216,6 @@ func addClientHandlers(handlerMap handler.Map, ch *ovsdb.Handler) *handler.Map {
 	handlerMap["monitor_cond_change"] = handler.New(ch.MonitorCondChange)
 	handlerMap["set_db_change_aware"] = handler.New(ch.SetDbChangeAware)
 	return &handlerMap
-}
-
-func setServerData(con *ovsdb.Databaser) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-	for schemaName, schema := range (*con).GetSchemas() {
-		schemaSet, err := libovsdb.NewOvsSet(schema.String())
-		if err != nil {
-			return err
-		}
-		srv := _Server.Database{Model: "standalone", Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
-			Connected: true, Leader: true, Schema: *schemaSet, Version: libovsdb.UUID{GoUUID: uuid.NewString()}}
-		key := common.NewDataKey("_Server", "Database", schemaName)
-		if err := (*con).PutData(ctx, key, srv); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func delPidfile(pidfile string) {

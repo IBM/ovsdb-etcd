@@ -3,6 +3,8 @@ package ovsdb
 import (
 	"context"
 	"encoding/json"
+	"github.com/google/uuid"
+	"github.com/ibm/ovsdb-etcd/pkg/types/_Server"
 	"sync"
 	"time"
 
@@ -23,14 +25,16 @@ type Databaser interface {
 	GetSchemas() libovsdb.Schemas
 	GetData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error)
 	PutData(ctx context.Context, key common.Key, obj interface{}) error
-	GetSchema(name string) (string, bool)
+	GetSchema(name string) map[string]interface{}
 }
 
 type DatabaseEtcd struct {
 	cli *clientv3.Client
 	// dataBaseName -> schema
 	Schemas libovsdb.Schemas
-	mu      sync.Mutex
+	// TODO will be removed
+	strSchemas map[string]map[string]interface{}
+	mu         sync.Mutex
 	// databaseName -> monitor
 	// We have a single monitor (etcd watcher) per database
 	monitors map[string]*monitor
@@ -69,7 +73,7 @@ var EtcdClientTimeout = 100 * time.Millisecond
 
 func NewDatabaseEtcd(cli *clientv3.Client) (Databaser, error) {
 	return &DatabaseEtcd{cli: cli,
-		Schemas: libovsdb.Schemas{}, monitors: map[string]*monitor{}}, nil
+		Schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}, monitors: map[string]*monitor{}}, nil
 }
 
 func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error) {
@@ -85,7 +89,31 @@ func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error)
 }
 
 func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
-	return con.Schemas.AddFromFile(schemaFile)
+	data, err := common.ReadFile(schemaFile)
+	if err != nil {
+		return err
+	}
+	err = con.Schemas.AddFromBytes(data)
+	if err != nil {
+		return err
+	}
+	schemaMap := map[string]interface{}{}
+	err = json.Unmarshal(data, &schemaMap)
+	if err != nil {
+		return err
+	}
+	schemaName := schemaMap["name"].(string)
+	con.strSchemas[schemaName] = schemaMap
+	schemaSet, err := libovsdb.NewOvsSet(string(data))
+	srv := _Server.Database{Model: "standalone", Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
+		Connected: true, Leader: true, Schema: *schemaSet, Version: libovsdb.UUID{GoUUID: uuid.NewString()}}
+	key := common.NewDataKey("_Server", "Database", schemaName)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	if err := (*con).PutData(ctx, key, srv); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (con *DatabaseEtcd) GetSchemas() libovsdb.Schemas {
@@ -114,8 +142,8 @@ func (con *DatabaseEtcd) GetData(key common.Key, keysOnly bool) (*clientv3.GetRe
 	return resp, err
 }
 
-func (con *DatabaseEtcd) GetSchema(name string) (string, bool) {
-	return con.Schemas[name].String(), true
+func (con *DatabaseEtcd) GetSchema(name string) map[string]interface{} {
+	return con.strSchemas[name]
 }
 
 func (con *DatabaseEtcd) PutData(ctx context.Context, key common.Key, obj interface{}) error {
@@ -233,8 +261,8 @@ func (con *DatabaseMock) PutData(ctx context.Context, key common.Key, obj interf
 	return con.Error
 }
 
-func (con *DatabaseMock) GetSchema(name string) (string, bool) {
-	return con.Response.(string), con.Ok
+func (con *DatabaseMock) GetSchema(name string) map[string]interface{} {
+	return nil
 }
 
 func (con *DatabaseMock) GetUUID() string {

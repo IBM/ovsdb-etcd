@@ -43,15 +43,3 @@ func TestMockGetData(t *testing.T) {
 	assert.Equal(t, expectedError, actualError)
 	assert.Equal(t, expectedResponse, actualResponse)
 }
-
-func TestMockGetSchema(t *testing.T) {
-	expectedResponse := "val1"
-	expectedOk := true
-	mock := DatabaseMock{
-		Response: expectedResponse,
-		Ok:       expectedOk,
-	}
-	actualResponse, actualOk := mock.GetSchema("")
-	assert.Equal(t, expectedOk, actualOk)
-	assert.Equal(t, expectedResponse, actualResponse)
-}
