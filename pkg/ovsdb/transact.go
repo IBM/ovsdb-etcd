@@ -293,6 +293,17 @@ func (mapUUID MapUUID) Resolv(value interface{}) (interface{}, error) {
 	}
 }
 
+func (mapUUID MapUUID) ResolvRow(row *map[string]interface{}) error {
+	for column, value := range *row {
+		value, err := mapUUID.Resolv(value)
+		if err != nil {
+			return err
+		}
+		(*row)[column] = value
+	}
+	return nil
+}
+
 type Transaction struct {
 	/* ovs */
 	schemas  libovsdb.Schemas
@@ -1111,24 +1122,6 @@ func RowUpdate(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, original *map
 			return errors.New(E_CONSTRAINT_VIOLATION)
 		}
 
-		value, err = columnSchema.Unmarshal(value)
-		if err != nil {
-			klog.Errorf("failed unmarshal of column %s: %s", column, err.Error())
-			return errors.New(E_CONSTRAINT_VIOLATION)
-		}
-
-		value, err = mapUUID.Resolv(value)
-		if err != nil {
-			klog.Errorf("failed resolv-namedUUID of column %s: %s", column, err.Error())
-			return errors.New(E_CONSTRAINT_VIOLATION)
-		}
-
-		err = columnSchema.Validate(value)
-		if err != nil {
-			klog.Errorf("failed validate of column %s: %s", column, err.Error())
-			return errors.New(E_CONSTRAINT_VIOLATION)
-		}
-
 		(*original)[column] = value
 	}
 	return nil
@@ -1143,7 +1136,7 @@ func etcdGetData(txn *Transaction, key *common.Key) {
 func etcdGetByWhere(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
 	tableSchema, err := txn.schemas.LookupTable(txn.request.DBName, *ovsOp.Table)
 	if err != nil {
-		return err
+		return errors.New(E_INTERNAL_ERROR)
 	}
 	uuid, err := doesWhereContainCondTypeUUID(tableSchema, txn.mapUUID, ovsOp.Where)
 	if err != nil {
@@ -1185,6 +1178,27 @@ func etcdDelRow(txn *Transaction, key *common.Key) error {
 	return nil
 }
 
+func RowPrepare(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, row *map[string]interface{}) error {
+	err := tableSchema.Unmarshal(row)
+	if err != nil {
+		klog.Errorf("%s", err.Error())
+		return errors.New(E_CONSTRAINT_VIOLATION)
+	}
+
+	err = mapUUID.ResolvRow(row)
+	if err != nil {
+		klog.Errorf("%s", err.Error())
+		return errors.New(E_CONSTRAINT_VIOLATION)
+	}
+
+	err = tableSchema.Validate(row)
+	if err != nil {
+		klog.Errorf("%s", err.Error())
+		return errors.New(E_CONSTRAINT_VIOLATION)
+	}
+	return nil
+}
+
 /* insert */
 func preInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
 	if ovsOp.UUIDName == nil {
@@ -1193,6 +1207,9 @@ func preInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 
 	if ovsOp.UUIDName != nil {
 		uuid := common.GenerateUUID()
+		if ovsOp.UUID != nil {
+			uuid = ovsOp.UUID.GoUUID
+		}
 		if _, ok := txn.mapUUID[*ovsOp.UUIDName]; ok {
 			klog.Errorf("Duplicate uuid-name: %s", *ovsOp.UUIDName)
 			return errors.New(E_DUP_UUIDNAME)
@@ -1206,8 +1223,12 @@ func preInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 }
 
 func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
+	tableSchema, err := txn.schemas.LookupTable(txn.request.DBName, *ovsOp.Table)
+	if err != nil {
+		return errors.New(E_INTERNAL_ERROR)
+	}
+
 	uuid := common.GenerateUUID()
-	var err error
 
 	if ovsOp.UUID != nil {
 		uuid = ovsOp.UUID.GoUUID
@@ -1234,15 +1255,8 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 	*row = *ovsOp.Row
 	txn.schemas.Default(txn.request.DBName, *ovsOp.Table, row)
 
-	err = txn.schemas.Unmarshal(txn.request.DBName, *ovsOp.Table, row)
+	err = RowPrepare(tableSchema, txn.mapUUID, ovsOp.Row)
 	if err != nil {
-		klog.Errorf("%s", err.Error())
-		return errors.New(E_CONSTRAINT_VIOLATION)
-	}
-
-	err = txn.schemas.Validate(txn.request.DBName, *ovsOp.Table, row)
-	if err != nil {
-		klog.Errorf("%s", err.Error())
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
@@ -1258,7 +1272,7 @@ func doSelect(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 	ovsResult.InitRows()
 	tableSchema, err := txn.schemas.LookupTable(txn.request.DBName, *ovsOp.Table)
 	if err != nil {
-		return err
+		return errors.New(E_INTERNAL_ERROR)
 	}
 
 	for _, row := range txn.cache.Table(txn.request.DBName, *ovsOp.Table) {
@@ -1287,7 +1301,7 @@ func doUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 	ovsResult.InitCount()
 	tableSchema, err := txn.schemas.LookupTable(txn.request.DBName, *ovsOp.Table)
 	if err != nil {
-		return err
+		return errors.New(E_INTERNAL_ERROR)
 	}
 	for uuid, row := range txn.cache.Table(txn.request.DBName, *ovsOp.Table) {
 		ok, err := isRowSelectedByWhere(tableSchema, txn.mapUUID, row, ovsOp.Where)
@@ -1298,15 +1312,9 @@ func doUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 			continue
 		}
 
-		err = txn.schemas.Unmarshal(txn.request.DBName, *ovsOp.Table, ovsOp.Row)
+		err = RowPrepare(tableSchema, txn.mapUUID, ovsOp.Row)
 		if err != nil {
-			klog.Errorf("%s", err.Error())
-			return errors.New(E_CONSTRAINT_VIOLATION)
-		}
-		err = txn.schemas.Validate(txn.request.DBName, *ovsOp.Table, ovsOp.Row)
-		if err != nil {
-			klog.Errorf("%s", err.Error())
-			return errors.New(E_CONSTRAINT_VIOLATION)
+			return err
 		}
 
 		err = RowUpdate(tableSchema, txn.mapUUID, row, ovsOp.Row)
@@ -1330,7 +1338,7 @@ func doMutate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 	ovsResult.InitCount()
 	tableSchema, err := txn.schemas.LookupTable(txn.request.DBName, *ovsOp.Table)
 	if err != nil {
-		return err
+		return errors.New(E_INTERNAL_ERROR)
 	}
 	for uuid, row := range txn.cache.Table(txn.request.DBName, *ovsOp.Table) {
 		ok, err := isRowSelectedByWhere(tableSchema, txn.mapUUID, row, ovsOp.Where)
@@ -1361,7 +1369,7 @@ func doDelete(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 	ovsResult.InitCount()
 	tableSchema, err := txn.schemas.LookupTable(txn.request.DBName, *ovsOp.Table)
 	if err != nil {
-		return err
+		return errors.New(E_INTERNAL_ERROR)
 	}
 	for uuid, row := range txn.cache.Table(txn.request.DBName, *ovsOp.Table) {
 		ok, err := isRowSelectedByWhere(tableSchema, txn.mapUUID, row, ovsOp.Where)
@@ -1395,7 +1403,7 @@ func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Ope
 	rows := []map[string]interface{}{}
 	tableSchema, err := txn.schemas.LookupTable(txn.request.DBName, *ovsOp.Table)
 	if err != nil {
-		return err
+		return errors.New(E_INTERNAL_ERROR)
 	}
 	for _, row := range txn.cache.Table(txn.request.DBName, *ovsOp.Table) {
 		ok, err := isRowSelectedByWhere(tableSchema, txn.mapUUID, row, ovsOp.Where)

@@ -387,6 +387,51 @@ func TestTransactInsertSimpleWithUUIDNameDupError(t *testing.T) {
 	assert.NotEqual(t, "", resp.Error)
 }
 
+func TestTransactAtomicInsert(t *testing.T) {
+	table := "table1"
+	uuidName1 := libovsdb.UUID{GoUUID: "myuuid1"}
+	uuid1 := libovsdb.UUID{GoUUID: "00000000-0000-0000-0000-000000000001"}
+	uuid1buf, err := json.Marshal(uuid1)
+	assert.Nil(t, err)
+	uuid1array := []interface{}{}
+	err = json.Unmarshal(uuid1buf, &uuid1array)
+	assert.Nil(t, err)
+
+	row1 := map[string]interface{}{
+		"string": "val1",
+	}
+	row2 := map[string]interface{}{
+		"uuid": &uuidName1,
+	}
+
+	req1 := &libovsdb.Transact{
+		DBName: "atomic",
+		Operations: []libovsdb.Operation{
+			{
+				Op:       OP_INSERT,
+				Table:    &table,
+				Row:      &row1,
+				UUID:     &uuid1,
+				UUIDName: &uuidName1.GoUUID,
+			},
+			{
+				Op:    OP_UPDATE,
+				Table: &table,
+				Row:   &row2,
+			},
+		},
+	}
+
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t, "atomic", "table1")
+
+	resp, _ := testTransact(t, req1)
+	assert.Equal(t, "", resp.Error)
+
+	dump := testEtcdDump(t, "atomic", "table1")
+	assert.Equal(t, []interface{}{"uuid", uuid1.GoUUID}, dump["uuid"])
+}
+
 func TestTransactInsertEnumOk(t *testing.T) {
 	table := "table1"
 	row := map[string]interface{}{
