@@ -305,7 +305,12 @@ func (ch *Handler) getMonitoredData(updatersMap Key2Updaters, isV1 bool) (ovsjso
 					return nil, err
 				}
 				// TODO merge
-				d1[uuid] = *row
+				if row != nil {
+					klog.Infof("getMonitoredData %v  row %v", d1, row)
+					d1[uuid] = *row
+				} else {
+					klog.Info("row is nil")
+				}
 			}
 		}
 		returnData[tableKey.TableName] = d1

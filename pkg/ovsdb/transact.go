@@ -95,8 +95,13 @@ func NewEtcdClient(endpoints []string) (*clientv3.Client, error) {
 }
 
 func (txn *Transaction) etcdTranaction() (*clientv3.TxnResponse, error) {
+	klog.V(6).Infof("etcd transaction:, if size %d then %d else %d", len(txn.etcdIf), len(txn.etcdThen), len(txn.etcdElse))
 	res, err := txn.etcdCli.Txn(txn.etcdCtx).If(txn.etcdIf...).Then(txn.etcdThen...).Else(txn.etcdElse...).Commit()
 
+	if err != nil {
+		klog.Infof("txn.etcdCli %s", err)
+		return nil, err
+	}
 	// remove previois put operations
 	for _, r := range res.Responses {
 		switch v := r.Response.(type) {
@@ -323,7 +328,7 @@ type Transaction struct {
 }
 
 func NewTransaction(cli *clientv3.Client, request *libovsdb.Transact) *Transaction {
-	klog.V(6).Infof("new transction: %s", request)
+	klog.V(6).Infof("new transaction [with size %d]: %s", len(request.Operations), request)
 	txn := new(Transaction)
 	txn.cache = Cache{}
 	txn.mapUUID = MapUUID{}
@@ -623,10 +628,17 @@ func (c *Condition) CompareString(row *map[string]interface{}) (bool, error) {
 }
 
 func (c *Condition) CompareUUID(row *map[string]interface{}) (bool, error) {
-	actual, ok := (*row)[c.Column].(libovsdb.UUID)
-	if !ok {
-		klog.Errorf("Failed to convert row value: %+v", (*row)[c.Column])
-		return false, errors.New(E_CONSTRAINT_VIOLATION)
+	klog.Infof("row Column %T %v", (*row)[c.Column], (*row)[c.Column])
+	var actual libovsdb.UUID
+	ar, ok := (*row)[c.Column].([]interface{})
+	if ok {
+		actual = libovsdb.UUID{GoUUID: ar[1].(string)}
+	} else {
+		actual, ok = (*row)[c.Column].(libovsdb.UUID)
+		if !ok {
+			klog.Errorf("Failed to convert row value: %T %+v", (*row)[c.Column], (*row)[c.Column])
+			return false, errors.New(E_CONSTRAINT_VIOLATION)
+		}
 	}
 	fn := c.Function
 	expected, ok := c.Value.(libovsdb.UUID)
