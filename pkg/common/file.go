@@ -6,10 +6,9 @@ import (
 )
 
 func ReadFile(filename string) ([]byte, error) {
-	byteValue := []byte{}
 	jsonFile, err := os.Open(filename)
 	if err != nil {
-		return byteValue, err
+		return nil, err
 	}
 	defer jsonFile.Close()
 	return ioutil.ReadAll(jsonFile)

@@ -28,6 +28,16 @@ func (schemas *Schemas) AddFromFile(path string) error {
 	return nil
 }
 
+func (schemas *Schemas) AddFromBytes(data []byte) error {
+	var databaseSchema DatabaseSchema
+	err := json.Unmarshal(data, &databaseSchema)
+	if err != nil {
+		return err
+	}
+	schemas.Add(&databaseSchema)
+	return nil
+}
+
 func (schemas *Schemas) Add(databaseSchema *DatabaseSchema) {
 	(*schemas)[databaseSchema.Name] = databaseSchema
 }

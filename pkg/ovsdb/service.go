@@ -2,7 +2,6 @@ package ovsdb
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/ibm/ovsdb-etcd/pkg/common"
@@ -255,16 +254,11 @@ func (s *Service) GetSchema(ctx context.Context, param interface{}) (interface{}
 		// probably is a bad idea
 		schemaName = fmt.Sprintf("%s", param)
 	}
-	schema, ok := s.db.GetSchema(schemaName)
-	if !ok {
+	schema := s.db.GetSchema(schemaName)
+	if schema == nil {
 		return nil, fmt.Errorf("unknown database")
 	}
-	var f interface{}
-	err := json.Unmarshal([]byte(schema), &f)
-	if err != nil {
-		return nil, err
-	}
-	return f, nil
+	return schema, nil
 }
 
 func (s *Service) GetServerId(ctx context.Context) string {
