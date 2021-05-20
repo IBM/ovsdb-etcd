@@ -25,7 +25,7 @@ require (
 replace (
 	github.com/coreos/bbolt => github.com/coreos/bbolt v1.3.2
 	github.com/coreos/etcd => github.com/coreos/etcd v3.3.13+incompatible
-	github.com/creachadair/jrpc2 v0.12.0 => github.com/ibm/jrpc2 v1.12.0
+	github.com/creachadair/jrpc2 v0.12.0 => github.com/ibm/jrpc2 v1.12.1
 	go.etcd.io/bbolt => go.etcd.io/bbolt v1.3.5
 	google.golang.org/grpc v1.29.1 => google.golang.org/grpc v1.26.0
 	google.golang.org/grpc v1.30.0 => google.golang.org/grpc v1.26.0
