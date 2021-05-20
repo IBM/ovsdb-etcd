@@ -1148,7 +1148,6 @@ func etcdGetByWhere(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libo
 }
 
 func etcdPutRow(txn *Transaction, key *common.Key, row *map[string]interface{}) error {
-	setRowUUID(row, key.UUID)
 	val, err := makeValue(row)
 	if err != nil {
 		return err
@@ -1248,12 +1247,13 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		}
 	}
 
-	key := common.NewDataKey(txn.request.DBName, *ovsOp.Table, uuid)
-	ovsResult.InitUUID(key.UUID)
+	ovsResult.InitUUID(uuid)
 
+	key := common.NewDataKey(txn.request.DBName, *ovsOp.Table, uuid)
 	row := txn.cache.Row(key)
 	*row = *ovsOp.Row
 	txn.schemas.Default(txn.request.DBName, *ovsOp.Table, row)
+	setRowUUID(row, uuid)
 
 	err = RowPrepare(tableSchema, txn.mapUUID, ovsOp.Row)
 	if err != nil {
