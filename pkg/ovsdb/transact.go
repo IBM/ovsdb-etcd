@@ -160,14 +160,50 @@ func NewEtcdClient(endpoints []string) (*clientv3.Client, error) {
 	return cli, nil
 }
 
+func etcdOpKey(op clientv3.Op) string {
+	v := reflect.ValueOf(op)
+	f := v.FieldByName("key")
+	k := f.Bytes()
+	return string(k)
+}
+
+func (txn *Transaction) etcdRemoveDup() {
+	klog.V(6).Infof("etcd remove dups: if size(%d) then size(%d) else size(%d)", len(txn.etcdIf), len(txn.etcdThen), len(txn.etcdElse))
+	newThen := []*clientv3.Op{}
+	for curr, op := range txn.etcdThen {
+		key := etcdOpKey(op)
+		klog.V(6).Infof("adding key %s index %d", key, curr)
+		newThen = append(newThen, &txn.etcdThen[curr])
+	}
+
+	prevKeyIndex := map[string]int{}
+	for curr, op := range newThen {
+		key := etcdOpKey(*op)
+		prev, ok := prevKeyIndex[key]
+		if ok {
+			klog.V(6).Infof("removing key %s index %d", key, prev)
+			newThen[prev] = nil
+		}
+		prevKeyIndex[key] = curr
+	}
+
+	txn.etcdThen = []clientv3.Op{}
+	for _, op := range newThen {
+		if op != nil {
+			txn.etcdThen = append(txn.etcdThen, *op)
+		}
+	}
+}
+
 func (txn *Transaction) etcdTranaction() (*clientv3.TxnResponse, error) {
-	klog.V(6).Infof("etcd transaction:, if size %d then %d else %d", len(txn.etcdIf), len(txn.etcdThen), len(txn.etcdElse))
+	klog.V(6).Infof("etcd transaction: if size(%d) then size(%d) else size(%d)", len(txn.etcdIf), len(txn.etcdThen), len(txn.etcdElse))
 	res, err := txn.etcdCli.Txn(txn.etcdCtx).If(txn.etcdIf...).Then(txn.etcdThen...).Else(txn.etcdElse...).Commit()
 
 	if err != nil {
 		klog.Infof("txn.etcdCli %s", err)
 		return nil, err
 	}
+
 	// remove previois put operations
 	for _, r := range res.Responses {
 		switch v := r.Response.(type) {
@@ -300,7 +336,7 @@ func (cache *Cache) Validate(schemas libovsdb.Schemas) error {
 type MapUUID map[string]string
 
 func (mapUUID MapUUID) Set(uuidName, uuid string) {
-	klog.Infof("setting named-uuid %s to uuid %s", uuidName, uuid)
+	klog.V(6).Infof("setting named-uuid %s to uuid %s", uuidName, uuid)
 	mapUUID[uuidName] = uuid
 }
 
@@ -481,6 +517,7 @@ func (txn *Transaction) Commit() error {
 			panic(fmt.Sprintf("validation of %s failed: %s", ovsOp, err.Error()))
 		}
 	}
+	txn.etcdRemoveDup()
 	_, err = txn.etcdTranaction()
 	if err != nil {
 		txn.response.Error = err.Error()
@@ -1230,21 +1267,8 @@ func etcdPutRow(txn *Transaction, key *common.Key, row *map[string]interface{}) 
 	if err != nil {
 		return err
 	}
-	keyStr := key.String()
-	etcdOp := clientv3.OpPut(keyStr, val)
 
-	/* remove any duplicate keys from prev operations */
-	newThen := []clientv3.Op{}
-	for _, op := range txn.etcdThen {
-		v := reflect.ValueOf(op)
-		f := v.FieldByName("key")
-		k := f.Bytes()
-		if string(k) != keyStr {
-			newThen = append(newThen, op)
-		}
-	}
-	txn.etcdThen = newThen
-
+	etcdOp := clientv3.OpPut(key.String(), val)
 	txn.etcdThen = append(txn.etcdThen, etcdOp)
 	return nil
 }
@@ -1288,7 +1312,7 @@ func preInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 			uuid = ovsOp.UUID.GoUUID
 		}
 		if _, ok := txn.mapUUID[*ovsOp.UUIDName]; ok {
-			klog.Errorf("Duplicate uuid-name: %s", *ovsOp.UUIDName)
+			klog.Errorf("duplicate uuid-name: %s", *ovsOp.UUIDName)
 			return errors.New(E_DUP_UUIDNAME)
 		}
 		txn.mapUUID.Set(*ovsOp.UUIDName, uuid)
@@ -1496,6 +1520,10 @@ func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Ope
 			return err
 		}
 		rows = append(rows, *newRow)
+	}
+
+	if ovsOp.Rows == nil {
+		return nil
 	}
 
 	klog.V(6).Infof("rows = %v", rows)
