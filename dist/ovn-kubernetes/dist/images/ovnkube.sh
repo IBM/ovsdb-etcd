@@ -213,6 +213,9 @@ ovn_encap_ip=${OVN_ENCAP_IP:-}
 
 # OVSDB-etcd variables
 ovsdb_etcd_members=${OVSDB_ETCD_MEMBERS:-"localhost:2479"}
+ovsdb_etcd_max_txn_ops=${OVSDB_ETCD_MAX_TXN_OPS:-"5120"}
+ovsdb_etcd_max_request_bytes=${OVSDB_ETCD_MAX_REQUEST_BYTES:-"157286400"}
+
 ovsdb_etcd_schemas_dir=${OVSDB_ETCD_SCHEMAS_DIR:-/root/ovsdb-etcd/schemas}
 ovsdb_etcd_prefix=${OVSDB_ETCD_PREFIX:-"ovsdb"}
 ovsdb_etcd_nb_log_level=${OVSDB_ETCD_NB_LOG_LEVEL:-"5"}
@@ -1211,7 +1214,8 @@ ovs-metrics() {
 etcd () {
   echo "================= start etcd server ============================ "
   /usr/local/bin/etcd --data-dir /etc/openvswitch/ --listen-peer-urls http://localhost:2480 \
-  --listen-client-urls http://localhost:2479 --advertise-client-urls http://localhost:2479
+  --listen-client-urls http://localhost:2479 --advertise-client-urls http://localhost:2479 \
+  --max-txn-ops ${ovsdb_etcd_max_txn_ops} --max-request-bytes ${ovsdb_etcd_max_request_bytes}
 }
 
 etcd_ready() {

@@ -170,8 +170,8 @@ func NewTransact(params []interface{}) (*Transact, error) {
 
 // TransactResponse represents the response to a Transact Operation
 type TransactResponse struct {
-	Result []OperationResult `json:"result"`
-	Error  string            `json:"error"`
+	Result []OperationResult `json:"result,omitempty"`
+	Error  *string           `json:"error,omitempty"`
 }
 
 // OperationResult is the result of an Operation
@@ -188,6 +188,15 @@ func (res *OperationResult) SetError(err string) {
 	res.Count = nil
 	res.UUID = nil
 	res.Rows = nil
+}
+
+// String, serialize TransactResponse
+func (res TransactResponse) String() string {
+	buf, err := json.Marshal(res)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal operationa result, err: %s", err.Error()))
+	}
+	return string(buf)
 }
 
 func (res *OperationResult) InitUUID(uuid string) {

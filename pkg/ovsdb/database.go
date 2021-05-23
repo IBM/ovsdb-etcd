@@ -134,9 +134,9 @@ func (con *DatabaseEtcd) GetData(key common.Key, keysOnly bool) (*clientv3.GetRe
 		klog.Errorf("GetData: %s", err)
 		return nil, err
 	}
-	if klog.V(7).Enabled() {
+	if klog.V(8).Enabled() {
 		for k, v := range resp.Kvs {
-			klog.V(7).Infof("GetData k %v, v %v\n", k, v)
+			klog.V(8).Infof("GetData k %v, v %v\n", k, v)
 		}
 	}
 	return resp, err

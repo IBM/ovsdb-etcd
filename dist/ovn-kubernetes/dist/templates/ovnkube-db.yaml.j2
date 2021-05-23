@@ -95,29 +95,10 @@ spec:
         env:
         - name: OVN_DAEMONSET_VERSION
           value: "3"
-        - name: OVN_LOGLEVEL_NB
-          value: "{{ ovn_loglevel_nb }}"
-        - name: K8S_APISERVER
-          valueFrom:
-            configMapKeyRef:
-              name: ovn-config
-              key: k8s_apiserver
-        - name: OVN_KUBERNETES_NAMESPACE
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.namespace
-        - name: K8S_NODE_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
-        - name: OVN_SSL_ENABLE
-          value: "{{ ovn_ssl_en }}"
-        - name: OVN_NB_PORT
-          value: "{{ ovn_nb_port }}"
-        - name: MAX_RETRY
-          value: "10"
-        - name: RETRY_TIME_OUT
-          value: "5000"
+        - name: OVSDB_ETCD_MAX_TXN_OPS
+          value: "5120"
+        - name: OVSDB_ETCD_MAX_REQUEST_BYTES
+          value: "157286400"
       # end of container
 
       # nb-ovsdb - v3
@@ -156,7 +137,6 @@ spec:
         - name: OVN_DAEMONSET_VERSION
           value: "3"
         - name: OVSDB_ETCD_NB_LOG_LEVEL
-          # value: "{{ ovn_loglevel_nb }}"
           value: "6"
         - name: K8S_APISERVER
           valueFrom:
