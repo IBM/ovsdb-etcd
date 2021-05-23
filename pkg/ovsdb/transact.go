@@ -43,8 +43,74 @@ const (
 )
 
 // XXX: move libovsdb
-func isEqualRows(a, b []map[string]interface{}) bool {
-	return reflect.DeepEqual(a, b)
+func isEqualRows(a, b []map[string]interface{}, schema *libovsdb.TableSchema) (bool, error) {
+	ret := true
+	for _, be := range b {
+		for column, bv := range be {
+			columnSchema, ok := schema.Columns[column]
+			if !ok {
+				klog.Errorf("Schema doesn't contain column %s", column)
+				return false, fmt.Errorf(E_SYNTAX_ERROR)
+			}
+			for _, ae := range a {
+				av := ae[column]
+				equal, err := compareValues(av, bv, columnSchema)
+				if err != nil {
+					return false, err
+				}
+				ret = ret && equal
+			}
+
+		}
+	}
+	return ret, nil
+}
+
+func compareValues(a, b interface{}, columnSchema *libovsdb.ColumnSchema) (bool, error) {
+	if columnSchema.Type == libovsdb.TypeMap {
+		buf, err := json.Marshal(b)
+		if err != nil {
+			klog.Errorf("map marshal returned %v", err)
+			return false, fmt.Errorf(E_SYNTAX_ERROR)
+		}
+		ovsMap := libovsdb.OvsMap{}
+		err = json.Unmarshal(buf, &ovsMap)
+		if err != nil {
+			klog.Errorf("map unmarshal returned %v", err)
+			return false, fmt.Errorf(E_SYNTAX_ERROR)
+		}
+		aMap, ok := a.(libovsdb.OvsMap)
+		if !ok {
+			klog.Errorf("wrong compare value type %#v", a)
+			return false, fmt.Errorf(E_SYNTAX_ERROR)
+		}
+		for bName, bValue := range ovsMap.GoMap {
+			if aMap.GoMap[bName.(string)] != bValue {
+				return false, nil
+			}
+		}
+		return true, nil
+	} else if columnSchema.Type == libovsdb.TypeSet {
+		buf, err := json.Marshal(b)
+		if err != nil {
+			klog.Errorf("set marshal returned %v", err)
+			return false, fmt.Errorf(E_SYNTAX_ERROR)
+		}
+		ovsSet := libovsdb.OvsSet{}
+		err = json.Unmarshal(buf, &ovsSet)
+		if err != nil {
+			klog.Errorf("set unmarshal returned %v", err)
+			return false, fmt.Errorf(E_SYNTAX_ERROR)
+		}
+		aSet, ok := a.(libovsdb.OvsSet)
+		if !ok {
+			klog.Errorf("wrong compare value type %#v", a)
+			return false, fmt.Errorf(E_SYNTAX_ERROR)
+		}
+		return isEqualSet(aSet, ovsSet), nil
+	}
+	// TODO we have to check other problematic use cases.
+	return reflect.DeepEqual(a, b), nil
 }
 
 // XXX: move libovsdb
@@ -1432,7 +1498,13 @@ func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Ope
 		rows = append(rows, *newRow)
 	}
 
-	equal := isEqualRows(rows, *ovsOp.Rows)
+	klog.V(6).Infof("rows = %v", rows)
+	klog.V(6).Infof("ovsOp.Rows = %v", *ovsOp.Rows)
+	equal, err := isEqualRows(rows, *ovsOp.Rows, tableSchema)
+	if err != nil {
+		return err
+	}
+	klog.V(6).Infof("doWait equal = %v ovsOp.Until = %v", equal, *ovsOp.Until)
 	switch *ovsOp.Until {
 	case FN_EQ:
 		if !equal {
