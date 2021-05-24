@@ -481,7 +481,8 @@ func (txn *Transaction) Commit() error {
 	if hasSelect && hasOther {
 		klog.Errorf("Can't mix select with other operations")
 		err := errors.New(E_CONSTRAINT_VIOLATION)
-		txn.response.Error = err.Error()
+		errStr := err.Error()
+		txn.response.Error = &errStr
 		return err
 	}
 
@@ -489,8 +490,9 @@ func (txn *Transaction) Commit() error {
 	for i, ovsOp := range txn.request.Operations {
 		err := ovsOpCallbackMap[ovsOp.Op][0](txn, &ovsOp, &txn.response.Result[i])
 		if err != nil {
-			txn.response.Result[i].SetError(err.Error())
-			txn.response.Error = err.Error()
+			errStr := err.Error()
+			txn.response.Result[i].SetError(errStr)
+			txn.response.Error = &errStr
 			return err
 		}
 
@@ -500,7 +502,8 @@ func (txn *Transaction) Commit() error {
 	}
 	_, err = txn.etcdTranaction()
 	if err != nil {
-		txn.response.Error = err.Error()
+		errStr := err.Error()
+		txn.response.Error = &errStr
 		return err
 	}
 
@@ -508,8 +511,9 @@ func (txn *Transaction) Commit() error {
 	for i, ovsOp := range txn.request.Operations {
 		err = ovsOpCallbackMap[ovsOp.Op][1](txn, &ovsOp, &txn.response.Result[i])
 		if err != nil {
-			txn.response.Result[i].SetError(err.Error())
-			txn.response.Error = err.Error()
+			errStr := err.Error()
+			txn.response.Result[i].SetError(errStr)
+			txn.response.Error = &errStr
 			return err
 		}
 
@@ -520,7 +524,8 @@ func (txn *Transaction) Commit() error {
 	txn.etcdRemoveDup()
 	_, err = txn.etcdTranaction()
 	if err != nil {
-		txn.response.Error = err.Error()
+		errStr := err.Error()
+		txn.response.Error = &errStr
 		return err
 	}
 

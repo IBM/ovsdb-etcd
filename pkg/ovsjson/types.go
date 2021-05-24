@@ -1,6 +1,9 @@
 package ovsjson
 
 import (
+	"encoding/json"
+	"fmt"
+
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 )
 
@@ -32,6 +35,15 @@ type RowUpdate struct {
 	Insert  *map[string]interface{} `json:"insert,omitempty"`
 	Delete  *map[string]interface{} `json:"delete,omitempty"`
 	Modify  *map[string]interface{} `json:"modify,omitempty"`
+}
+
+// String, serialize Operation Result
+func (ru *RowUpdate) String() string {
+	buf, err := json.Marshal(ru)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal operationa result, err: %s", err.Error()))
+	}
+	return string(buf)
 }
 
 // Validate that the RowUpdate is valid as RowUpdate according to the RFC 7047
@@ -113,11 +125,6 @@ type CondMonitorParameters struct {
 	MonitorCondRequests map[string][]MonitorCondRequest
 	LastTxnID           string
 	//	UpdateType          UpdateNotificationType
-}
-
-// TODO to be updated
-type TransactionResponse struct {
-	Rows []map[string]string
 }
 
 func (uuid Uuid) String() string {

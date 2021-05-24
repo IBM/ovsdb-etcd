@@ -44,7 +44,7 @@ func (ch *Handler) Transact(ctx context.Context, param []interface{}) (interface
 	txn := NewTransaction(ch.etcdClient, req)
 	txn.schemas = ch.db.GetSchemas()
 	txn.Commit()
-	klog.V(5).Infof("Transact response %v", txn.response)
+	klog.V(5).Infof("Transact response %s", txn.response)
 	return txn.response.Result, nil
 }
 
@@ -304,9 +304,9 @@ func (ch *Handler) getMonitoredData(updatersMap Key2Updaters, isV1 bool) (ovsjso
 					klog.Errorf("prepareCreateRowInitial returned %s", err)
 					return nil, err
 				}
+				klog.V(8).Infof("processing getMonitoredData %v  row %v", d1, row)
 				// TODO merge
 				if row != nil {
-					klog.Infof("getMonitoredData %v  row %v", d1, row)
 					d1[uuid] = *row
 				} else {
 					klog.Info("row is nil")
@@ -315,7 +315,7 @@ func (ch *Handler) getMonitoredData(updatersMap Key2Updaters, isV1 bool) (ovsjso
 		}
 		returnData[tableKey.TableName] = d1
 	}
-	klog.V(6).Infof("getMonitoredData: %v", returnData)
+	klog.V(7).Infof("getMonitoredData: %v", returnData)
 	return returnData, nil
 }
 
