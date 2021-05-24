@@ -194,17 +194,12 @@ func testEtcdNewCli() (*clientv3.Client, error) {
 	return NewEtcdClient(endpoints)
 }
 
-func testEtcdCleanup(t *testing.T, dbname, table string) {
+func testEtcdCleanup(t *testing.T) {
 	cli, err := testEtcdNewCli()
 	assert.Nil(t, err)
 	ctx := context.TODO()
-	key := common.NewTableKey(dbname, table)
-	_, err = cli.Delete(ctx, key.TableKeyString(), clientv3.WithPrefix())
+	_, err = cli.Delete(ctx, "", clientv3.WithPrefix())
 	assert.Nil(t, err)
-}
-
-func testEtcdCleanupComment(t *testing.T, dbname string) {
-	testEtcdCleanup(t, dbname, "_comment")
 }
 
 func testMergeKvs(kvs []*mvccpb.KeyValue, table string) (*map[string]interface{}, error) {
@@ -296,13 +291,65 @@ func TestTransactInsertSimple(t *testing.T) {
 		},
 	}
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "simple", "table1")
+	testEtcdCleanup(t)
 	resp, txn := testTransact(t, req)
 	assert.Equal(t, "", resp.Error)
 	dump := testTransactDump(t, txn, "simple", "table1")
 	assert.Equal(t, "val1", dump["key1"])
 	assert.Equal(t, int(0), dump["key2"])
 }
+
+func testTransactInsertSimpleScale(t *testing.T, n int) {
+	table := "table1"
+	row := map[string]interface{}{
+		"key1": "val1",
+	}
+	op := libovsdb.Operation{
+		Op:    OP_INSERT,
+		Table: &table,
+		Row:   &row,
+	}
+
+	req := &libovsdb.Transact{
+		DBName:     "simple",
+		Operations: []libovsdb.Operation{},
+	}
+	for i := 0; i < n; i++ {
+		req.Operations = append(req.Operations, op)
+	}
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t)
+	resp, txn := testTransact(t, req)
+	assert.Equal(t, "", resp.Error)
+	dump := testTransactDump(t, txn, "simple", "table1")
+	assert.Equal(t, "val1", dump["key1"])
+	assert.Equal(t, int(0), dump["key2"])
+}
+
+func TestTransactInsertSimpleScale10(t *testing.T) {
+	testTransactInsertSimpleScale(t, 10)
+}
+
+func TestTransactInsertSimpleScale100(t *testing.T) {
+	testTransactInsertSimpleScale(t, 100)
+}
+
+/*
+XXX: If run with default setting then it will fail with message:
+XXX:
+XXX:   etcdserver: too many operations in txn request
+XXX:
+XXX: To enable the test to pass:
+XXX: 1. use etcd version 3.4.x and above
+XXX: 2. configure in /etc/default/etcd:
+XXX:
+XXX:   ETCD_MAX_TXN_OPS=100000
+XXX:   ETCD_MAX_REQUEST_BYTES=100000000
+XXX:
+func TestTransactInsertSimpleScale1000(t *testing.T) {
+	testTransactInsertSimpleScale(t, 1000)
+}
+*/
 
 func TestTransactInsertSimpleWithUUID(t *testing.T) {
 	table := "table1"
@@ -321,7 +368,7 @@ func TestTransactInsertSimpleWithUUID(t *testing.T) {
 		},
 	}
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "simple", "table1")
+	testEtcdCleanup(t)
 	resp, txn := testTransact(t, req)
 	assert.Equal(t, "", resp.Error)
 	dump := testTransactDump(t, txn, "simple", "table1")
@@ -347,7 +394,7 @@ func TestTransactInsertSimpleWithUUIDName(t *testing.T) {
 		},
 	}
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "simple", "table1")
+	testEtcdCleanup(t)
 	resp, txn := testTransact(t, req)
 	assert.Equal(t, "", resp.Error)
 	dump := testTransactDump(t, txn, "simple", "table1")
@@ -379,7 +426,7 @@ func TestTransactInsertSimpleWithUUIDNameDupError(t *testing.T) {
 		},
 	}
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "simple", "table1")
+	testEtcdCleanup(t)
 	resp, _ := testTransact(t, req)
 	assert.NotEqual(t, "", resp.Error)
 }
@@ -420,7 +467,7 @@ func TestTransactAtomicInsertNamedUUID(t *testing.T) {
 	}
 
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "atomic", "table1")
+	testEtcdCleanup(t)
 
 	resp, _ := testTransact(t, req1)
 	assert.Equal(t, "", resp.Error)
@@ -469,7 +516,7 @@ func TestTransactAtomicInsertUUID(t *testing.T) {
 	}
 
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "atomic", "table1")
+	testEtcdCleanup(t)
 
 	resp, _ := testTransact(t, req1)
 	assert.Equal(t, "", resp.Error)
@@ -494,7 +541,7 @@ func TestTransactInsertEnumOk(t *testing.T) {
 		},
 	}
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "enum", "table1")
+	testEtcdCleanup(t)
 	resp, txn := testTransact(t, req)
 	assert.Equal(t, "", resp.Error)
 	dump := testTransactDump(t, txn, "enum", "table1")
@@ -517,7 +564,7 @@ func TestTransactInsertEnumError(t *testing.T) {
 		},
 	}
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "enum", "table1")
+	testEtcdCleanup(t)
 	resp, _ := testTransact(t, req)
 	assert.NotEqual(t, "", resp.Error)
 }
@@ -538,7 +585,7 @@ func TestTransactInsertSetOk(t *testing.T) {
 		},
 	}
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "set", "table1")
+	testEtcdCleanup(t)
 	resp, txn := testTransact(t, req)
 	assert.Equal(t, "", resp.Error)
 	dump := testTransactDump(t, txn, "set", "table1")
@@ -561,7 +608,7 @@ func TestTransactInsertSetError(t *testing.T) {
 		},
 	}
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "set", "table1")
+	testEtcdCleanup(t)
 	resp, _ := testTransact(t, req)
 	assert.NotEqual(t, "", resp.Error)
 }
@@ -578,7 +625,7 @@ func TestTransactSelect(t *testing.T) {
 		},
 	}
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "simple", "table1")
+	testEtcdCleanup(t)
 	testEtcdPut(t, "simple", "table1", map[string]interface{}{
 		"key1": "val1",
 		"key2": int(3),
@@ -614,7 +661,7 @@ func TestTransactUpdateSimple(t *testing.T) {
 		},
 	}
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "simple", "table1")
+	testEtcdCleanup(t)
 	resp, _ := testTransact(t, req)
 	assert.Equal(t, "", resp.Error)
 	dump := testEtcdDump(t, "simple", "table1")
@@ -665,7 +712,7 @@ func TestTransactUpdateWhere(t *testing.T) {
 	}
 
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "atomic", "table1")
+	testEtcdCleanup(t)
 
 	resp, _ := testTransact(t, req1)
 	assert.Equal(t, "", resp.Error)
@@ -700,7 +747,7 @@ func TestTransactUpdateMapOk(t *testing.T) {
 		},
 	}
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "map", "table1")
+	testEtcdCleanup(t)
 	resp, txn := testTransact(t, req)
 	assert.Equal(t, "", resp.Error)
 	dump := testTransactDump(t, txn, "map", "table1")
@@ -731,7 +778,7 @@ func TestTransactUpdateMapError(t *testing.T) {
 		},
 	}
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "map", "table1")
+	testEtcdCleanup(t)
 	resp, _ := testTransact(t, req)
 	assert.NotEqual(t, "", resp.Error)
 }
@@ -762,7 +809,7 @@ func TestTransactUpdateUnmutableError(t *testing.T) {
 		},
 	}
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "mutable", "table1")
+	testEtcdCleanup(t)
 	resp, _ := testTransact(t, req)
 	assert.NotEqual(t, "", resp.Error)
 }
@@ -795,7 +842,7 @@ func TestTransactMutateSimple(t *testing.T) {
 		},
 	}
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "simple", "table1")
+	testEtcdCleanup(t)
 	resp, _ := testTransact(t, req)
 	assert.Equal(t, "", resp.Error)
 	dump := testEtcdDump(t, "simple", "table1")
@@ -815,6 +862,7 @@ func TestTransactMutateMapNamedUUID(t *testing.T) {
 			"uuid1": libovsdb.UUID{GoUUID: namedUUID1},
 		}},
 	}
+
 	mutations := []interface{}{
 		[]interface{}{
 			"map",
@@ -855,7 +903,7 @@ func TestTransactMutateMapNamedUUID(t *testing.T) {
 		},
 	}
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "uuid", "table1")
+	testEtcdCleanup(t)
 	resp, _ := testTransact(t, req)
 	assert.Equal(t, "", resp.Error)
 }
@@ -894,7 +942,7 @@ func TestTransactMutateUnmutableError(t *testing.T) {
 		},
 	}
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "mutable", "table1")
+	testEtcdCleanup(t)
 	resp, _ := testTransact(t, req)
 	assert.NotEqual(t, "", resp.Error)
 }
@@ -911,7 +959,7 @@ func TestTransactDelete(t *testing.T) {
 		},
 	}
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanup(t, "simple", "table1")
+	testEtcdCleanup(t)
 	testEtcdPut(t, "simple", "table1", map[string]interface{}{
 		"key1": "val1",
 		"key2": int(2),
@@ -925,18 +973,20 @@ func TestTransactDelete(t *testing.T) {
 
 func TestTransactWait(t *testing.T) {
 	table := "table1"
+	timeout := 0
 	req := &libovsdb.Transact{
 		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
-				Op:    OP_WAIT,
-				Table: &table,
+				Op:      OP_WAIT,
+				Table:   &table,
+				Timeout: &timeout,
 			},
 		},
 	}
 	common.SetPrefix("ovsdb/nb")
 	resp, _ := testTransact(t, req)
-	assert.True(t, "" != resp.Error)
+	assert.Equal(t, resp.Error, "")
 }
 
 func TestTransactCommit(t *testing.T) {
@@ -981,7 +1031,7 @@ func TestTransactComment(t *testing.T) {
 		},
 	}
 	common.SetPrefix("ovsdb/nb")
-	testEtcdCleanupComment(t, "simple")
+	testEtcdCleanup(t)
 	resp, _ := testTransact(t, req)
 	assert.Equal(t, "", resp.Error)
 }

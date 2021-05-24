@@ -1,7 +1,7 @@
 TEST_PATTERN ?= Test
 
-.PHONY: go
-go:
+.PHONY: test
+test:
 	go test -v -run ${TEST_PATTERN}
 
 .PHONY: dlv
