@@ -18,6 +18,8 @@ import (
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 )
 
+const ETCD_MAX_TXN_OPS = 128
+
 const (
 	/* ovsdb operations */
 	E_DUP_UUIDNAME         = "duplicate uuid-name"
@@ -168,12 +170,12 @@ func etcdOpKey(op clientv3.Op) string {
 }
 
 func (txn *Transaction) etcdRemoveDup() {
-	klog.V(6).Infof("etcd remove dups: if size(%d) then size(%d) else size(%d)", len(txn.etcdIf), len(txn.etcdThen), len(txn.etcdElse))
+	klog.V(6).Infof("etcd remove dups: if size(%d) then size(%d) else size(%d)", len(txn.etcd.If), len(txn.etcd.Then), len(txn.etcd.Else))
 	newThen := []*clientv3.Op{}
-	for curr, op := range txn.etcdThen {
+	for curr, op := range txn.etcd.Then {
 		key := etcdOpKey(op)
 		klog.V(6).Infof("adding key %s index %d", key, curr)
-		newThen = append(newThen, &txn.etcdThen[curr])
+		newThen = append(newThen, &txn.etcd.Then[curr])
 	}
 
 	prevKeyIndex := map[string]int{}
@@ -187,32 +189,31 @@ func (txn *Transaction) etcdRemoveDup() {
 		prevKeyIndex[key] = curr
 	}
 
-	txn.etcdThen = []clientv3.Op{}
+	txn.etcd.Then = []clientv3.Op{}
 	for _, op := range newThen {
 		if op != nil {
-			txn.etcdThen = append(txn.etcdThen, *op)
+			txn.etcd.Then = append(txn.etcd.Then, *op)
 		}
 	}
 }
 
 func (txn *Transaction) etcdTranaction() (*clientv3.TxnResponse, error) {
-	klog.V(6).Infof("etcd transaction: if size(%d) then size(%d) else size(%d)", len(txn.etcdIf), len(txn.etcdThen), len(txn.etcdElse))
-	res, err := txn.etcdCli.Txn(txn.etcdCtx).If(txn.etcdIf...).Then(txn.etcdThen...).Else(txn.etcdElse...).Commit()
+	klog.V(6).Infof("etcd transaction: %s", txn.etcd)
 
-	if err != nil {
-		klog.Infof("txn.etcdCli %s", err)
-		return nil, err
-	}
+	// etcds := txn.etcd.Split() // split
+	etcds := []*Etcd{txn.etcd} // don't split
 
-	// remove previois put operations
-	for _, r := range res.Responses {
-		switch v := r.Response.(type) {
-		case *etcdserverpb.ResponseOp_ResponseRange:
-			txn.cache.PopulateFromKV(v.ResponseRange.Kvs)
+	for i, child := range etcds {
+		klog.V(6).Infof("etcd processing(%d): %s", i, child)
+		err := child.Commit()
+		if err != nil {
+			klog.V(6).Infof("etcd processing(%d): %s", i, err)
+			return nil, errors.New(E_IO_ERROR)
 		}
+		txn.cache.GetFromEtcd(child.Res)
 	}
 
-	err = txn.cache.Unmarshal(txn.schemas)
+	err := txn.cache.Unmarshal(txn.schemas)
 	if err != nil {
 		return nil, err
 	}
@@ -223,11 +224,9 @@ func (txn *Transaction) etcdTranaction() (*clientv3.TxnResponse, error) {
 	}
 
 	// clear etcd ops (for next transaction)
-	txn.etcdIf = []clientv3.Cmp{}
-	txn.etcdThen = []clientv3.Op{}
-	txn.etcdElse = []clientv3.Op{}
+	txn.etcd.Clear()
 
-	return res, err
+	return txn.etcd.Res, nil
 }
 
 // XXX: move to db
@@ -291,7 +290,7 @@ func (c *Cache) Row(key common.Key) *map[string]interface{} {
 	return tb[key.UUID]
 }
 
-func (c *Cache) PopulateFromKV(kvs []*mvccpb.KeyValue) error {
+func (c *Cache) GetFromEtcdKV(kvs []*mvccpb.KeyValue) error {
 	for _, x := range kvs {
 		kv, err := NewKeyValue(x)
 		if err != nil {
@@ -301,6 +300,15 @@ func (c *Cache) PopulateFromKV(kvs []*mvccpb.KeyValue) error {
 		(*row) = kv.Value
 	}
 	return nil
+}
+
+func (cache *Cache) GetFromEtcd(res *clientv3.TxnResponse) {
+	for _, r := range res.Responses {
+		switch v := r.Response.(type) {
+		case *etcdserverpb.ResponseOp_ResponseRange:
+			cache.GetFromEtcdKV(v.ResponseRange.Kvs)
+		}
+	}
 }
 
 func (cache *Cache) Unmarshal(schemas libovsdb.Schemas) error {
@@ -411,6 +419,54 @@ func (mapUUID MapUUID) ResolvRow(row *map[string]interface{}) error {
 	return nil
 }
 
+type Etcd struct {
+	Cli  *clientv3.Client
+	Ctx  context.Context
+	If   []clientv3.Cmp
+	Then []clientv3.Op
+	Else []clientv3.Op
+	Res  *clientv3.TxnResponse
+}
+
+func NewEtcd(parent *Etcd) *Etcd {
+	return &Etcd{
+		Ctx: parent.Ctx,
+		Cli: parent.Cli,
+	}
+}
+func (etcd *Etcd) Clear() {
+	etcd.If = []clientv3.Cmp{}
+	etcd.Then = []clientv3.Op{}
+	etcd.Else = []clientv3.Op{}
+}
+
+func (etcd Etcd) String() string {
+	return fmt.Sprintf("if size(%d) then size(%d) else size(%d)", len(etcd.If), len(etcd.Then), len(etcd.Else))
+}
+
+func (etcd *Etcd) Commit() error {
+	res, err := etcd.Cli.Txn(etcd.Ctx).If(etcd.If...).Then(etcd.Then...).Else(etcd.Else...).Commit()
+	if err != nil {
+		return err
+	}
+	etcd.Res = res
+	return nil
+}
+
+func (etcd *Etcd) Split() []*Etcd {
+	split := []*Etcd{}
+	child := NewEtcd(etcd)
+	split = append(split, child)
+	for _, op := range etcd.Then {
+		child.Then = append(child.Then, op)
+		if len(child.Then) == ETCD_MAX_TXN_OPS {
+			child = NewEtcd(etcd)
+			split = append(split, child)
+		}
+	}
+	return split
+}
+
 type Transaction struct {
 	/* ovs */
 	schemas  libovsdb.Schemas
@@ -422,11 +478,7 @@ type Transaction struct {
 	mapUUID MapUUID
 
 	/* etcd */
-	etcdCli  *clientv3.Client
-	etcdCtx  context.Context
-	etcdIf   []clientv3.Cmp
-	etcdThen []clientv3.Op
-	etcdElse []clientv3.Op
+	etcd *Etcd
 }
 
 func NewTransaction(cli *clientv3.Client, request *libovsdb.Transact) *Transaction {
@@ -437,8 +489,9 @@ func NewTransaction(cli *clientv3.Client, request *libovsdb.Transact) *Transacti
 	txn.schemas = libovsdb.Schemas{}
 	txn.request = *request
 	txn.response.Result = make([]libovsdb.OperationResult, len(request.Operations))
-	txn.etcdCtx = context.TODO()
-	txn.etcdCli = cli
+	txn.etcd = new(Etcd)
+	txn.etcd.Ctx = context.TODO()
+	txn.etcd.Cli = cli
 	return txn
 }
 
@@ -1250,7 +1303,7 @@ func RowUpdate(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, original *map
 func etcdGetData(txn *Transaction, key *common.Key) {
 	etcdOp := clientv3.OpGet(key.String(), clientv3.WithPrefix())
 	// XXX: eliminate duplicate GETs
-	txn.etcdThen = append(txn.etcdThen, etcdOp)
+	txn.etcd.Then = append(txn.etcd.Then, etcdOp)
 }
 
 func etcdGetByWhere(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
@@ -1274,13 +1327,13 @@ func etcdPutRow(txn *Transaction, key *common.Key, row *map[string]interface{}) 
 	}
 
 	etcdOp := clientv3.OpPut(key.String(), val)
-	txn.etcdThen = append(txn.etcdThen, etcdOp)
+	txn.etcd.Then = append(txn.etcd.Then, etcdOp)
 	return nil
 }
 
 func etcdDelRow(txn *Transaction, key *common.Key) error {
 	etcdOp := clientv3.OpDelete(key.String())
-	txn.etcdThen = append(txn.etcdThen, etcdOp)
+	txn.etcd.Then = append(txn.etcd.Then, etcdOp)
 	return nil
 }
 
@@ -1589,7 +1642,7 @@ func doComment(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 	key := common.NewCommentKey(timestamp)
 	comment := *ovsOp.Comment
 	etcdOp := clientv3.OpPut(key.String(), comment)
-	txn.etcdThen = append(txn.etcdThen, etcdOp)
+	txn.etcd.Then = append(txn.etcd.Then, etcdOp)
 	return nil
 }
 
