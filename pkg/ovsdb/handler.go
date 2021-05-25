@@ -313,7 +313,9 @@ func (ch *Handler) getMonitoredData(updatersMap Key2Updaters, isV1 bool) (ovsjso
 				}
 			}
 		}
-		returnData[tableKey.TableName] = d1
+		if len(d1) > 0 {
+			returnData[tableKey.TableName] = d1
+		}
 	}
 	klog.V(7).Infof("getMonitoredData: %v", returnData)
 	return returnData, nil
