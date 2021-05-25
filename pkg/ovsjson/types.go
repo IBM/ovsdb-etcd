@@ -29,16 +29,25 @@ type TableUpdate map[string]RowUpdate
 // RowUpdate represents a row update according to RFC7047 and
 // https://docs.openvswitch.org/en/latest/ref/ovsdb-server.7/ extensions.
 type RowUpdate struct {
-	New     *map[string]interface{} `json:"new,omitempty"`
-	Old     *map[string]interface{} `json:"old,omitempty"`
-	Initial *map[string]interface{} `json:"initial,omitempty"`
-	Insert  *map[string]interface{} `json:"insert,omitempty"`
-	Delete  *map[string]interface{} `json:"delete,omitempty"`
-	Modify  *map[string]interface{} `json:"modify,omitempty"`
+	New     *map[string]interface{}
+	Old     *map[string]interface{}
+	Initial *map[string]interface{}
+	Insert  *map[string]interface{}
+	Delete  bool
+	Modify  *map[string]interface{}
 }
 
-// String, serialize Operation Result
-func (ru *RowUpdate) String() string {
+// String, serialize Operation TableUpdate
+func (tu TableUpdate) String() string {
+	buf, err := json.Marshal(tu)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal operationa result, err: %s", err.Error()))
+	}
+	return string(buf)
+}
+
+// String, serialize Operation RowUpdate
+func (ru RowUpdate) String() string {
 	buf, err := json.Marshal(ru)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal operationa result, err: %s", err.Error()))
@@ -57,7 +66,7 @@ func (ru *RowUpdate) ValidateRowUpdate() (bool, string) {
 	if ru.Insert != nil {
 		i++
 	}
-	if ru.Delete != nil {
+	if ru.Delete {
 		i++
 	}
 	if ru.Modify != nil {
@@ -83,7 +92,7 @@ func (ru *RowUpdate) ValidateRowUpdate2() (bool, string) {
 	if ru.Insert != nil {
 		i++
 	}
-	if ru.Delete != nil {
+	if ru.Delete {
 		i++
 	}
 	if ru.Modify != nil {
@@ -119,12 +128,18 @@ type MonitorCondRequest struct {
 }
 
 type CondMonitorParameters struct {
-	DatabaseName string
-	JsonValue    interface{} // can be nil
-	// maps table name to MonitorCondRequests
-	MonitorCondRequests map[string][]MonitorCondRequest
-	LastTxnID           string
-	//	UpdateType          UpdateNotificationType
+	DatabaseName        string                          `json:"db-name,omitempty"`
+	JsonValue           interface{}                     `json:"json-value"`    // can be nil
+	MonitorCondRequests map[string][]MonitorCondRequest `json:"mcr,omitempty"` // maps tableName to MonitorCondRequests
+	LastTxnID           *string                         `json:"last-txn-id,omitempty"`
+}
+
+func (cmp CondMonitorParameters) String() string {
+	buf, err := json.Marshal(cmp)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal operationa result, err: %s", err.Error()))
+	}
+	return string(buf)
 }
 
 func (uuid Uuid) String() string {

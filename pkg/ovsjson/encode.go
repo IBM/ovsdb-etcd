@@ -67,9 +67,11 @@ func (cmr *CondMonitorParameters) UnmarshalJSON(p []byte) error {
 		}
 	}
 	if l == 4 {
-		if err := json.Unmarshal(tmp[3], &cmr.LastTxnID); err != nil {
+		lastTxnID := ""
+		if err := json.Unmarshal(tmp[3], &lastTxnID); err != nil {
 			return fmt.Errorf("Unmarshal last transaction ID: %s", err)
 		}
+		cmr.LastTxnID = &lastTxnID
 	}
 	return nil
 }
@@ -82,4 +84,66 @@ func (un UpdateNotification) MarshalJSON() ([]byte, error) {
 		oSet = append(oSet, un.Uuid.GoUUID)
 	}
 	return json.Marshal(oSet)
+}
+
+func (ru RowUpdate) MarshalJSON() ([]byte, error) {
+	obj := map[string]interface{}{}
+	if ru.New != nil {
+		obj["new"] = *ru.New
+	}
+	if ru.Old != nil {
+		obj["old"] = *ru.Old
+	}
+	if ru.Initial != nil {
+		obj["initial"] = *ru.Initial
+	}
+	if ru.Modify != nil {
+		obj["modify"] = *ru.Modify
+	}
+	if ru.Insert != nil {
+		obj["insert"] = *ru.Insert
+	}
+	if ru.Delete {
+		obj["delete"] = nil
+	}
+	return json.Marshal(obj)
+}
+
+func (ru *RowUpdate) UnmarshalJSON(p []byte) error {
+	obj := map[string]interface{}{}
+	err := json.Unmarshal(p, &obj)
+	if err != nil {
+		return err
+	}
+	v, ok := obj["new"]
+	if ok {
+		val := v.(map[string]interface{})
+		ru.New = &val
+	}
+	v, ok = obj["old"]
+	if ok {
+		val := v.(map[string]interface{})
+		ru.Old = &val
+	}
+	v, ok = obj["initial"]
+	if ok {
+		val := v.(map[string]interface{})
+		ru.Initial = &val
+	}
+	v, ok = obj["insert"]
+	if ok {
+		val := v.(map[string]interface{})
+		ru.Insert = &val
+	}
+	v, ok = obj["modify"]
+	if ok {
+		val := v.(map[string]interface{})
+		ru.Modify = &val
+	}
+	_, ok = obj["delete"]
+	fmt.Printf("ok = %v\n", ok)
+	if ok {
+		ru.Delete = true
+	}
+	return nil
 }
