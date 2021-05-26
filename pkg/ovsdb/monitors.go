@@ -262,7 +262,7 @@ func (u *updater) prepareDeleteRowUpdate(event *clientv3.Event) (*ovsjson.RowUpd
 		if err != nil {
 			return nil, "", err
 		}
-		return &ovsjson.RowUpdate{Delete: nil}, uuid, nil
+		return &ovsjson.RowUpdate{Delete: true}, uuid, nil
 	}
 
 	data, uuid, err := u.prepareRow(value)
