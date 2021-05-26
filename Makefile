@@ -88,3 +88,4 @@ ovn-kubernetes-build:
 	cp dist/ovn-kubernetes/dist/images/ovndb-raft-functions.sh ${OVN_KUBERNETES_ROOT}/dist/images/
 	cp dist/ovn-kubernetes/dist/images/ovnkube.sh ${OVN_KUBERNETES_ROOT}/dist/images/
 	awk '{sub("XXREPO","${OVSDB_ETCD_REPOSITORY}")}1' dist/ovn-kubernetes/dist/templates/ovnkube-db.yaml.j2  > ${OVN_KUBERNETES_ROOT}/dist/templates/ovnkube-db.yaml.j2
+	cp  dist/ovn-kubernetes/dist/templates/ovnkube-node.yaml.j2  ${OVN_KUBERNETES_ROOT}/dist/templates/ovnkube-node.yaml.j2
