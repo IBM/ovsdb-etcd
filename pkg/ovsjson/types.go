@@ -123,13 +123,13 @@ const (
 
 type MonitorCondRequest struct {
 	Columns []string                `json:"columns,omitempty"`
-	Where   [][]string              `json:"where,omitempty"`
+	Where   interface{}             `json:"where,omitempty"` // TODO fix type (should be []string, or [][]string, but sometimes it is boolean
 	Select  *libovsdb.MonitorSelect `json:"select,omitempty"`
 }
 
 type CondMonitorParameters struct {
 	DatabaseName        string                          `json:"db-name,omitempty"`
-	JsonValue           interface{}                     `json:"json-value"`    // can be nil
+	JsonValue           string                          `json:"json-value"`    // can be nil
 	MonitorCondRequests map[string][]MonitorCondRequest `json:"mcr,omitempty"` // maps tableName to MonitorCondRequests
 	LastTxnID           *string                         `json:"last-txn-id,omitempty"`
 }

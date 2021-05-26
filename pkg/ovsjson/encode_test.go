@@ -125,7 +125,7 @@ func TestCondMonitorParameters(t *testing.T) {
 	mcr := MonitorCondRequest{Columns: []string{"model"},
 		Select: expectedSelect}
 
-	expectedCMP := CondMonitorParameters{DatabaseName: "_Server", MonitorCondRequests: map[string][]MonitorCondRequest{"Database": {mcr}}}
+	expectedCMP := CondMonitorParameters{DatabaseName: "_Server", JsonValue: "null", MonitorCondRequests: map[string][]MonitorCondRequest{"Database": {mcr}}}
 	assert.Equal(t, expectedCMP, actualCMP, "they should be equal\n"+
 		fmt.Sprintf("expected: %v\n", expectedCMP)+
 		fmt.Sprintf("actual  : %v\n", actualCMP))

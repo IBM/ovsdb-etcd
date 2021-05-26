@@ -1584,13 +1584,10 @@ func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Ope
 		return nil
 	}
 
-	klog.V(6).Infof("rows = %v", rows)
-	klog.V(6).Infof("ovsOp.Rows = %v", *ovsOp.Rows)
 	equal, err := isEqualRows(rows, *ovsOp.Rows, tableSchema)
 	if err != nil {
 		return err
 	}
-	klog.V(6).Infof("doWait equal = %v ovsOp.Until = %v", equal, *ovsOp.Until)
 	switch *ovsOp.Until {
 	case FN_EQ:
 		if !equal {

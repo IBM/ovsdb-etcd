@@ -147,7 +147,7 @@ func main() {
 				handler := ovsdb.NewHandler(tctx, db, cli)
 				assigner := addClientHandlers(*globServiceMap, handler)
 				srv := jrpc2.NewServer(assigner, servOptions)
-				handler.SetConnection(srv)
+				handler.SetConnection(srv, conn)
 				srv.Start(ch)
 				go func() {
 					defer cancel()
