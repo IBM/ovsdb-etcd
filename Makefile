@@ -69,42 +69,41 @@ south-server:
 tests:
 	go test -v ./...
 
-.PHONY: image-etcd
-image-etcd:
+.PHONY: ovn
+ovn: docker-build docker-push ovn-deploy
+
+.PHONY: docker-build
+docker-build: build
+	@echo "checking for OVN_KUBERNETES_ROOT" && [ -n "${OVN_KUBERNETES_ROOT}" ]
+	cp ${OVN_KUBERNETES_ROOT}/dist/images/ovndb-raft-functions.sh dist/images/.
+	cp ${OVN_KUBERNETES_ROOT}/dist/images/ovnkube.sh dist/images/.
 	docker build . -t etcd -f dist/images/Dockerfile.etcd
+	docker build . -t ovsdb-etcd -f dist/images/Dockerfile.ovsdb-etcd
 
-.PHONY: image-server
-image-server: build
-	docker build . -t server -f dist/images/Dockerfile.ovsdb-etcd
-
-.PHONY: ovnk
-ovnk: ovnk-build ovnk-push ovnk-deploy
-
-ovnk-root:
-	@[ -n "${OVN_KUBERNETES_ROOT}" ] || echo "missing OVN_KUBERNETES_ROOT"
-	@[ -n "${OVN_KUBERNETES_ROOT}" ]
-
-.PHONY: ovnk-build
-ovnk-build:
-	$(MAKE) build
-	$(MAKE) image-server
-	$(MAKE) image-etcd
-
-.PHONY: ovnk-push
-ovnk-push: ovnk-root
-	./scripts/pushDocker
-	cp dist/ovn-kubernetes/dist/images/ovndb-raft-functions.sh ${OVN_KUBERNETES_ROOT}/dist/images/
-	cp dist/ovn-kubernetes/dist/images/ovnkube.sh ${OVN_KUBERNETES_ROOT}/dist/images/
-	awk '{sub("XXREPO","${OVSDB_ETCD_REPOSITORY}")}1' dist/ovn-kubernetes/dist/templates/ovnkube-db.yaml.j2  > ${OVN_KUBERNETES_ROOT}/dist/templates/ovnkube-db.yaml.j2
-	cp  dist/ovn-kubernetes/dist/templates/ovnkube-node.yaml.j2  ${OVN_KUBERNETES_ROOT}/dist/templates/ovnkube-node.yaml.j2
+.PHONY: docker-push
+docker-push:
+	@echo "checking for OVSDB_ETCD_REPOSITORY" && [ -n "${OVSDB_ETCD_REPOSITORY}" ]
+	docker tag ovsdb-etcd ${OVSDB_ETCD_REPOSITORY}/ovsdb-etcd
+	docker push ${OVSDB_ETCD_REPOSITORY}/ovsdb-etcd
+	docker tag etcd ${OVSDB_ETCD_REPOSITORY}/etcd
+	docker push ${OVSDB_ETCD_REPOSITORY}/etcd
 
 export KUBECONFIG=${HOME}/admin.conf
 
-.PHONY: ovnk-deploy
-ovnk-deploy: ovnk-root
-	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh --delete || true
-	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh -ml 7 -nl 7 -dbl 7 -ndl  '-vconsole:dbg -vfile:dbg' -dl '-vconsole:dbg -vfile:dbg' -cl '-vconsole:dbg -vfile:dbg'
+.PHONY: ovn-deploy
+ovn-deploy:
+	@echo "checking for OVN_KUBERNETES_ROOT" && [ -n "${OVN_KUBERNETES_ROOT}" ]
+	@echo "checking for OVSDB_ETCD_REPOSITORY" && [ -n "${OVSDB_ETCD_REPOSITORY}" ]
+	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh \
+		--ovn-etcd-image "${OVSDB_ETCD_REPOSITORY}/etcd:latest" \
+		--ovn-ovsdb-etcd-image "${OVSDB_ETCD_REPOSITORY}/ovsdb-etcd:latest" \
+		--master-loglevel 7 \
+		--node-loglevel 7 \
+		--dbchecker-loglevel 7 \
+		--ovn-loglevel-northd '-vconsole:dbg -vfile:dbg' \
+		--ovn-loglevel-nbctld '-vconsole:dbg -vfile:dbg' \
+		--ovn-loglevel-controller '-vconsole:dbg -vfile:dbg'
 
-.PHONY: ovnk-status
-ovnk-status:
+.PHONY: ovn-status
+ovn-status:
 	kubectl --kubeconfig=${KUBECONFIG} -n=ovn-kubernetes get pods

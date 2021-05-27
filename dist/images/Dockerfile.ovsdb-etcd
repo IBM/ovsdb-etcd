@@ -12,8 +12,8 @@ COPY schemas/ /root/ovsdb-etcd/schemas/
 
 # ovnkube.sh is the entry point. This script examines environment
 # variables to direct operation and configure ovn
-COPY dist/ovn-kubernetes/dist/images/ovnkube.sh /root/
-COPY dist/ovn-kubernetes/dist/images/ovndb-raft-functions.sh /root
+COPY dist/images/ovnkube.sh /root/
+COPY dist/images/ovndb-raft-functions.sh /root
 
 # so we will have etcdctl in the container, if we want to connect to the etcd
 COPY scripts/install_etcd.sh /root/install_etcd.sh

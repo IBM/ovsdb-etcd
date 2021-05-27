@@ -1,3 +1,5 @@
 .idea/
-client/client
-server/server
+pkg/cmd/client/client
+pkg/cmd/server/server
+dist/images/ovndb-raft-functions.sh
+dist/images/ovnkube.sh

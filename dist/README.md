@@ -1,79 +1,79 @@
 # Deplyment of ovsdb-etcd on OVN kubernetes
 
-In order to deploy [OVN kubernetes](https://github.com/ovn-org/ovn-kubernetes) with ovsdb-etcd follow the following steps:
-
-## Build ovn
-
-```bash
-git clone https://github.com/hunchback/ovn
-cd ovn
-git checkout ovndb-etcd
-./boot.sh
-./configure
-make
-export OVN_ROOT=$PWD
-```
 
 ## Prepare ovs-kubernetes
 
 Clone OVN kubernetes from the main repository:
 
 ```bash
-# Clone ovn-kubernetes repo
 git clone https://github.com/hunchback/ovn-kubernetes
 cd ovn-kubernetes
-git checkout ovndb-etcd
+git checkout ovsdb-etcd2
 export OVN_KUBERNETES_ROOT=$PWD
 		```
-Build the OVN kubernetes container image:
+## Build docker images
 
-```bash
-make -C go-controller
-```
-
-```bash
-cp $OVN_ROOT/utilities/ovn-nbctl dist/images/
-make -C dist/images fedora
-```
-
-## Build ovn-kubernetes
-
-clone and build and push (aboute 5 minutes):
+clone and build and push:
 
 ```bash
 git clone https://github.com/IBM/ovsdb-etcd
 cd ovsdb-etcd
-make ovnk-build
+make docker-build
 ```
 
-## Push ovn-kubernetes
-
-Login to docker:
+## Setup docker paramaters
 
 ```
 export CR_PASSWORD=<DOCKER_PASSWORD>
 export CR_USERNAME=<DOCKER_USENAME>
 export CR_REPO=docker.io
-echo $CR_PAT | docker login $CR_REPO -u $CR_USERNAME --password-stdin
-export OVSDB_ETCD_REPOSITORY=$CR_REPO/$CR_USERNAME
+export OVSDB_ETCD_REPOSITORY=$CR_USERNAME
 ```
 
-Push to repo:
+## Push docker images (optional)
 
-```bash
-make ovnk-push
+Login to docker and push:
+
+```
+echo $CR_PAT | docker login $CR_REPO -u $CR_USERNAME --password-stdin
+make docker-push
 ```
 
 ## Deploy ovn-kubernetes
 
-Deploy kind (for more information read [OVN kubernetes KIND deployment official documentation](https://github.com/ovn-org/ovn-kubernetes/blob/master/docs/kind.md))
+Deploy on kind via makefile:
 
 ```bash
-make ovnk-deploy
+make ovn-deploy
 ```
 
-After the deplyment is complete you can check out the relevant pods.
+Or directly:
 
 ```bash
-make ovnk-status
+export KUBECONFIG=${HOME}/admin.conf
+pushd ${OVN_KUBERNETES_ROOT}/contrib
+./kind.sh \
+	--ovn-etcd-image "${OVSDB_ETCD_REPOSITORY}/etcd:latest" \
+	--ovn-ovsdb-etcd-image "${OVSDB_ETCD_REPOSITORY}/ovsdb-etcd:latest" \
+	--master-loglevel 7 \
+	--node-loglevel 7 \
+	--dbchecker-loglevel 7 \
+	--ovn-loglevel-northd '-vconsole:dbg -vfile:dbg' \
+	--ovn-loglevel-nbctld '-vconsole:dbg -vfile:dbg' \
+	--ovn-loglevel-controller '-vconsole:dbg -vfile:dbg'
+popd
+```
+## Get status ovn-kubernetes
+
+Check status via makefile:
+
+```bash
+make ovn-status
+```
+
+Or directly:
+
+```bash
+export KUBECONFIG=${HOME}/admin.conf
+kubectl --kubeconfig=${KUBECONFIG} -n=ovn-kubernetes get pods
 ```
