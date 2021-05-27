@@ -53,8 +53,11 @@ func (cmr *CondMonitorParameters) UnmarshalJSON(p []byte) error {
 	if l < 2 || l > 4 {
 		return fmt.Errorf("wrong monitor conditions lenght: %d", l)
 	}
-	if err := json.Unmarshal(tmp[1], &cmr.JsonValue); err != nil {
-		return fmt.Errorf("unmarshal json value: %s", err)
+
+	if len(tmp[1]) > 0 {
+		cmr.JsonValue = string(tmp[1])
+	} else {
+		cmr.JsonValue = InterfaceToString(nil)
 	}
 	if err := json.Unmarshal(tmp[2], &cmr.MonitorCondRequests); err != nil {
 		obj := map[string]MonitorCondRequest{}
@@ -146,4 +149,9 @@ func (ru *RowUpdate) UnmarshalJSON(p []byte) error {
 		ru.Delete = true
 	}
 	return nil
+}
+
+// the given argument can be nil
+func InterfaceToString(inter interface{}) string {
+	return fmt.Sprintf("%v", inter)
 }
