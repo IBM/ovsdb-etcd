@@ -71,6 +71,20 @@ func (l *lock) cancel() {
 
 var EtcdClientTimeout = 100 * time.Millisecond
 
+func NewEtcdClient(endpoints []string) (*clientv3.Client, error) {
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints:          endpoints,
+		DialTimeout:        10 * time.Second,
+		MaxCallSendMsgSize: 120 * 1024 * 1024, // we set etcd server-side default send/recv limit to 15M
+		MaxCallRecvMsgSize: 0,                 // from etcd code "If 0, it defaults to "math.MaxInt32", because range response can easily exceed request send limits.
+
+	})
+	if err != nil {
+		return nil, err
+	}
+	return cli, nil
+}
+
 func NewDatabaseEtcd(cli *clientv3.Client) (Databaser, error) {
 	return &DatabaseEtcd{cli: cli,
 		Schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}, monitors: map[string]*monitor{}}, nil
