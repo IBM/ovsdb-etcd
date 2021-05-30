@@ -117,7 +117,7 @@ func TestCondMonitorParameters(t *testing.T) {
 	// ["_Server",null,{"Database":[{"where":[["model","==","standalone"],true],"select":{"modify":false,"initial":true,"insert":true,"delete":true},"columns":["model","connected"]}]}]
 	// ["_Server",null,{"Database":[{"where":[["model","==","standalone"],true],"columns":["cid","connected","index","leader","model","name","schema","sid","_version"]}]},"00000000-0000-0000-0000-000000000000"]
 	// ["_Server",null,{"Database":[{"where":[true],"columns":["cid","connected","index","leader","model","name","schema","sid","_version"]}]},"00000000-0000-0000-0000-000000000000"]
-	var s = []byte(`["_Server",null,{"Database":[{"select":{"modify":true,"initial":true,"insert":false,"delete":true},"columns":["model"]}]}]`)
+	var s = []byte(`["_Server",["monid","OVN_Northbound"],{"Database":[{"select":{"modify":true,"initial":true,"insert":false,"delete":true},"columns":["model"]}]}]`)
 	actualCMP := CondMonitorParameters{}
 	err := json.Unmarshal(s, &actualCMP)
 	assert.Nil(t, err)
@@ -125,7 +125,11 @@ func TestCondMonitorParameters(t *testing.T) {
 	mcr := MonitorCondRequest{Columns: []string{"model"},
 		Select: expectedSelect}
 
-	expectedCMP := CondMonitorParameters{DatabaseName: "_Server", JsonValue: "null", MonitorCondRequests: map[string][]MonitorCondRequest{"Database": {mcr}}}
+	jsonValue := json.RawMessage{}
+	err = json.Unmarshal([]byte("[\"monid\",\"OVN_Northbound\"]"), &jsonValue)
+	assert.Nil(t, err)
+	expectedCMP := CondMonitorParameters{DatabaseName: "_Server", JsonValue: jsonValue, MonitorCondRequests: map[string][]MonitorCondRequest{"Database": {mcr}}}
+	fmt.Printf("===> %T %T\n", expectedCMP.JsonValue, actualCMP.JsonValue)
 	assert.Equal(t, expectedCMP, actualCMP, "they should be equal\n"+
 		fmt.Sprintf("expected: %v\n", expectedCMP)+
 		fmt.Sprintf("actual  : %v\n", actualCMP))

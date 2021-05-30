@@ -129,7 +129,7 @@ type MonitorCondRequest struct {
 
 type CondMonitorParameters struct {
 	DatabaseName        string                          `json:"db-name,omitempty"`
-	JsonValue           string                          `json:"json-value"`    // can be nil
+	JsonValue           interface{}                     `json:"json-value"`    // can be nil
 	MonitorCondRequests map[string][]MonitorCondRequest `json:"mcr,omitempty"` // maps tableName to MonitorCondRequests
 	LastTxnID           *string                         `json:"last-txn-id,omitempty"`
 }
