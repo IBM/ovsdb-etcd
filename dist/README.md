@@ -5,11 +5,20 @@ In order to deploy [OVN kubernetes](https://github.com/ovn-org/ovn-kubernetes) w
 ## Build ovn
 
 ```bash
+git clone https://github.com/hunchback/ovs
+cd ovs
+./boot.sh
+./configure
+make
+export OVS_ROOT=$PWD
+```
+
+```bash
 git clone https://github.com/hunchback/ovn
 cd ovn
 git checkout ovndb-etcd
 ./boot.sh
-./configure
+./configure --with-ovs-source $OVS_ROOT
 make
 export OVN_ROOT=$PWD
 ```
