@@ -1,15 +1,16 @@
 # Deplyment of ovsdb-etcd on OVN kubernetes
 
 
-## Prepare ovs-kubernetes
+## Prepare ovn-kubernetes
 
 Clone OVN kubernetes from the main repository:
 
 ```bash
 git clone https://github.com/hunchback/ovn-kubernetes
-cd ovn-kubernetes
+pushd ovn-kubernetes
 git checkout ovsdb-etcd2
 export OVN_KUBERNETES_ROOT=$PWD
+popd
 		```
 ## Build docker images
 
@@ -17,8 +18,9 @@ clone and build and push:
 
 ```bash
 git clone https://github.com/IBM/ovsdb-etcd
-cd ovsdb-etcd
+pushd ovsdb-etcd
 make docker-build
+popd
 ```
 
 ## Setup docker paramaters
@@ -44,7 +46,9 @@ make docker-push
 Deploy on kind via makefile:
 
 ```bash
-make ovn-deploy
+pushd ovsdb-etcd
+make ovnk-deploy
+popd
 ```
 
 Or directly:
@@ -68,12 +72,14 @@ popd
 Check status via makefile:
 
 ```bash
-make ovn-status
+pushd ovsdb-etcd
+make ovnk-status
+popd
 ```
 
 Or directly:
 
 ```bash
 export KUBECONFIG=${HOME}/admin.conf
-kubectl --kubeconfig=${KUBECONFIG} -n=ovn-kubernetes get pods
+kubectl -n=ovn-kubernetes get pods
 ```

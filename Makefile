@@ -69,9 +69,6 @@ south-server:
 tests:
 	go test -v ./...
 
-.PHONY: ovn
-ovn: docker-build docker-push ovn-deploy
-
 .PHONY: docker-build
 docker-build: build
 	@echo "checking for OVN_KUBERNETES_ROOT" && [ -n "${OVN_KUBERNETES_ROOT}" ]
@@ -90,8 +87,8 @@ docker-push:
 
 export KUBECONFIG=${HOME}/admin.conf
 
-.PHONY: ovn-deploy
-ovn-deploy:
+.PHONY: ovnk-deploy
+ovnk-deploy:
 	@echo "checking for OVN_KUBERNETES_ROOT" && [ -n "${OVN_KUBERNETES_ROOT}" ]
 	@echo "checking for OVSDB_ETCD_REPOSITORY" && [ -n "${OVSDB_ETCD_REPOSITORY}" ]
 	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh \
@@ -104,6 +101,6 @@ ovn-deploy:
 		--ovn-loglevel-nbctld '-vconsole:dbg -vfile:dbg' \
 		--ovn-loglevel-controller '-vconsole:dbg -vfile:dbg'
 
-.PHONY: ovn-status
-ovn-status:
+.PHONY: ovnk-status
+ovnk-status:
 	kubectl --kubeconfig=${KUBECONFIG} -n=ovn-kubernetes get pods
