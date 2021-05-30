@@ -54,11 +54,8 @@ func (cmr *CondMonitorParameters) UnmarshalJSON(p []byte) error {
 		return fmt.Errorf("wrong monitor conditions lenght: %d", l)
 	}
 
-	if len(tmp[1]) > 0 {
-		cmr.JsonValue = string(tmp[1])
-	} else {
-		cmr.JsonValue = InterfaceToString(nil)
-	}
+	cmr.JsonValue = tmp[1]
+
 	if err := json.Unmarshal(tmp[2], &cmr.MonitorCondRequests); err != nil {
 		obj := map[string]MonitorCondRequest{}
 		if err := json.Unmarshal(tmp[2], &obj); err != nil {

@@ -47,7 +47,7 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	txn := NewTransaction(ch.etcdClient, req)
 	txn.schemas = ch.db.GetSchemas()
 	txn.Commit()
-	klog.V(5).Infof("Transact response %s", txn.response)
+	klog.V(5).Infof("Transact response to %v: %s", ch.clientCon.RemoteAddr(), txn.response)
 	return txn.response.Result, nil
 }
 
@@ -267,7 +267,8 @@ func (ch *Handler) monitor(params []interface{}, notificationType ovsjson.Update
 
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
-	if _, ok := ch.monitors[cmpr.JsonValue]; ok {
+	jsonStr := ovsjson.InterfaceToString(cmpr.JsonValue)
+	if _, ok := ch.monitors[jsonStr]; ok {
 		return nil, fmt.Errorf("duplicate json-value")
 	}
 	updatersMap := Key2Updaters{}
@@ -284,12 +285,12 @@ func (ch *Handler) monitor(params []interface{}, notificationType ovsjson.Update
 		updatersMap[common.NewTableKey(cmpr.DatabaseName, tableName)] = updaters
 		updaterKeys[tableName] = keys
 	}
-	ch.monitors[cmpr.JsonValue] = handlerMonitorData{
+	ch.monitors[jsonStr] = handlerMonitorData{
 		dataBaseName:     cmpr.DatabaseName,
 		notificationType: notificationType,
 		updaters:         updaterKeys,
 		jsonValue:        cmpr.JsonValue}
-	ch.db.AddMonitors(cmpr.DatabaseName, updatersMap, handlerKey{jsonValueStr: cmpr.JsonValue, handler: ch})
+	ch.db.AddMonitors(cmpr.DatabaseName, updatersMap, handlerKey{jsonValueStr: jsonStr, handler: ch})
 	return updatersMap, nil
 }
 
