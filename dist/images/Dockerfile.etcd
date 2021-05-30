@@ -12,7 +12,7 @@ RUN mkdir -p /var/run/openvswitch && /root/install_etcd.sh
 
 # ovnkube.sh is the entry point. This script examines environment
 # variables to direct operation and configure ovn
-COPY dist/ovn-kubernetes/dist/images/ovnkube.sh /root/
-COPY dist/ovn-kubernetes/dist/images/ovndb-raft-functions.sh /root
+COPY dist/images/ovnkube.sh /root/
+COPY dist/images/ovndb-raft-functions.sh /root
 
 WORKDIR /root
