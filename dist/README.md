@@ -6,7 +6,7 @@
 Clone OVN kubernetes from the main repository:
 
 ```bash
-git clone https://github.com/hunchback/ovn-kubernetes
+git clone https://github.com/ibm/ovn-kubernetes
 pushd ovn-kubernetes
 git checkout ovsdb-etcd2
 export OVN_KUBERNETES_ROOT=$PWD
