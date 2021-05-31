@@ -1117,6 +1117,15 @@ func (m *Mutation) MutateReal(row *map[string]interface{}) error {
 	return err
 }
 
+func inSet(set *libovsdb.OvsSet, a interface{}) bool {
+	for _, b := range set.GoSet {
+		if isEqual(a, b) {
+			return true
+		}
+	}
+	return false
+}
+
 func insertToSet(original *libovsdb.OvsSet, toInsert interface{}) (*libovsdb.OvsSet, error) {
 	toInsertSet, ok := toInsert.(libovsdb.OvsSet)
 	if !ok {
@@ -1126,7 +1135,9 @@ func insertToSet(original *libovsdb.OvsSet, toInsert interface{}) (*libovsdb.Ovs
 	mutated := new(libovsdb.OvsSet)
 	copier.Copy(mutated, original)
 	for _, v := range toInsertSet.GoSet {
-		mutated.GoSet = append(mutated.GoSet, v)
+		if !inSet(original, v) {
+			mutated.GoSet = append(mutated.GoSet, v)
+		}
 	}
 	return mutated, nil
 }
