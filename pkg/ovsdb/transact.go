@@ -491,7 +491,7 @@ var ovsOpCallbackMap = map[string][2]ovsOpCallback{
 	OP_UPDATE:  {preUpdate, doUpdate},
 	OP_MUTATE:  {preMutate, doMutate},
 	OP_DELETE:  {preDelete, doDelete},
-	OP_WAIT:    {preWait, doWait},
+	OP_WAIT:    {preWait, doWaitDummy},
 	OP_COMMIT:  {preCommit, doCommit},
 	OP_ABORT:   {preAbort, doAbort},
 	OP_COMMENT: {preComment, doComment},
@@ -1546,8 +1546,11 @@ func preWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Op
 	return etcdGetByWhere(txn, ovsOp, ovsResult)
 }
 
+func doWaitDummy(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
+	return nil
+}
+
 func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
-	/*
 	rows := []map[string]interface{}{}
 	tableSchema, err := txn.schemas.LookupTable(txn.request.DBName, *ovsOp.Table)
 	if err != nil {
@@ -1588,7 +1591,6 @@ func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Ope
 	default:
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
-	*/
 	return nil
 }
 
