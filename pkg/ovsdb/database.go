@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"k8s.io/klog/v2"
@@ -69,14 +70,16 @@ func (l *lock) cancel() {
 	l.myCancel()
 }
 
-var EtcdClientTimeout = 100 * time.Millisecond
+var EtcdClientTimeout = time.Second
 
 func NewEtcdClient(endpoints []string) (*clientv3.Client, error) {
+	logcfg := zap.NewProductionConfig()
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:          endpoints,
-		DialTimeout:        10 * time.Second,
-		MaxCallSendMsgSize: 120 * 1024 * 1024, // we set etcd server-side default send/recv limit to 15M
-		MaxCallRecvMsgSize: 0,                 // from etcd code "If 0, it defaults to "math.MaxInt32", because range response can easily exceed request send limits.
+		DialTimeout:        30 * time.Second,
+		MaxCallSendMsgSize: 120 * 1024 * 1024,
+		MaxCallRecvMsgSize: 0 /* max */,
+		LogConfig:          &logcfg,
 
 	})
 	if err != nil {
@@ -122,7 +125,7 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 	srv := _Server.Database{Model: "standalone", Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
 		Connected: true, Leader: true, Schema: *schemaSet, Version: libovsdb.UUID{GoUUID: uuid.NewString()}}
 	key := common.NewDataKey("_Server", "Database", schemaName)
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), EtcdClientTimeout)
 	defer cancel()
 	if err := (*con).PutData(ctx, key, srv); err != nil {
 		return err
