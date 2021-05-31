@@ -67,11 +67,11 @@ func (k *Key) TableKeyString() string {
 	if len(k.TableName) == 0 {
 		return k.DBKeyString()
 	}
-	return fmt.Sprintf("%s%s%s%s%s", k.Prefix, KEY_DELIMETER, k.DBName, KEY_DELIMETER, k.TableName)
+	return fmt.Sprintf("%s%s%s%s%s%s", k.Prefix, KEY_DELIMETER, k.DBName, KEY_DELIMETER, k.TableName, KEY_DELIMETER)
 }
 
 func (k *Key) DBKeyString() string {
-	return fmt.Sprintf("%s%s%s", k.Prefix, KEY_DELIMETER, k.DBName)
+	return fmt.Sprintf("%s%s%s%s", k.Prefix, KEY_DELIMETER, k.DBName, KEY_DELIMETER)
 }
 
 func (k *Key) DeploymentKeyString() string {
