@@ -1547,6 +1547,7 @@ func preWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Op
 }
 
 func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
+	/*
 	rows := []map[string]interface{}{}
 	tableSchema, err := txn.schemas.LookupTable(txn.request.DBName, *ovsOp.Table)
 	if err != nil {
@@ -1587,6 +1588,7 @@ func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Ope
 	default:
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
+	*/
 	return nil
 }
 
