@@ -38,7 +38,7 @@ type Handler struct {
 }
 
 func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interface{}, error) {
-	klog.V(5).Infof("Transact request from %v, params %s", ch.clientCon.RemoteAddr(), params)
+	klog.V(5).Infof("Transact request from %v, params %v", ch.clientCon.RemoteAddr(), params)
 	klog.Flush()
 	req, err := libovsdb.NewTransact(params)
 	if err != nil {
