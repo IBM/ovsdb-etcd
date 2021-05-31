@@ -1551,46 +1551,48 @@ func doWaitDummy(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsd
 }
 
 func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
-	rows := []map[string]interface{}{}
-	tableSchema, err := txn.schemas.LookupTable(txn.request.DBName, *ovsOp.Table)
-	if err != nil {
-		return errors.New(E_INTERNAL_ERROR)
-	}
-	for _, row := range txn.cache.Table(txn.request.DBName, *ovsOp.Table) {
-		ok, err := isRowSelectedByWhere(tableSchema, txn.mapUUID, row, ovsOp.Where)
+	/*
+		rows := []map[string]interface{}{}
+		tableSchema, err := txn.schemas.LookupTable(txn.request.DBName, *ovsOp.Table)
+		if err != nil {
+			return errors.New(E_INTERNAL_ERROR)
+		}
+		for _, row := range txn.cache.Table(txn.request.DBName, *ovsOp.Table) {
+			ok, err := isRowSelectedByWhere(tableSchema, txn.mapUUID, row, ovsOp.Where)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				continue
+			}
+			newRow, err := reduceRowByColumns(row, ovsOp.Columns)
+			if err != nil {
+				return err
+			}
+			rows = append(rows, *newRow)
+		}
+
+		if ovsOp.Rows == nil {
+			return nil
+		}
+
+		equal, err := isEqualRows(rows, *ovsOp.Rows, tableSchema)
 		if err != nil {
 			return err
 		}
-		if !ok {
-			continue
+		switch *ovsOp.Until {
+		case FN_EQ:
+			if !equal {
+				return errors.New(E_TIMEOUT)
+			}
+		case FN_NE:
+			if equal {
+				return errors.New(E_TIMEOUT)
+			}
+		default:
+			return errors.New(E_CONSTRAINT_VIOLATION)
 		}
-		newRow, err := reduceRowByColumns(row, ovsOp.Columns)
-		if err != nil {
-			return err
-		}
-		rows = append(rows, *newRow)
-	}
-
-	if ovsOp.Rows == nil {
-		return nil
-	}
-
-	equal, err := isEqualRows(rows, *ovsOp.Rows, tableSchema)
-	if err != nil {
-		return err
-	}
-	switch *ovsOp.Until {
-	case FN_EQ:
-		if !equal {
-			return errors.New(E_TIMEOUT)
-		}
-	case FN_NE:
-		if equal {
-			return errors.New(E_TIMEOUT)
-		}
-	default:
-		return errors.New(E_CONSTRAINT_VIOLATION)
-	}
+	*/
 	return nil
 }
 
