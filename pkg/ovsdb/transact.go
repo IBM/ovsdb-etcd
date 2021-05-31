@@ -1541,8 +1541,7 @@ func preWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Op
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
 	if *ovsOp.Timeout != 0 {
-		klog.Errorf("only support timeout 0")
-		return errors.New(E_CONSTRAINT_VIOLATION)
+		klog.Errorf("ignoring non-zero wait timeout %d", *ovsOp.Timeout)
 	}
 	return etcdGetByWhere(txn, ovsOp, ovsResult)
 }
