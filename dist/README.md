@@ -11,7 +11,7 @@ pushd ovn-kubernetes
 git checkout ovsdb-etcd2
 export OVN_KUBERNETES_ROOT=$PWD
 popd
-		```
+```
 ## Build docker images
 
 clone and build and push:

@@ -85,6 +85,9 @@ docker-push:
 	docker tag etcd ${OVSDB_ETCD_REPOSITORY}/etcd
 	docker push ${OVSDB_ETCD_REPOSITORY}/etcd
 
+.PHONY: docker
+docker: docker-build docker-push
+
 export KUBECONFIG=${HOME}/admin.conf
 
 .PHONY: ovnk-deploy
@@ -103,4 +106,4 @@ ovnk-deploy:
 
 .PHONY: ovnk-status
 ovnk-status:
-	kubectl --kubeconfig=${KUBECONFIG} -n=ovn-kubernetes get pods
+	kubectl  -n=ovn-kubernetes get pods
