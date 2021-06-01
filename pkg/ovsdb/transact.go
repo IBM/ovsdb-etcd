@@ -777,7 +777,6 @@ func (c *Condition) CompareString(row *map[string]interface{}) (bool, error) {
 }
 
 func (c *Condition) CompareUUID(row *map[string]interface{}) (bool, error) {
-	klog.Infof("row Column %T %v", (*row)[c.Column], (*row)[c.Column])
 	var actual libovsdb.UUID
 	ar, ok := (*row)[c.Column].([]interface{})
 	if ok {
