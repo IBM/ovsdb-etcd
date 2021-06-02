@@ -106,4 +106,9 @@ ovnk-deploy:
 
 .PHONY: ovnk-status
 ovnk-status:
-	kubectl  -n=ovn-kubernetes get pods
+	kubectl -n=ovn-kubernetes get pods
+
+.PHONY: ovnk-delete
+ovnk-delete:
+	@echo "checking for OVN_KUBERNETES_ROOT" && [ -n "${OVN_KUBERNETES_ROOT}" ]
+	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh --delete
