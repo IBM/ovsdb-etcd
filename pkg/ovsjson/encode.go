@@ -59,7 +59,7 @@ func (cmr *CondMonitorParameters) UnmarshalJSON(p []byte) error {
 	if err := json.Unmarshal(tmp[2], &cmr.MonitorCondRequests); err != nil {
 		obj := map[string]MonitorCondRequest{}
 		if err := json.Unmarshal(tmp[2], &obj); err != nil {
-			return fmt.Errorf("unmarshal json value into interfaces map: %s", err)
+			return fmt.Errorf("unmarshal monitorCondRequest into map: %s", err)
 		}
 		cmr.MonitorCondRequests = map[string][]MonitorCondRequest{}
 		for k, v := range obj {
@@ -69,7 +69,7 @@ func (cmr *CondMonitorParameters) UnmarshalJSON(p []byte) error {
 	if l == 4 {
 		lastTxnID := ""
 		if err := json.Unmarshal(tmp[3], &lastTxnID); err != nil {
-			return fmt.Errorf("Unmarshal last transaction ID: %s", err)
+			return fmt.Errorf("unmarshal last transaction ID: %s", err)
 		}
 		cmr.LastTxnID = &lastTxnID
 	}
@@ -146,9 +146,4 @@ func (ru *RowUpdate) UnmarshalJSON(p []byte) error {
 		ru.Delete = true
 	}
 	return nil
-}
-
-// the given argument can be nil
-func InterfaceToString(inter interface{}) string {
-	return fmt.Sprintf("%v", inter)
 }

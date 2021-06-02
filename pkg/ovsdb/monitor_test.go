@@ -10,7 +10,6 @@ import (
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
-	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
 )
 
@@ -145,9 +144,10 @@ func TestRowUpdate(t *testing.T) {
 	}
 }
 
+/*
 func TestAddRemoveUpdaters(t *testing.T) {
 	common.SetPrefix("ovsdb/nb")
-	compareMonitorStates := func(expected, actual *monitor) {
+	compareMonitorStates := func(expected, actual *dbMonitor) {
 		assert.Equal(t, expected.handlers, actual.handlers, "Handlers maps should be equals")
 		assert.Equal(t, expected.key2Updaters, actual.key2Updaters, "Key to updater maps should be equals")
 		assert.Equal(t, expected.upater2handlers, actual.upater2handlers, "Updaters to handlers maps should be equals")
@@ -166,18 +166,18 @@ func TestAddRemoveUpdaters(t *testing.T) {
 	k2 := common.NewTableKey(dbName, t2)
 
 	m1 := Key2Updaters{k1: {*u1, *u2}, k2: {*u3}}
-	h1 := handlerKey{jsonValueStr: "jsonValue1"}
+	h1 := handlerKey{jsonValue: "jsonValue1"}
 
 	m.addUpdaters(m1, h1)
-	expected := &monitor{
+	expected := &dbMonitor{
 		handlers:        map[handlerKey]bool{h1: true},
 		key2Updaters:    Key2Updaters{k1: {*u1, *u2}, k2: {*u3}},
 		upater2handlers: map[string][]handlerKey{u1.key: {h1}, u2.key: {h1}, u3.key: {h1}}}
 	compareMonitorStates(expected, m)
 
-	h2 := handlerKey{jsonValueStr: "jsonValue2"}
+	h2 := handlerKey{jsonValue: "jsonValue2"}
 	m.addUpdaters(m1, h2)
-	expected2 := &monitor{
+	expected2 := &dbMonitor{
 		handlers:        map[handlerKey]bool{h1: true, h2: true},
 		key2Updaters:    Key2Updaters{k1: {*u1, *u2}, k2: {*u3}},
 		upater2handlers: map[string][]handlerKey{u1.key: {h1, h2}, u2.key: {h1, h2}, u3.key: {h1, h2}}}
@@ -185,9 +185,9 @@ func TestAddRemoveUpdaters(t *testing.T) {
 
 	u11 := mcrToUpdater(mcr1, false)
 	m11 := Key2Updaters{k1: {*u11}}
-	h11 := handlerKey{jsonValueStr: "jsonValue11"}
+	h11 := handlerKey{jsonValue: "jsonValue11"}
 	m.addUpdaters(m11, h11)
-	expected3 := &monitor{
+	expected3 := &dbMonitor{
 		handlers:        map[handlerKey]bool{h1: true, h2: true, h11: true},
 		key2Updaters:    Key2Updaters{k1: {*u1, *u2, *u11}, k2: {*u3}},
 		upater2handlers: map[string][]handlerKey{u1.key: {h1, h2}, u2.key: {h1, h2}, u3.key: {h1, h2}, u11.key: {h11}}}
@@ -197,9 +197,10 @@ func TestAddRemoveUpdaters(t *testing.T) {
 	compareMonitorStates(expected2, m)
 
 	m.removeUpdaters(map[string][]string{t1: {u2.key, u1.key}, t2: {u3.key}}, h1)
-	expected4 := &monitor{
+	expected4 := &dbMonitor{
 		handlers:        map[handlerKey]bool{h2: true},
 		key2Updaters:    Key2Updaters{k1: {*u1, *u2}, k2: {*u3}},
 		upater2handlers: map[string][]handlerKey{u1.key: {h2}, u2.key: {h2}, u3.key: {h2}}}
 	compareMonitorStates(expected4, m)
 }
+*/

@@ -60,10 +60,10 @@ type Servicer interface {
 	Cancel(ctx context.Context, param interface{}) (interface{}, error)
 
 	// RFC 7047 section 4.1.5
-	// The "monitor" request enables a client to replicate tables or subsets of tables within an OVSDB database by
+	// The "dbMonitor" request enables a client to replicate tables or subsets of tables within an OVSDB database by
 	// requesting notifications of changes to those tables and by receiving the complete initial state of a table or a
 	// subset of a table.
-	// "params": [<db-name>, <json-value>, <monitor-requests>]
+	// "params": [<db-name>, <json-value>, <dbMonitor-requests>]
 	// The response object has the following members:
 	//   "result": <table-updates>  If no tables' initial contents are requested, then "result" is an empty object
 	//   "error": null
@@ -71,15 +71,15 @@ type Servicer interface {
 	Monitor(ctx context.Context, param ovsjson.CondMonitorParameters) (interface{}, error)
 
 	// RFC 7047 section 4.1.7
-	// The "monitor_cancel" request cancels a previously issued monitor request.
-	// "params": [<json-value>] matches the <json-value> for the ongoing "monitor" request that is to be canceled.
+	// The "monitor_cancel" request cancels a previously issued dbMonitor request.
+	// "params": [<json-value>] matches the <json-value> for the ongoing "dbMonitor" request that is to be canceled.
 	// The response to this request has the following members:
 	//   "result": {}
 	//   "error": null
-	// If a monitor cancellation request refers to an unknown monitor request, an error response with the following
+	// If a dbMonitor cancellation request refers to an unknown dbMonitor request, an error response with the following
 	// members is returned:
 	//   "result": null
-	//   "error": "unknown monitor"
+	//   "error": "unknown dbMonitor"
 	MonitorCancel(ctx context.Context, param interface{}) (interface{}, error)
 
 	// RFC 7047 section 4.1.8
@@ -112,14 +112,14 @@ type Servicer interface {
 	// contents of these rows when table updates occur. monitor_cond also allows a more efficient update notifications
 	// by receiving <table-updates2> notifications
 	//
-	// "params": [<db-name>, <json-value>, <monitor-cond-requests>]
+	// "params": [<db-name>, <json-value>, <dbMonitor-cond-requests>]
 	// The <json-value> parameter is used to match subsequent update notifications
-	//  The <monitor-cond-requests> object maps the name of the table to an array of <monitor-cond-request>.
+	//  The <dbMonitor-cond-requests> object maps the name of the table to an array of <dbMonitor-cond-request>.
 	//
-	// Each <monitor-cond-request> is an object with the following members:
+	// Each <dbMonitor-cond-request> is an object with the following members:
 	// 		"columns": [<column>*]            optional
 	//		"where": [<condition>*]           optional
-	//		"select": <monitor-select>        optional
+	//		"select": <dbMonitor-select>        optional
 	//
 	// The columns, if present, define the columns within the table to be monitored that match conditions.
 	// If not present, all columns are monitored.
@@ -127,7 +127,7 @@ type Servicer interface {
 	// The where, if present, is a JSON array of <condition> and boolean values. If not present or condition is an empty
 	// array, implicit True will be considered and updates on all rows will be sent.
 	//
-	//  <monitor-select> is an object with the following members:
+	//  <dbMonitor-select> is an object with the following members:
 	//		"initial": <boolean>              optional
 	//		"insert": <boolean>               optional
 	//		"delete": <boolean>               optional
@@ -142,7 +142,7 @@ type Servicer interface {
 	// ovsdb-server.7 section 4.1.13
 	// enables a client to change an existing monitor_cond replication of the database by specifying a new condition
 	// and columns for each replicated table. Currently changing the columns set is not supported.
-	// "params": [<json-value>, <json-value>, <monitor-cond-update-requests>]
+	// "params": [<json-value>, <json-value>, <dbMonitor-cond-update-requests>]
 	// Returns:
 	// 		"result": null
 	//		"error": null
@@ -152,14 +152,14 @@ type Servicer interface {
 	// Enables a client to request changes that happened after a specific transaction id. A client can use this feature
 	// to request only latest changes after a server connection reset instead of re-transfer all data from the server again.
 	//
-	// "params": [<db-name>, <json-value>, <monitor-cond-requests>, <last-txn-id>]
+	// "params": [<db-name>, <json-value>, <dbMonitor-cond-requests>, <last-txn-id>]
 	// The <json-value> parameter is used to match subsequent update notifications to this request.
-	// The <monitor-cond-requests> object maps the name of the table to an array of <monitor-cond-request>. Each
-	// <monitor-cond-request> is an object with the following members:
+	// The <dbMonitor-cond-requests> object maps the name of the table to an array of <dbMonitor-cond-request>. Each
+	// <dbMonitor-cond-request> is an object with the following members:
 	//    	"columns": [<column>*]            optional
 	//		"where": [<condition>*]           optional
-	//		"select": <monitor-select>        optional
-	// <monitor-select> is an object with the following members:
+	//		"select": <dbMonitor-select>        optional
+	// <dbMonitor-select> is an object with the following members:
 	// 		"initial": <boolean>              optional
 	//		"insert": <boolean>               optional
 	//		"delete": <boolean>               optional
@@ -189,7 +189,7 @@ type Servicer interface {
 	// and read-only due to a transition between active and backup roles. Traditionally, ovsdb-server disconnects all of
 	// its clients when this happens, because this prompts a well-written client to reassess what is available from the
 	// server when it reconnects.
-	// By itself, this does not suppress ovsdb-server disconnection behavior, because a client might monitor this database
+	// By itself, this does not suppress ovsdb-server disconnection behavior, because a client might dbMonitor this database
 	// without understanding its special semantics. Instead, ovsdb-server provides a special request: <Set_db_change_aware>
 	//
 	// 		"params": [<boolean>]

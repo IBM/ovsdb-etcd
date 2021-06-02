@@ -32,8 +32,9 @@ type Handler struct {
 
 	mu sync.Mutex
 
-	// jsonValueStr -> handlerMonitorData
-	monitors      map[string]handlerMonitorData
+	// json-value string to handler monitor related data
+	handlerMonitorData map[string]handlerMonitorData
+
 	databaseLocks map[string]Locker
 }
 
@@ -59,9 +60,9 @@ func (ch *Handler) Cancel(ctx context.Context, param interface{}) (interface{}, 
 
 func (ch *Handler) Monitor(ctx context.Context, params []interface{}) (interface{}, error) {
 	klog.V(5).Infof("Monitor request from %v, params %v", ch.clientCon.RemoteAddr(), params)
-	updatersMap, err := ch.monitor(params, ovsjson.Update)
+	updatersMap, err := ch.addMonitor(params, ovsjson.Update)
 	if err != nil {
-		klog.Errorf("Monitor from %v, params %v got an error: %s", ch.clientCon.RemoteAddr(), err)
+		klog.Errorf("Monitor from %v, params %v got an error: %s", ch.clientCon.RemoteAddr(), params, err)
 		return nil, err
 	}
 	data, err := ch.getMonitoredData(updatersMap, true)
@@ -159,7 +160,7 @@ func (ch *Handler) Steal(ctx context.Context, param interface{}) (interface{}, e
 
 func (ch *Handler) MonitorCond(ctx context.Context, params []interface{}) (interface{}, error) {
 	klog.V(1).Infof("MonitorCond request from %v, param %v", ch.clientCon.RemoteAddr(), params)
-	updatersMap, err := ch.monitor(params, ovsjson.Update2)
+	updatersMap, err := ch.addMonitor(params, ovsjson.Update2)
 	if err != nil {
 		klog.Errorf("MonitorCond from remote %v got an error: %s", ch.clientCon.RemoteAddr(), err)
 		return nil, err
@@ -181,7 +182,7 @@ func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) 
 
 func (ch *Handler) MonitorCondSince(ctx context.Context, params []interface{}) (interface{}, error) {
 	klog.V(5).Infof("MonitorCondSince request from %v, parameters %v", ch.clientCon.RemoteAddr(), params)
-	updatersMap, err := ch.monitor(params, ovsjson.Update3)
+	updatersMap, err := ch.addMonitor(params, ovsjson.Update3)
 	if err != nil {
 		klog.Errorf("MonitorCondSince from remote %v got an error: %s", ch.clientCon.RemoteAddr(), err)
 		return nil, err
@@ -202,7 +203,7 @@ func (ch *Handler) SetDbChangeAware(ctx context.Context, param interface{}) inte
 
 func NewHandler(tctx context.Context, db Databaser, cli *clientv3.Client) *Handler {
 	return &Handler{
-		handlerContext: tctx, db: db, databaseLocks: map[string]Locker{}, monitors: map[string]handlerMonitorData{},
+		handlerContext: tctx, db: db, databaseLocks: map[string]Locker{}, handlerMonitorData: map[string]handlerMonitorData{},
 		etcdClient: cli,
 	}
 }
@@ -214,7 +215,8 @@ func (ch *Handler) Cleanup() error {
 	for _, m := range ch.databaseLocks {
 		m.unlock()
 	}
-	for jsonValueStr, monitorHandler := range ch.monitors {
+	for _, monitorHandler := range ch.handlerMonitorData {
+		jsonValueStr := jsonValueToString(monitorHandler.jsonValue)
 		ch.db.RemoveMonitors(monitorHandler.dataBaseName, monitorHandler.updaters, handlerKey{handler: ch, jsonValueStr: jsonValueStr})
 	}
 	return nil
@@ -225,25 +227,25 @@ func (ch *Handler) SetConnection(jrpcSerer JrpcServer, clientCon net.Conn) {
 	ch.clientCon = clientCon
 }
 
-func (ch *Handler) notify(jsonValueStr string, updates ovsjson.TableUpdates) {
-	handler, ok := ch.monitors[jsonValueStr]
+func (ch *Handler) notify(jsonValueString string, updates ovsjson.TableUpdates) {
+	monitorData, ok := ch.handlerMonitorData[jsonValueString]
 	if !ok {
-		klog.Errorf("Unknown jsonValue %s", jsonValueStr)
+		klog.Errorf("Unknown jsonValue %s", jsonValueString)
 		return
 	}
-	if klog.V(7).Enabled() {
-		klog.V(7).Infof("Monitor notification jsonValue %v to %v: %s", handler.jsonValue, ch.clientCon.RemoteAddr(), updates)
+	if klog.V(5).Enabled() {
+		klog.V(5).Infof("Monitor notification jsonValue %v to %v: %s", monitorData.jsonValue, ch.clientCon.RemoteAddr(), updates)
 	} else {
-		klog.V(5).Infof("Monitor notification jsonValue %v to %v", handler.jsonValue, ch.clientCon.RemoteAddr())
+		klog.V(5).Infof("Monitor notification jsonValue %v to %v", monitorData.jsonValue, ch.clientCon.RemoteAddr())
 	}
 	var err error
-	switch handler.notificationType {
+	switch monitorData.notificationType {
 	case ovsjson.Update:
-		err = ch.jrpcServer.Notify(ch.handlerContext, "update", []interface{}{handler.jsonValue, updates})
+		err = ch.jrpcServer.Notify(ch.handlerContext, "update", []interface{}{monitorData.jsonValue, updates})
 	case ovsjson.Update2:
-		err = ch.jrpcServer.Notify(ch.handlerContext, "update2", []interface{}{handler.jsonValue, updates})
+		err = ch.jrpcServer.Notify(ch.handlerContext, "update2", []interface{}{monitorData.jsonValue, updates})
 	case ovsjson.Update3:
-		err = ch.jrpcServer.Notify(ch.handlerContext, "update3", []interface{}{handler.jsonValue, ovsjson.ZERO_UUID, updates})
+		err = ch.jrpcServer.Notify(ch.handlerContext, "update3", []interface{}{monitorData.jsonValue, ovsjson.ZERO_UUID, updates})
 	}
 	if err != nil {
 		// TODO should we do something else
@@ -261,38 +263,25 @@ func (ch *Handler) monitorCanceledNotification(jsonValue interface{}) {
 }
 
 func (ch *Handler) removeMonitor(jsonValue interface{}) error {
-	jsonStr := ovsjson.InterfaceToString(jsonValue)
-	klog.V(5).Infof("removeMonitor %v", jsonStr)
-	buf, err := json.Marshal(jsonValue)
-	if err != nil {
-		klog.Errorf("removeMonitor %v", err)
-		return err
-	}
-	var tmp json.RawMessage
-	if err := json.Unmarshal(buf, &tmp); err != nil {
-		klog.Errorf("removeMonitor unmarshal %v", err)
-		return err
-	}
+	klog.V(5).Infof("removeMonitor %v", jsonValue)
 
+	jsonValueString := jsonValueToString(jsonValue)
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
-	monitorHandler, ok := ch.monitors[ovsjson.InterfaceToString(tmp)]
+	monitorHandler, ok := ch.handlerMonitorData[jsonValueString]
 	if !ok {
-		klog.V(5).Infof("removeMonitor unknown monitor")
-		return fmt.Errorf("unknown monitor")
+		err := fmt.Errorf("removing unexisting dbMonitor with jsonValue = %v", jsonValue)
+		klog.Warningf("%v", err)
+		return err
 	}
-	ch.db.RemoveMonitors(monitorHandler.dataBaseName, monitorHandler.updaters, handlerKey{handler: ch, jsonValueStr: jsonStr})
-	delete(ch.monitors, jsonStr)
+	ch.db.RemoveMonitors(monitorHandler.dataBaseName, monitorHandler.updaters, handlerKey{handler: ch, jsonValueStr: jsonValueString})
+	delete(ch.handlerMonitorData, jsonValueString)
 	return nil
 }
 
-func (ch *Handler) monitor(params []interface{}, notificationType ovsjson.UpdateNotificationType) (Key2Updaters, error) {
-	buf, err := json.Marshal(params)
-	if err != nil {
-		return nil, err
-	}
-	cmpr := ovsjson.CondMonitorParameters{}
-	err = json.Unmarshal(buf, &cmpr)
+func (ch *Handler) addMonitor(params []interface{}, notificationType ovsjson.UpdateNotificationType) (Key2Updaters, error) {
+
+	cmpr, err := parseCondMonitorParameters(params)
 	if err != nil {
 		return nil, err
 	}
@@ -300,11 +289,11 @@ func (ch *Handler) monitor(params []interface{}, notificationType ovsjson.Update
 		return nil, fmt.Errorf("monitored dataBase name is empty")
 	}
 
+	jsonValueString := jsonValueToString(cmpr.JsonValue)
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
-	jsonStr := ovsjson.InterfaceToString(cmpr.JsonValue)
-	if _, ok := ch.monitors[jsonStr]; ok {
-		return nil, fmt.Errorf("duplicate json-value")
+	if _, ok := ch.handlerMonitorData[jsonValueString]; ok {
+		return nil, fmt.Errorf("duplicate dbMonitor ID")
 	}
 	updatersMap := Key2Updaters{}
 	updaterKeys := map[string][]string{}
@@ -320,12 +309,13 @@ func (ch *Handler) monitor(params []interface{}, notificationType ovsjson.Update
 		updatersMap[common.NewTableKey(cmpr.DatabaseName, tableName)] = updaters
 		updaterKeys[tableName] = keys
 	}
-	ch.monitors[jsonStr] = handlerMonitorData{
+	ch.handlerMonitorData[jsonValueString] = handlerMonitorData{
 		dataBaseName:     cmpr.DatabaseName,
 		notificationType: notificationType,
 		updaters:         updaterKeys,
 		jsonValue:        cmpr.JsonValue}
-	ch.db.AddMonitors(cmpr.DatabaseName, updatersMap, handlerKey{jsonValueStr: jsonStr, handler: ch})
+	klog.V(5).Infof("addMonitor %s handlerKey %+v", cmpr.DatabaseName, handlerKey{jsonValueStr: jsonValueString, handler: ch, remoteAddr: ch.clientCon.RemoteAddr().String()} )
+	ch.db.AddMonitors(cmpr.DatabaseName, updatersMap, handlerKey{jsonValueStr: jsonValueString, handler: ch, remoteAddr: ch.clientCon.RemoteAddr().String()})
 	return updatersMap, nil
 }
 
@@ -371,4 +361,55 @@ func (ch *Handler) getMonitoredData(updatersMap Key2Updaters, isV1 bool) (ovsjso
 	}
 	klog.V(6).Infof("getMonitoredData: %v", returnData)
 	return returnData, nil
+}
+
+func parseCondMonitorParameters(params []interface{}) (*ovsjson.CondMonitorParameters, error) {
+	klog.Infof("CondMonitorParameters: length = %d", len(params))
+	for i, v := range params {
+		klog.Infof("CondMonitorParameters param[%d] %T >%v<", i, v, v)
+	}
+	l := len(params)
+	if l < 2 || l > 4 {
+		err := fmt.Errorf("wrong length of condition dbMonitor parameters: %d", l)
+		klog.Errorf("parseCondMonitorParameters %v params = %v", err, params)
+		return nil, err
+	}
+	cmp := ovsjson.CondMonitorParameters{}
+	var ok bool
+	cmp.DatabaseName, ok = params[0].(string)
+	if !ok {
+		err := fmt.Errorf("parseCondMonitorParameters, cannot assert dbname interface (type %T, value %v) to string", params[0], params[0])
+		klog.Errorf("%v", err)
+		return nil, err
+	}
+	cmp.JsonValue = params[1]
+	buf, err := json.Marshal(params[2])
+	if err != nil {
+		klog.Errorf("marshal dbMonitor conditional request returned %v", err)
+		return nil, err
+	}
+	if err := json.Unmarshal(buf, &cmp.MonitorCondRequests); err != nil {
+		obj := map[string]ovsjson.MonitorCondRequest{}
+		if err := json.Unmarshal(buf, &obj); err != nil {
+			return nil, fmt.Errorf("unmarshal dbMonitor condition requests returned: %v", err)
+		}
+		cmp.MonitorCondRequests = map[string][]ovsjson.MonitorCondRequest{}
+		for k, v := range obj {
+			cmp.MonitorCondRequests[k] = []ovsjson.MonitorCondRequest{v}
+		}
+	}
+	if l == 4 {
+		str, ok := params[3].(string)
+		if !ok {
+			err := fmt.Errorf("parseCondMonitorParameters, cannot assert last txn ID interface (type %T, value %v) to string", params[3], params[3])
+			klog.Errorf("%v", err)
+			return nil, err
+		}
+		cmp.LastTxnID = &str
+	}
+	return &cmp, nil
+}
+
+func jsonValueToString(jsonValue interface{}) string {
+	return fmt.Sprintf("%v", jsonValue)
 }

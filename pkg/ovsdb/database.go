@@ -10,7 +10,6 @@ import (
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
-	"go.uber.org/zap"
 	"k8s.io/klog/v2"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
@@ -36,9 +35,9 @@ type DatabaseEtcd struct {
 	// TODO will be removed
 	strSchemas map[string]map[string]interface{}
 	mu         sync.Mutex
-	// databaseName -> monitor
-	// We have a single monitor (etcd watcher) per database
-	monitors map[string]*monitor
+	// databaseName -> dbMonitor
+	// We have a single dbMonitor (etcd watcher) per database
+	monitors map[string]*dbMonitor
 }
 
 type Locker interface {
@@ -73,13 +72,11 @@ func (l *lock) cancel() {
 var EtcdClientTimeout = time.Second
 
 func NewEtcdClient(endpoints []string) (*clientv3.Client, error) {
-	logcfg := zap.NewProductionConfig()
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:          endpoints,
 		DialTimeout:        30 * time.Second,
 		MaxCallSendMsgSize: 120 * 1024 * 1024,
 		MaxCallRecvMsgSize: 0, /* max */
-		LogConfig:          &logcfg,
 	})
 	if err != nil {
 		return nil, err
@@ -89,7 +86,7 @@ func NewEtcdClient(endpoints []string) (*clientv3.Client, error) {
 
 func NewDatabaseEtcd(cli *clientv3.Client) (Databaser, error) {
 	return &DatabaseEtcd{cli: cli,
-		Schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}, monitors: map[string]*monitor{}}, nil
+		Schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}, monitors: map[string]*dbMonitor{}}, nil
 }
 
 func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error) {
@@ -206,7 +203,7 @@ func (con *DatabaseEtcd) RemoveMonitors(dbName string, updaters map[string][]str
 	defer con.mu.Unlock()
 	m, ok := con.monitors[dbName]
 	if !ok {
-		klog.Warningf("Remove nonexistent db monitor %s", dbName)
+		klog.Warningf("Remove nonexistent db dbMonitor %s", dbName)
 		return
 	}
 	m.removeUpdaters(updaters, handler)
