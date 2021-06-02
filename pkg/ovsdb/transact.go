@@ -44,90 +44,47 @@ const (
 	E_SYNTAX_ERROR     = "syntax error or unknown column"
 )
 
-// XXX: move libovsdb
-func isEqualRows(a, b []map[string]interface{}, schema *libovsdb.TableSchema) (bool, error) {
-	ret := true
-	for _, be := range b {
-		for column, bv := range be {
-			columnSchema, ok := schema.Columns[column]
-			if !ok {
-				klog.Errorf("Schema doesn't contain column %s", column)
-				return false, fmt.Errorf(E_SYNTAX_ERROR)
-			}
-			for _, ae := range a {
-				av := ae[column]
-				equal, err := compareValues(av, bv, columnSchema)
-				if err != nil {
-					return false, err
-				}
-				ret = ret && equal
-			}
-
-		}
-	}
-	return ret, nil
+func isEqualSet(a, b interface{}) bool {
+	aSet := a.(libovsdb.OvsSet)
+	bSet := b.(libovsdb.OvsSet)
+	return reflect.DeepEqual(aSet.GoSet, bSet.GoSet) // XXX: should I sort first?
 }
 
-func compareValues(a, b interface{}, columnSchema *libovsdb.ColumnSchema) (bool, error) {
-	if columnSchema.Type == libovsdb.TypeMap {
-		buf, err := json.Marshal(b)
-		if err != nil {
-			klog.Errorf("map marshal returned %v", err)
-			return false, fmt.Errorf(E_SYNTAX_ERROR)
-		}
-		ovsMap := libovsdb.OvsMap{}
-		err = json.Unmarshal(buf, &ovsMap)
-		if err != nil {
-			klog.Errorf("map unmarshal returned %v", err)
-			return false, fmt.Errorf(E_SYNTAX_ERROR)
-		}
-		aMap, ok := a.(libovsdb.OvsMap)
-		if !ok {
-			klog.Errorf("wrong compare value type %#v", a)
-			return false, fmt.Errorf(E_SYNTAX_ERROR)
-		}
-		for bName, bValue := range ovsMap.GoMap {
-			if aMap.GoMap[bName.(string)] != bValue {
-				return false, nil
-			}
-		}
-		return true, nil
-	} else if columnSchema.Type == libovsdb.TypeSet {
-		buf, err := json.Marshal(b)
-		if err != nil {
-			klog.Errorf("set marshal returned %v", err)
-			return false, fmt.Errorf(E_SYNTAX_ERROR)
-		}
-		ovsSet := libovsdb.OvsSet{}
-		err = json.Unmarshal(buf, &ovsSet)
-		if err != nil {
-			klog.Errorf("set unmarshal returned %v", err)
-			return false, fmt.Errorf(E_SYNTAX_ERROR)
-		}
-		aSet, ok := a.(libovsdb.OvsSet)
-		if !ok {
-			klog.Errorf("wrong compare value type %#v", a)
-			return false, fmt.Errorf(E_SYNTAX_ERROR)
-		}
-		return isEqualSet(aSet, ovsSet), nil
-	}
-	// TODO we have to check other problematic use cases.
-	return reflect.DeepEqual(a, b), nil
+func isEqualMap(a, b interface{}) bool {
+	aMap := a.(libovsdb.OvsMap)
+	bMap := b.(libovsdb.OvsMap)
+	return reflect.DeepEqual(aMap.GoMap, bMap.GoMap)
 }
 
-// XXX: move libovsdb
-func isEqualSet(a, b libovsdb.OvsSet) bool {
-	return reflect.DeepEqual(a.GoSet, b.GoSet) // XXX: should I sort first?
-}
-
-// XXX: move libovsdb
-func isEqualMap(a, b libovsdb.OvsMap) bool {
-	return reflect.DeepEqual(a.GoMap, b.GoMap)
-}
-
-// XXX: move libovsdb
-func isEqual(a, b interface{}) bool {
+func isEqualValue(a, b interface{}) bool {
 	return reflect.DeepEqual(a, b)
+}
+
+func isEqualColumn(columnSchema *libovsdb.ColumnSchema, a, b interface{}) bool {
+	switch columnSchema.Type {
+	case libovsdb.TypeSet:
+		return isEqualSet(a, b)
+	case libovsdb.TypeMap:
+		return isEqualMap(a, b)
+	default:
+		return isEqualValue(a, b)
+	}
+}
+
+func isEqualRow(tableSchema *libovsdb.TableSchema, aRow, bRow *map[string]interface{}) (bool, error) {
+	for column, a := range *aRow {
+		columnSchema, err := tableSchema.LookupColumn(column)
+		if err != nil {
+			klog.Errorf("Schema doesn't contain column %s", column)
+			return false, errors.New(E_CONSTRAINT_VIOLATION)
+		}
+		b := (*bRow)[column]
+		if !isEqualColumn(columnSchema, a, b) {
+			return false, nil
+		}
+
+	}
+	return true, nil
 }
 
 // XXX: move to libovsdb
@@ -491,7 +448,7 @@ var ovsOpCallbackMap = map[string][2]ovsOpCallback{
 	OP_UPDATE:  {preUpdate, doUpdate},
 	OP_MUTATE:  {preMutate, doMutate},
 	OP_DELETE:  {preDelete, doDelete},
-	OP_WAIT:    {preWait, doWaitDummy},
+	OP_WAIT:    {preWait, doWait},
 	OP_COMMIT:  {preCommit, doCommit},
 	OP_ABORT:   {preAbort, doAbort},
 	OP_COMMENT: {preComment, doComment},
@@ -1118,7 +1075,7 @@ func (m *Mutation) MutateReal(row *map[string]interface{}) error {
 
 func inSet(set *libovsdb.OvsSet, a interface{}) bool {
 	for _, b := range set.GoSet {
-		if isEqual(a, b) {
+		if isEqualValue(a, b) {
 			return true
 		}
 	}
@@ -1151,7 +1108,7 @@ func deleteFromSet(original *libovsdb.OvsSet, toDelete interface{}) (*libovsdb.O
 	for _, current := range original.GoSet {
 		found := false
 		for _, v := range toDeleteSet.GoSet {
-			if isEqual(current, v) {
+			if isEqualValue(current, v) {
 				found = true
 				break
 			}
@@ -1556,52 +1513,81 @@ func preWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Op
 	return etcdGetByWhere(txn, ovsOp, ovsResult)
 }
 
-func doWaitDummy(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
-	return nil
-}
-
+/* wait */
 func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
-	rows := []map[string]interface{}{}
+	if ovsOp.Table == nil {
+		klog.Errorf("missing table parameter")
+		return errors.New(E_CONSTRAINT_VIOLATION)
+	}
+
+	if ovsOp.Rows == nil {
+		klog.Errorf("missing rows parameter")
+		return errors.New(E_CONSTRAINT_VIOLATION)
+	}
+
+	if ovsOp.Columns == nil {
+		klog.Errorf("missing columns parameter")
+		return errors.New(E_CONSTRAINT_VIOLATION)
+	}
+
+	if ovsOp.Until == nil {
+		klog.Errorf("missing until parameter")
+		return errors.New(E_CONSTRAINT_VIOLATION)
+	}
+
 	tableSchema, err := txn.schemas.LookupTable(txn.request.DBName, *ovsOp.Table)
 	if err != nil {
+		klog.Errorf("%s", err)
 		return errors.New(E_INTERNAL_ERROR)
 	}
-	for _, row := range txn.cache.Table(txn.request.DBName, *ovsOp.Table) {
-		ok, err := isRowSelectedByWhere(tableSchema, txn.mapUUID, row, ovsOp.Where)
+
+	var equal bool
+	switch *ovsOp.Until {
+	case FN_EQ:
+		equal = true
+	case FN_NE:
+		equal = false
+	default:
+		klog.Errorf("wait: unsupported function %s", *ovsOp.Until)
+		return errors.New(E_CONSTRAINT_VIOLATION)
+	}
+
+	for _, actual := range txn.cache.Table(txn.request.DBName, *ovsOp.Table) {
+		ok, err := isRowSelectedByWhere(tableSchema, txn.mapUUID, actual, ovsOp.Where)
 		if err != nil {
 			return err
 		}
 		if !ok {
 			continue
 		}
-		newRow, err := reduceRowByColumns(row, ovsOp.Columns)
+		actual, err = reduceRowByColumns(actual, ovsOp.Columns)
 		if err != nil {
+			klog.Errorf("wait: failed column reduction %s", err)
 			return err
 		}
-		rows = append(rows, *newRow)
+
+		for _, expected := range *ovsOp.Rows {
+			cond, err := isEqualRow(tableSchema, &expected, actual)
+			if err != nil {
+				klog.Errorf("wait: error in row compare %s", err)
+				return err
+			}
+			if cond {
+				if equal {
+					return nil
+				}
+				klog.Errorf("wait: timed out")
+				return errors.New(E_TIMEOUT)
+			}
+		}
 	}
 
-	if ovsOp.Rows == nil {
+	if !equal {
 		return nil
 	}
 
-	equal, err := isEqualRows(rows, *ovsOp.Rows, tableSchema)
-	if err != nil {
-		return err
-	}
-	switch *ovsOp.Until {
-	case FN_EQ:
-		if !equal {
-			return errors.New(E_TIMEOUT)
-		}
-	case FN_NE:
-		if equal {
-			return errors.New(E_TIMEOUT)
-		}
-	default:
-		return errors.New(E_CONSTRAINT_VIOLATION)
-	}
-	return nil
+	klog.Errorf("wait: timed out")
+	return errors.New(E_TIMEOUT)
 }
 
 /* commit */

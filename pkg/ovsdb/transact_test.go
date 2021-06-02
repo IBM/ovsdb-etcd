@@ -1042,22 +1042,180 @@ func TestTransactDelete(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestTransactWait(t *testing.T) {
+func TestTransactWaitEQ(t *testing.T) {
 	table := "table1"
 	timeout := 0
+	row1 := map[string]interface{}{
+		"key1": "val1a",
+		"key2": 1,
+	}
+	row2 := map[string]interface{}{
+		"key1": "val1b",
+		"key2": 1,
+	}
+	columns := []string{"key1"}
+	rows := []map[string]interface{}{
+		{
+			"key1": "val1a",
+		},
+	}
+	until := FN_EQ
 	req := &libovsdb.Transact{
 		DBName: "simple",
 		Operations: []libovsdb.Operation{
 			{
+				Op:      OP_INSERT,
+				Table:   &table,
+				Row:     &row1,
+				Timeout: &timeout,
+			},
+			{
+				Op:      OP_INSERT,
+				Table:   &table,
+				Row:     &row2,
+				Timeout: &timeout,
+			},
+			{
 				Op:      OP_WAIT,
 				Table:   &table,
+				Rows:    &rows,
+				Columns: &columns,
+				Until:   &until,
 				Timeout: &timeout,
 			},
 		},
 	}
 	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t)
 	resp, _ := testTransact(t, req)
 	assert.Nil(t, resp.Error)
+}
+
+func TestTransactWaitNE(t *testing.T) {
+	table := "table1"
+	timeout := 0
+	row1 := map[string]interface{}{
+		"key1": "val1a",
+		"key2": 1,
+	}
+	row2 := map[string]interface{}{
+		"key1": "val1b",
+		"key2": 1,
+	}
+	columns := []string{"key1"}
+	rows := []map[string]interface{}{
+		{
+			"key1": "val1c",
+		},
+	}
+	until := FN_NE
+	req := &libovsdb.Transact{
+		DBName: "simple",
+		Operations: []libovsdb.Operation{
+			{
+				Op:      OP_INSERT,
+				Table:   &table,
+				Row:     &row1,
+				Timeout: &timeout,
+			},
+			{
+				Op:      OP_INSERT,
+				Table:   &table,
+				Row:     &row2,
+				Timeout: &timeout,
+			},
+			{
+				Op:      OP_WAIT,
+				Table:   &table,
+				Rows:    &rows,
+				Columns: &columns,
+				Until:   &until,
+				Timeout: &timeout,
+			},
+		},
+	}
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t)
+	resp, _ := testTransact(t, req)
+	assert.Nil(t, resp.Error)
+}
+
+func TestTransactWaitEQError(t *testing.T) {
+	table := "table1"
+	timeout := 0
+	row1 := map[string]interface{}{
+		"key1": "val1a",
+	}
+	columns := []string{"key1"}
+	rows := []map[string]interface{}{
+		{
+			"key1": "val1b",
+		},
+	}
+	until := FN_EQ
+	req := &libovsdb.Transact{
+		DBName: "simple",
+		Operations: []libovsdb.Operation{
+			{
+				Op:      OP_INSERT,
+				Table:   &table,
+				Row:     &row1,
+				Timeout: &timeout,
+			},
+			{
+				Op:      OP_WAIT,
+				Table:   &table,
+				Rows:    &rows,
+				Columns: &columns,
+				Until:   &until,
+				Timeout: &timeout,
+			},
+		},
+	}
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t)
+	resp, _ := testTransact(t, req)
+	assert.NotNil(t, resp.Error)
+	assert.Equal(t, E_TIMEOUT, *resp.Error)
+}
+
+func TestTransactWaitNEError(t *testing.T) {
+	table := "table1"
+	timeout := 0
+	row1 := map[string]interface{}{
+		"key1": "val1a",
+	}
+	columns := []string{"key1"}
+	rows := []map[string]interface{}{
+		{
+			"key1": "val1a",
+		},
+	}
+	until := FN_NE
+	req := &libovsdb.Transact{
+		DBName: "simple",
+		Operations: []libovsdb.Operation{
+			{
+				Op:      OP_INSERT,
+				Table:   &table,
+				Row:     &row1,
+				Timeout: &timeout,
+			},
+			{
+				Op:      OP_WAIT,
+				Table:   &table,
+				Rows:    &rows,
+				Columns: &columns,
+				Until:   &until,
+				Timeout: &timeout,
+			},
+		},
+	}
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t)
+	resp, _ := testTransact(t, req)
+	assert.NotNil(t, resp.Error)
+	assert.Equal(t, E_TIMEOUT, *resp.Error)
 }
 
 func TestTransactCommit(t *testing.T) {
