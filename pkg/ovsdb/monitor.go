@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"sort"
 	"sync"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -16,78 +15,89 @@ import (
 	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
 )
 
-type updater struct {
-	Columns map[string]bool
-	Where   [][]string
-	Select  libovsdb.MonitorSelect
-	isV1    bool
-	// the update unique key, used as a map key instead of the updater itself
-	key string
-}
+const (
+	MONITOR_CANCELED = "monitor_canceled"
+	UPDATE           = "update"
+	UPDATE2          = "update2"
+	UPDATE3          = "update3"
+)
 
-type handlerKey struct {
-	handler   *Handler
-	jsonValue interface{}
+type updater struct {
+	Columns          map[string]bool
+	Where            [][]string
+	Select           libovsdb.MonitorSelect
+	isV1             bool
+	notificationType ovsjson.UpdateNotificationType
+	jasonValueStr    string
 }
 
 type handlerMonitorData struct {
 	notificationType ovsjson.UpdateNotificationType
-	updaters         map[string][]string
-	dataBaseName     string
-	jsonValue        interface{}
+
+	// updaters from the given json-value, key is the path in the monitor.
+	updatersKeys []common.Key
+	dataBaseName string
+	jsonValue    interface{}
 }
 
 // Map from a key which represents a table paths (prefix/dbname/table) to arrays of updaters
-// OVSDB allows specifying an array of <monitor-request> objects for a monitored table
+// OVSDB allows specifying an array of <dbMonitor-request> objects for a monitored table
 type Key2Updaters map[common.Key][]updater
 
-type monitor struct {
+func (k *Key2Updaters) removeUpdaters(key common.Key, jsonValue string) {
+	updaters, ok := (*k)[key]
+	if !ok {
+		return
+	}
+	newUpdaters := []updater{}
+	for _, u := range updaters {
+		if u.jasonValueStr != jsonValue {
+			newUpdaters = append(newUpdaters, u)
+		}
+	}
+	if len(newUpdaters) != 0 {
+		(*k)[key] = newUpdaters
+	} else {
+		delete(*k, key)
+	}
+}
+
+type dbMonitor struct {
 	// etcd watcher channel
 	watchChannel clientv3.WatchChan
 	// cancel function to close the etcd watcher
 	cancel context.CancelFunc
 
 	mu sync.Mutex
-	db Databaser
-	// database name that the monitor is watching
+	// database name that the dbMonitor is watching
 	dataBaseName string
 
 	// Map from etcd paths (prefix/dbname/table) to arrays of updaters
 	// We use it to link keys from etcd events to updaters. We use array of updaters, because OVSDB allows to specify
-	// an array of <monitor-request> objects for a monitored table
+	// an array of <dbMonitor-request> objects for a monitored table
 	key2Updaters Key2Updaters
 
-	// Map from updater keys to arrays of handlers
-	// The map helps to link from the updaters discovered by 'key2Updaters' to relevant clients (handlers)
-	updater2handlers map[string][]handlerKey
+	handler *Handler
 }
 
-func newMonitor(dbName string, db Databaser) *monitor {
-	m := monitor{dataBaseName: dbName, db: db}
-	m.key2Updaters = Key2Updaters{}
-	m.updater2handlers = map[string][]handlerKey{}
+func newMonitor(dbName string, handler *Handler) *dbMonitor {
+	m := dbMonitor{dataBaseName: dbName, handler: handler, key2Updaters: Key2Updaters{}}
 	return &m
 }
 
-func (m *monitor) addUpdaters(updaters Key2Updaters, handler handlerKey) {
+func (m *dbMonitor) addUpdaters(keyToUpdaters Key2Updaters) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for key, updaters := range updaters {
+	for key, updaters := range keyToUpdaters {
 		_, ok := m.key2Updaters[key]
 		if !ok {
 			m.key2Updaters[key] = []updater{}
 		}
-
-	Outer:
 		for _, uNew := range updaters {
-			if _, ok := m.updater2handlers[uNew.key]; !ok {
-				m.updater2handlers[uNew.key] = []handlerKey{}
-			}
-			m.updater2handlers[uNew.key] = append(m.updater2handlers[uNew.key], handler)
 			for _, u1 := range m.key2Updaters[key] {
-				if uNew.key == u1.key {
-					continue Outer
+				if reflect.DeepEqual(uNew, u1) {
+					continue
 				}
 			}
 			m.key2Updaters[key] = append(m.key2Updaters[key], uNew)
@@ -95,94 +105,77 @@ func (m *monitor) addUpdaters(updaters Key2Updaters, handler handlerKey) {
 	}
 }
 
-func (m *monitor) removeUpdaters(updaters map[string][]string, handler handlerKey) {
+func (m *dbMonitor) removeUpdaters(keys []common.Key, jsonValue string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for table, updaterkeys := range updaters {
-		tableKey := common.NewTableKey(m.dataBaseName, table)
-		for _, updaterKey := range updaterkeys {
-			handlers := m.updater2handlers[updaterKey]
-			for i, v := range handlers {
-				if v == handler {
-					m.updater2handlers[updaterKey] = append(handlers[:i], handlers[i+1:]...)
-					break
-				}
-			}
-			if len(m.updater2handlers[updaterKey]) == 0 {
-				delete(m.updater2handlers, updaterKey)
-				updt := m.key2Updaters[tableKey]
-				for i, v := range updt {
-					if v.key == updaterKey {
-						m.key2Updaters[tableKey] = append(updt[:i], updt[i+1:]...)
-						break
-					}
-				}
-			}
-		}
+	for _, key := range keys {
+		m.key2Updaters.removeUpdaters(key, jsonValue)
 	}
-	if !m.hasHandlers() {
-		// there is no handlers, we can just destroy the entire monitor object
-		// clean the tables if the monitor will not be destroyed
-		m.key2Updaters = Key2Updaters{}
-		m.updater2handlers = map[string][]handlerKey{}
-		return
-	}
-	return
 }
 
-func (m *monitor) start() {
+func (m *dbMonitor) hasUpdaters() bool {
+	return len(m.key2Updaters) > 0
+}
+
+func (m *dbMonitor) start() {
 	go func() {
 		for wresp := range m.watchChannel {
 			if wresp.Canceled {
-				// TODO should we just reconnect
-				m.mu.Lock()
-				for _, handlersArray := range m.updater2handlers {
-					for _, hlk := range handlersArray {
-						// run in separate goroutines
-						go hlk.handler.monitorCanceledNotification(hlk.jsonValue)
-					}
-				}
-				m.mu.Unlock()
-				// remove itself
-				m.db.RemoveMonitor(m.dataBaseName)
+				m.cancelDbMonitor()
 				return
 			}
-			result, _ := m.prepareTableUpdate(wresp.Events)
-			for hd, tu := range result {
-				go hd.handler.notify(hd.jsonValue, tu)
-			}
+			m.notify(wresp.Events)
 		}
 	}()
 }
 
-func (m *monitor) hasHandlers() bool {
-	return len(m.updater2handlers) > 0
+func (m *dbMonitor) notify(events []*clientv3.Event) {
+	if len(events) == 0 {
+		return
+	}
+	result, err := m.prepareTableUpdate(events)
+	if err != nil {
+		klog.Errorf("%v", err)
+	} else {
+		for jValue, tableUpdates := range result {
+			m.handler.notify(jValue, tableUpdates)
+		}
+	}
 }
 
-func mcrToUpdater(mcr ovsjson.MonitorCondRequest, isV1 bool) *updater {
-	sort.Strings(mcr.Columns)
-	var key string
-	for _, c := range mcr.Columns {
-		key = key + c
+func (m *dbMonitor) cancelDbMonitor() {
+	m.cancel()
+	jasonValues := map[string]string{}
+	m.mu.Lock()
+	for _, updaters := range m.key2Updaters {
+		for _, updater := range updaters {
+			jasonValues[updater.jasonValueStr] = updater.jasonValueStr
+		}
 	}
-	// TODO handle "Where"
+	m.key2Updaters = Key2Updaters{}
+	m.mu.Unlock()
+	for jsonValue, _ := range jasonValues {
+		m.handler.monitorCanceledNotification(jsonValue)
+	}
+}
+
+func mcrToUpdater(mcr ovsjson.MonitorCondRequest, jsonValue string, isV1 bool) *updater {
+
+	//TODO  handle "Where"
 	if mcr.Select == nil {
 		mcr.Select = &libovsdb.MonitorSelect{}
 	}
-	key = fmt.Sprintf("%s%v%v", key, isV1, *mcr.Select)
-	return &updater{Columns: common.StringArrayToMap(mcr.Columns), isV1: isV1, Select: *mcr.Select, key: key}
+	return &updater{Columns: common.StringArrayToMap(mcr.Columns), jasonValueStr: jsonValue, isV1: isV1, Select: *mcr.Select}
 }
 
-func (m *monitor) prepareTableUpdate(events []*clientv3.Event) (map[handlerKey]ovsjson.TableUpdates, error) {
-	// prepare results that will be sent to clients
-	// handlerKey -> tableName -> uuid -> rowUpdate
-	result := map[handlerKey]ovsjson.TableUpdates{}
+func (m *dbMonitor) prepareTableUpdate(events []*clientv3.Event) (map[string]ovsjson.TableUpdates, error) {
+	result := map[string]ovsjson.TableUpdates{}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, ev := range events {
 		key, err := common.ParseKey(string(ev.Kv.Key))
 		if err != nil {
-			klog.Errorf("Wrong event's key %s", string(ev.Kv.Key))
+			klog.Errorf("error: %v", err)
 			continue
 		}
 		updaters, ok := m.key2Updaters[key.ToTableKey()]
@@ -200,28 +193,23 @@ func (m *monitor) prepareTableUpdate(events []*clientv3.Event) (map[handlerKey]o
 				// there is no updates
 				continue
 			}
-			hKeys, ok := m.updater2handlers[updater.key]
+			tableUpdates, ok := result[updater.jasonValueStr]
 			if !ok {
-				klog.Errorf("Cannot find handlers for the updater %#v", updater)
+				tableUpdates = ovsjson.TableUpdates{}
+				result[updater.jasonValueStr] = tableUpdates
 			}
-			for _, hKey := range hKeys {
-				tableUpdates, ok := result[hKey]
-				if !ok {
-					tableUpdates = ovsjson.TableUpdates{} //map[string]map[string]ovsjson.RowUpdate{}
-					result[hKey] = tableUpdates
-				}
-				tableUpdate, ok := tableUpdates[key.TableName]
-				if !ok {
-					tableUpdate = ovsjson.TableUpdate{} // map[string]ovsjson.RowUpdate{}
-					tableUpdates[key.TableName] = tableUpdate
-				}
-				// check if there is a rowUpdate for the same uuid
-				_, ok = tableUpdate[uuid]
-				if ok {
-					klog.Warningf("Duplicate event for %s", key.ShortString())
-				}
-				tableUpdate[uuid] = *rowUpdate
+			tableUpdate, ok := tableUpdates[key.TableName]
+			if !ok {
+				tableUpdate = ovsjson.TableUpdate{} // map[string]ovsjson.RowUpdate{}
+				tableUpdates[key.TableName] = tableUpdate
 			}
+			// check if there is a rowUpdate for the same uuid
+			_, ok = tableUpdate[uuid]
+			if ok {
+				klog.Warningf("Duplicate event for %s\n prevRowUpdate %v \n newRowUpdate %v",
+					key.ShortString(), tableUpdate[uuid], rowUpdate)
+			}
+			tableUpdate[uuid] = *rowUpdate
 		}
 	}
 	return result, nil
