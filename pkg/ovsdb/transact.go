@@ -1525,11 +1525,6 @@ func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Ope
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
-	if ovsOp.Columns == nil {
-		klog.Errorf("missing columns parameter")
-		return errors.New(E_CONSTRAINT_VIOLATION)
-	}
-
 	if ovsOp.Until == nil {
 		klog.Errorf("missing until parameter")
 		return errors.New(E_CONSTRAINT_VIOLATION)
@@ -1560,10 +1555,13 @@ func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Ope
 		if !ok {
 			continue
 		}
-		actual, err = reduceRowByColumns(actual, ovsOp.Columns)
-		if err != nil {
-			klog.Errorf("wait: failed column reduction %s", err)
-			return err
+
+		if ovsOp.Columns != nil {
+			actual, err = reduceRowByColumns(actual, ovsOp.Columns)
+			if err != nil {
+				klog.Errorf("wait: failed column reduction %s", err)
+				return err
+			}
 		}
 
 		for _, expected := range *ovsOp.Rows {
