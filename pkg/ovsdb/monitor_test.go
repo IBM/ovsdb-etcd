@@ -1,9 +1,13 @@
 package ovsdb
 
 import (
+	"context"
 	"encoding/json"
-	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
+	"errors"
+	"strings"
 	"testing"
+
+	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 
 	guuid "github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -145,61 +149,200 @@ func TestRowUpdate(t *testing.T) {
 	}
 }
 
-func TestAddRemoveUpdaters(t *testing.T) {
-	common.SetPrefix("ovsdb/nb")
-	compareMonitorStates := func(expected, actual *monitor) {
-		assert.Equal(t, expected.handlers, actual.handlers, "Handlers maps should be equals")
-		assert.Equal(t, expected.key2Updaters, actual.key2Updaters, "Key to updater maps should be equals")
-		assert.Equal(t, expected.upater2handlers, actual.upater2handlers, "Updaters to handlers maps should be equals")
+func initMonitor(prefix string, dbName string) *monitor {
+	common.SetPrefix(prefix)
+	return newMonitor(dbName, &DatabaseMock{})
+}
+
+func addTablesToMonitor(m *monitor, tables []string) []common.Key {
+	keys := make([]common.Key, len(tables))
+	for idx, table := range tables {
+		keys[idx] = common.NewTableKey(m.dataBaseName, table)
 	}
-	dbName := "dbtest"
-	t1 := "table1"
-	t2 := "table2"
-	m := newMonitor(dbName, &DatabaseMock{})
-	mcr1 := ovsjson.MonitorCondRequest{Columns: []string{"c1", "c3", "c2"}}
-	mcr2 := ovsjson.MonitorCondRequest{Columns: []string{"c4"}}
-	mcr3 := ovsjson.MonitorCondRequest{Columns: []string{"a1"}}
-	u1 := mcrToUpdater(mcr1, true)
-	u2 := mcrToUpdater(mcr2, true)
-	u3 := mcrToUpdater(mcr3, true)
-	k1 := common.NewTableKey(dbName, t1)
-	k2 := common.NewTableKey(dbName, t2)
+	return keys
+}
 
-	m1 := Key2Updaters{k1: {*u1, *u2}, k2: {*u3}}
-	h1 := handlerKey{jsonValueStr: "jsonValue1"}
+func addNewHandler(m *monitor, handler_json_value string, k2u Key2Updaters) handlerKey {
+	handler := handlerKey{jsonValue: handler_json_value}
+	m.addUpdaters(k2u, handler)
+	return handler
+}
 
-	m.addUpdaters(m1, h1)
+func newUpdater(columns []string, isV1 bool) *updater {
+	return mcrToUpdater(ovsjson.MonitorCondRequest{Columns: columns}, isV1)
+}
+
+func assertEqualMonitors(t *testing.T, expected, actual *monitor) {
+	assert.Equal(t, expected.key2Updaters, actual.key2Updaters, "Key to updater maps should be equals")
+	assert.Equal(t, expected.updater2handlers, actual.updater2handlers, "Updaters to handlers maps should be equals")
+}
+
+func TestMonitorAddSingleHandler(t *testing.T) {
+	m := initMonitor("ovsdb/nb", "dbtest")
+	tables := []string{"table1", "table2"}
+	keys := addTablesToMonitor(m, tables)
+	updaters := []*updater{
+		newUpdater([]string{"c1", "c3", "c2"}, true),
+		newUpdater([]string{"c4"}, true),
+		newUpdater([]string{"a1"}, true),
+	}
+	key2Updaters := Key2Updaters{keys[0]: {*updaters[0], *updaters[1]}, keys[1]: {*updaters[2]}}
+	handlers := []handlerKey{addNewHandler(m, "jsonValue1", key2Updaters)}
 	expected := &monitor{
-		handlers:        map[handlerKey]bool{h1: true},
-		key2Updaters:    Key2Updaters{k1: {*u1, *u2}, k2: {*u3}},
-		upater2handlers: map[string][]handlerKey{u1.key: {h1}, u2.key: {h1}, u3.key: {h1}}}
-	compareMonitorStates(expected, m)
+		key2Updaters:     key2Updaters,
+		updater2handlers: map[string][]handlerKey{updaters[0].key: {handlers[0]}, updaters[1].key: {handlers[0]}, updaters[2].key: {handlers[0]}},
+	}
+	assertEqualMonitors(t, expected, m)
+}
 
-	h2 := handlerKey{jsonValueStr: "jsonValue2"}
-	m.addUpdaters(m1, h2)
-	expected2 := &monitor{
-		handlers:        map[handlerKey]bool{h1: true, h2: true},
-		key2Updaters:    Key2Updaters{k1: {*u1, *u2}, k2: {*u3}},
-		upater2handlers: map[string][]handlerKey{u1.key: {h1, h2}, u2.key: {h1, h2}, u3.key: {h1, h2}}}
-	compareMonitorStates(expected2, m)
+func TestMonitorAddTwoSameHandlers(t *testing.T) {
+	m := initMonitor("ovsdb/nb", "dbtest")
+	tables := []string{"table1", "table2"}
+	keys := addTablesToMonitor(m, tables)
+	updaters := []*updater{
+		newUpdater([]string{"c1", "c3", "c2"}, true),
+		newUpdater([]string{"c4"}, true),
+		newUpdater([]string{"a1"}, true),
+	}
+	key2Updaters := Key2Updaters{keys[0]: {*updaters[0], *updaters[1]}, keys[1]: {*updaters[2]}}
+	handlers := []handlerKey{addNewHandler(m, "jsonValue1", key2Updaters),
+		addNewHandler(m, "jsonValue2", key2Updaters)}
+	expected := &monitor{
+		key2Updaters:     key2Updaters,
+		updater2handlers: map[string][]handlerKey{updaters[0].key: {handlers[0], handlers[1]}, updaters[1].key: {handlers[0], handlers[1]}, updaters[2].key: {handlers[0], handlers[1]}},
+	}
+	assertEqualMonitors(t, expected, m)
+}
 
-	u11 := mcrToUpdater(mcr1, false)
-	m11 := Key2Updaters{k1: {*u11}}
-	h11 := handlerKey{jsonValueStr: "jsonValue11"}
-	m.addUpdaters(m11, h11)
-	expected3 := &monitor{
-		handlers:        map[handlerKey]bool{h1: true, h2: true, h11: true},
-		key2Updaters:    Key2Updaters{k1: {*u1, *u2, *u11}, k2: {*u3}},
-		upater2handlers: map[string][]handlerKey{u1.key: {h1, h2}, u2.key: {h1, h2}, u3.key: {h1, h2}, u11.key: {h11}}}
-	compareMonitorStates(expected3, m)
+func TestMonitorAddThreeHandlers(t *testing.T) {
+	m := initMonitor("ovsdb/nb", "dbtest")
+	tables := []string{"table1", "table2"}
+	keys := addTablesToMonitor(m, tables)
+	updaters := []*updater{
+		newUpdater([]string{"c1", "c3", "c2"}, true),
+		newUpdater([]string{"c4"}, true),
+		newUpdater([]string{"a1"}, true),
+		newUpdater([]string{"c1", "c3", "c2"}, false),
+	}
+	key2Updaters := []Key2Updaters{{keys[0]: {*updaters[0], *updaters[1]}, keys[1]: {*updaters[2]}},
+		{keys[0]: {*updaters[3]}}}
+	handlers := []handlerKey{addNewHandler(m, "jsonValue1", key2Updaters[0]),
+		addNewHandler(m, "jsonValue2", key2Updaters[0]),
+		addNewHandler(m, "jsonValue3", key2Updaters[1])}
+	expected := &monitor{
+		key2Updaters: Key2Updaters{keys[0]: {*updaters[0], *updaters[1], *updaters[3]}, keys[1]: {*updaters[2]}},
+		updater2handlers: map[string][]handlerKey{updaters[0].key: {handlers[0], handlers[1]},
+			updaters[1].key: {handlers[0], handlers[1]},
+			updaters[2].key: {handlers[0], handlers[1]},
+			updaters[3].key: {handlers[2]}}}
+	assertEqualMonitors(t, expected, m)
+}
 
-	m.removeUpdaters(map[string][]string{t1: {u11.key}}, h11)
-	compareMonitorStates(expected2, m)
+func TestMonitorRemoveHandlerT1(t *testing.T) {
+	m := initMonitor("ovsdb/nb", "dbtest")
+	tables := []string{"table1", "table2"}
+	keys := addTablesToMonitor(m, tables)
+	updaters := []*updater{
+		newUpdater([]string{"c1", "c3", "c2"}, true),
+		newUpdater([]string{"c4"}, true),
+		newUpdater([]string{"a1"}, true),
+		newUpdater([]string{"c1", "c3", "c2"}, false),
+	}
+	key2Updaters := []Key2Updaters{{keys[0]: {*updaters[0], *updaters[1]}, keys[1]: {*updaters[2]}},
+		{keys[0]: {*updaters[3]}}}
+	handlers := []handlerKey{addNewHandler(m, "jsonValue1", key2Updaters[0]),
+		addNewHandler(m, "jsonValue2", key2Updaters[0]),
+		addNewHandler(m, "jsonValue3", key2Updaters[1])}
 
-	m.removeUpdaters(map[string][]string{t1: {u2.key, u1.key}, t2: {u3.key}}, h1)
-	expected4 := &monitor{
-		handlers:        map[handlerKey]bool{h2: true},
-		key2Updaters:    Key2Updaters{k1: {*u1, *u2}, k2: {*u3}},
-		upater2handlers: map[string][]handlerKey{u1.key: {h2}, u2.key: {h2}, u3.key: {h2}}}
-	compareMonitorStates(expected4, m)
+	m.removeUpdaters(map[string][]string{tables[0]: {updaters[3].key}}, handlers[2])
+	expected := &monitor{
+		key2Updaters:     key2Updaters[0],
+		updater2handlers: map[string][]handlerKey{updaters[0].key: {handlers[0], handlers[1]}, updaters[1].key: {handlers[0], handlers[1]}, updaters[2].key: {handlers[0], handlers[1]}},
+	}
+	assertEqualMonitors(t, expected, m)
+}
+
+func TestMonitorRemoveHandlerT2(t *testing.T) {
+	m := initMonitor("ovsdb/nb", "dbtest")
+	tables := []string{"table1", "table2"}
+	keys := addTablesToMonitor(m, tables)
+	updaters := []*updater{
+		newUpdater([]string{"c1", "c3", "c2"}, true),
+		newUpdater([]string{"c4"}, true),
+		newUpdater([]string{"a1"}, true),
+	}
+	key2Updaters := Key2Updaters{keys[0]: {*updaters[0], *updaters[1]}, keys[1]: {*updaters[2]}}
+	handlers := []handlerKey{addNewHandler(m, "jsonValue1", key2Updaters),
+		addNewHandler(m, "jsonValue2", key2Updaters)}
+	m.removeUpdaters(map[string][]string{tables[0]: {updaters[0].key, updaters[1].key}, tables[1]: {updaters[2].key}}, handlers[0])
+	expected := &monitor{
+		key2Updaters:     key2Updaters,
+		updater2handlers: map[string][]handlerKey{updaters[0].key: {handlers[1]}, updaters[1].key: {handlers[1]}, updaters[2].key: {handlers[1]}},
+	}
+	assertEqualMonitors(t, expected, m)
+}
+
+// adding function to test monitor method of handler type (importent note:we are testing here "monitor" with lower-case m!")
+
+func initHandlerSimple(t *testing.T) (handler *Handler, tctx context.Context, cli *clientv3.Client, cancel context.CancelFunc) {
+	const ETCD_LOCALHOST = "localhost:2379"
+	etcdServers := strings.Split(ETCD_LOCALHOST, ",")
+	cli, err := NewEtcdClient(etcdServers)
+	if err != nil {
+		t.Error(err.Error())
+	}
+	db, _ := NewDatabaseEtcd(cli)
+	tctx, cancel = context.WithCancel(context.Background())
+	handler = NewHandler(tctx, db, cli)
+	return
+}
+
+func addMonitorToHandler(handler *Handler, DatabaseName string, jsonValue string, monitorCondRequests_key_value_pairs []struct {
+	key     string
+	columns []string
+}, LastTxnID *string, notificationType ovsjson.UpdateNotificationType) error {
+	errStr := ""
+	if DatabaseName == "" {
+		errStr += errStr + " DatabaseName is empty."
+	}
+	n_pairs := len(monitorCondRequests_key_value_pairs)
+	if n_pairs == 0 {
+		errStr += errStr + " monitorCondRequests_key_value_pairs is empty"
+	}
+	if errStr != "" {
+		errStr = "error :" + errStr
+		return errors.New(errStr)
+	}
+	monitorCondRequestMap := make(map[string]ovsjson.MonitorCondRequest, n_pairs)
+	for _, element := range monitorCondRequests_key_value_pairs {
+		monitorCondRequestMap[element.key] = ovsjson.MonitorCondRequest{Columns: element.columns}
+	}
+	var params []interface{} = make([]interface{}, 4)
+	params[0] = DatabaseName
+	params[1] = jsonValue
+	params[2] = monitorCondRequestMap
+	params[3] = LastTxnID
+	handler.monitor(params, notificationType)
+	return nil
+}
+
+func TestHandlerAddMonitor(t *testing.T) {
+	handler, _, _, cancel := initHandlerSimple(t)
+	defer cancel()
+	err := addMonitorToHandler(
+		handler, "ovsdb/nb", "json-value-string", []struct {
+			key     string
+			columns []string
+		}{
+			struct {
+				key     string
+				columns []string
+			}{"client-a", []string{"a1", "a2", "a3"}},
+			struct {
+				key     string
+				columns []string
+			}{"client-b", []string{"b1", "b2", "b3"}}}, nil, 1)
+	if err != nil {
+		t.Error(err.Error())
+	}
 }

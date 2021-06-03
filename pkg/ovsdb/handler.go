@@ -32,8 +32,7 @@ type Handler struct {
 
 	mu sync.Mutex
 
-	// jsonValueStr -> handlerMonitorData
-	monitors      map[string]handlerMonitorData
+	monitors      []handlerMonitorData
 	databaseLocks map[string]Locker
 }
 
@@ -202,7 +201,7 @@ func (ch *Handler) SetDbChangeAware(ctx context.Context, param interface{}) inte
 
 func NewHandler(tctx context.Context, db Databaser, cli *clientv3.Client) *Handler {
 	return &Handler{
-		handlerContext: tctx, db: db, databaseLocks: map[string]Locker{}, monitors: map[string]handlerMonitorData{},
+		handlerContext: tctx, db: db, databaseLocks: map[string]Locker{}, monitors: []handlerMonitorData{},
 		etcdClient: cli,
 	}
 }
@@ -214,8 +213,8 @@ func (ch *Handler) Cleanup() error {
 	for _, m := range ch.databaseLocks {
 		m.unlock()
 	}
-	for jsonValueStr, monitorHandler := range ch.monitors {
-		ch.db.RemoveMonitors(monitorHandler.dataBaseName, monitorHandler.updaters, handlerKey{handler: ch, jsonValueStr: jsonValueStr})
+	for _, monitorHandler := range ch.monitors {
+		ch.db.RemoveMonitors(monitorHandler.dataBaseName, monitorHandler.updaters, handlerKey{handler: ch, jsonValue: monitorHandler.jsonValue})
 	}
 	return nil
 }
@@ -225,25 +224,25 @@ func (ch *Handler) SetConnection(jrpcSerer JrpcServer, clientCon net.Conn) {
 	ch.clientCon = clientCon
 }
 
-func (ch *Handler) notify(jsonValueStr string, updates ovsjson.TableUpdates) {
-	handler, ok := ch.monitors[jsonValueStr]
-	if !ok {
-		klog.Errorf("Unknown jsonValue %s", jsonValueStr)
+func (ch *Handler) notify(jsonValue interface{}, updates ovsjson.TableUpdates) {
+	handler := ch.getMonitor(jsonValue)
+	if handler == nil {
+		klog.Errorf("Unknown jsonValue %s", jsonValue)
 		return
 	}
 	if klog.V(7).Enabled() {
-		klog.V(7).Infof("Monitor notification jsonValue %v to %v: %s", handler.jsonValue, ch.clientCon.RemoteAddr(), updates)
+		klog.V(7).Infof("Monitor notification jsonValue %v to %v: %s", jsonValue, ch.clientCon.RemoteAddr(), updates)
 	} else {
-		klog.V(5).Infof("Monitor notification jsonValue %v to %v", handler.jsonValue, ch.clientCon.RemoteAddr())
+		klog.V(5).Infof("Monitor notification jsonValue %v to %v", jsonValue, ch.clientCon.RemoteAddr())
 	}
 	var err error
 	switch handler.notificationType {
 	case ovsjson.Update:
-		err = ch.jrpcServer.Notify(ch.handlerContext, "update", []interface{}{handler.jsonValue, updates})
+		err = ch.jrpcServer.Notify(ch.handlerContext, "update", []interface{}{jsonValue, updates})
 	case ovsjson.Update2:
-		err = ch.jrpcServer.Notify(ch.handlerContext, "update2", []interface{}{handler.jsonValue, updates})
+		err = ch.jrpcServer.Notify(ch.handlerContext, "update2", []interface{}{jsonValue, updates})
 	case ovsjson.Update3:
-		err = ch.jrpcServer.Notify(ch.handlerContext, "update3", []interface{}{handler.jsonValue, ovsjson.ZERO_UUID, updates})
+		err = ch.jrpcServer.Notify(ch.handlerContext, "update3", []interface{}{jsonValue, ovsjson.ZERO_UUID, updates})
 	}
 	if err != nil {
 		// TODO should we do something else
@@ -261,28 +260,18 @@ func (ch *Handler) monitorCanceledNotification(jsonValue interface{}) {
 }
 
 func (ch *Handler) removeMonitor(jsonValue interface{}) error {
-	jsonStr := ovsjson.InterfaceToString(jsonValue)
-	klog.V(5).Infof("removeMonitor %v", jsonStr)
-	buf, err := json.Marshal(jsonValue)
-	if err != nil {
-		klog.Errorf("removeMonitor %v", err)
-		return err
-	}
-	var tmp json.RawMessage
-	if err := json.Unmarshal(buf, &tmp); err != nil {
-		klog.Errorf("removeMonitor unmarshal %v", err)
-		return err
-	}
+	klog.V(5).Infof("removeMonitor %v", jsonValue)
 
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
-	monitorHandler, ok := ch.monitors[ovsjson.InterfaceToString(tmp)]
-	if !ok {
-		klog.V(5).Infof("removeMonitor unknown monitor")
-		return fmt.Errorf("unknown monitor")
+	monitorHandler := ch.getMonitor(jsonValue)
+	if monitorHandler != nil {
+		err := fmt.Errorf("removing unexisting monitor with jsonValue = %v", jsonValue)
+		klog.Warningf("%v", err)
+		return err
 	}
-	ch.db.RemoveMonitors(monitorHandler.dataBaseName, monitorHandler.updaters, handlerKey{handler: ch, jsonValueStr: jsonStr})
-	delete(ch.monitors, jsonStr)
+	ch.db.RemoveMonitors(monitorHandler.dataBaseName, monitorHandler.updaters, handlerKey{handler: ch, jsonValue: jsonValue})
+	ch.deleteMonitor(jsonValue)
 	return nil
 }
 
@@ -302,8 +291,7 @@ func (ch *Handler) monitor(params []interface{}, notificationType ovsjson.Update
 
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
-	jsonStr := ovsjson.InterfaceToString(cmpr.JsonValue)
-	if _, ok := ch.monitors[jsonStr]; ok {
+	if m := ch.getMonitor(cmpr.JsonValue); m != nil {
 		return nil, fmt.Errorf("duplicate json-value")
 	}
 	updatersMap := Key2Updaters{}
@@ -320,12 +308,12 @@ func (ch *Handler) monitor(params []interface{}, notificationType ovsjson.Update
 		updatersMap[common.NewTableKey(cmpr.DatabaseName, tableName)] = updaters
 		updaterKeys[tableName] = keys
 	}
-	ch.monitors[jsonStr] = handlerMonitorData{
+	ch.monitors = append(ch.monitors, handlerMonitorData{
 		dataBaseName:     cmpr.DatabaseName,
 		notificationType: notificationType,
 		updaters:         updaterKeys,
-		jsonValue:        cmpr.JsonValue}
-	ch.db.AddMonitors(cmpr.DatabaseName, updatersMap, handlerKey{jsonValueStr: jsonStr, handler: ch})
+		jsonValue:        cmpr.JsonValue})
+	ch.db.AddMonitors(cmpr.DatabaseName, updatersMap, handlerKey{jsonValue: cmpr.JsonValue, handler: ch})
 	return updatersMap, nil
 }
 
@@ -371,4 +359,26 @@ func (ch *Handler) getMonitoredData(updatersMap Key2Updaters, isV1 bool) (ovsjso
 	}
 	klog.V(6).Infof("getMonitoredData: %v", returnData)
 	return returnData, nil
+}
+
+// should be calling under ch.mu.Lock()
+func (ch *Handler) deleteMonitor(jsonValue interface{}) {
+	for i, m := range ch.monitors {
+		if m.jsonValue == jsonValue {
+			l := len(ch.monitors) - 1
+			ch.monitors[i] = ch.monitors[l]
+			ch.monitors = ch.monitors[:l]
+		}
+	}
+	klog.Warningf("Try to delete a monitor with unexisting jsonValue %v", jsonValue)
+}
+
+// should be calling under ch.mu.Lock()
+func (ch *Handler) getMonitor(jsonValue interface{}) *handlerMonitorData {
+	for _, m := range ch.monitors {
+		if m.jsonValue == jsonValue {
+			return &m
+		}
+	}
+	return nil
 }
