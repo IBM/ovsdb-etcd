@@ -18,9 +18,7 @@ import (
 
 type Databaser interface {
 	GetLock(ctx context.Context, id string) (Locker, error)
-	AddMonitors(dbName string, updaters Key2Updaters, handler handlerKey)
-	RemoveMonitors(dbName string, updaters map[string][]string, handler handlerKey)
-	RemoveMonitor(dbName string)
+	CreateMonitor(dbName string, handler *Handler) *dbMonitor
 	AddSchema(schemaFile string) error
 	GetSchemas() libovsdb.Schemas
 	GetData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error)
@@ -35,9 +33,6 @@ type DatabaseEtcd struct {
 	// TODO will be removed
 	strSchemas map[string]map[string]interface{}
 	mu         sync.Mutex
-	// databaseName -> monitor
-	// We have a single monitor (etcd watcher) per database
-	monitors map[string]*monitor
 }
 
 type Locker interface {
@@ -86,7 +81,7 @@ func NewEtcdClient(endpoints []string) (*clientv3.Client, error) {
 
 func NewDatabaseEtcd(cli *clientv3.Client) (Databaser, error) {
 	return &DatabaseEtcd{cli: cli,
-		Schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}, monitors: map[string]*monitor{}}, nil
+		Schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}}, nil
 }
 
 func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error) {
@@ -171,52 +166,17 @@ func (con *DatabaseEtcd) PutData(ctx context.Context, key common.Key, obj interf
 	return nil
 }
 
-func (con *DatabaseEtcd) AddMonitors(dbName string, updaters Key2Updaters, handler handlerKey) {
-	if len(updaters) == 0 {
-		// nothing to add
-		return
-	}
-	con.mu.Lock()
-	defer con.mu.Unlock()
-	m, ok := con.monitors[dbName]
-	if !ok {
-		// we don't have monitors for this database yet, create a new one.
-		m = newMonitor(dbName, con)
-		ctxt, cancel := context.WithCancel(context.Background())
-		m.cancel = cancel
-		key := common.NewDBPrefixKey(dbName)
-		wch := con.cli.Watch(clientv3.WithRequireLeader(ctxt), key.String(),
-			clientv3.WithPrefix(),
-			clientv3.WithCreatedNotify(),
-			clientv3.WithPrevKV())
-		m.watchChannel = wch
-		con.monitors[dbName] = m
-	}
-	m.addUpdaters(updaters, handler)
-	if !ok {
-		m.start()
-	}
-}
-
-func (con *DatabaseEtcd) RemoveMonitors(dbName string, updaters map[string][]string, handler handlerKey) {
-	con.mu.Lock()
-	defer con.mu.Unlock()
-	m, ok := con.monitors[dbName]
-	if !ok {
-		klog.Warningf("Remove nonexistent db monitor %s", dbName)
-		return
-	}
-	m.removeUpdaters(updaters, handler)
-	if !m.hasHandlers() {
-		m.cancel()
-		delete(con.monitors, dbName)
-	}
-}
-
-func (con *DatabaseEtcd) RemoveMonitor(dbName string) {
-	con.mu.Lock()
-	defer con.mu.Unlock()
-	delete(con.monitors, dbName)
+func (con *DatabaseEtcd) CreateMonitor(dbName string, handler *Handler) *dbMonitor {
+	m := newMonitor(dbName, handler)
+	ctxt, cancel := context.WithCancel(context.Background())
+	m.cancel = cancel
+	key := common.NewDBPrefixKey(dbName)
+	wch := con.cli.Watch(clientv3.WithRequireLeader(ctxt), key.String(),
+		clientv3.WithPrefix(),
+		clientv3.WithCreatedNotify(),
+		clientv3.WithPrevKV())
+	m.watchChannel = wch
+	return m
 }
 
 type DatabaseMock struct {
@@ -282,11 +242,9 @@ func (con *DatabaseMock) GetUUID() string {
 	return con.Response.(string)
 }
 
-func (con *DatabaseMock) AddMonitors(dbName string, updaters Key2Updaters, handler handlerKey) {
-}
-
-func (con *DatabaseMock) RemoveMonitors(dbName string, updaters map[string][]string, handler handlerKey) {
-}
-
-func (con *DatabaseMock) RemoveMonitor(dbName string) {
+func (con *DatabaseMock) CreateMonitor(dbName string, handler *Handler) *dbMonitor {
+	m := newMonitor(dbName, handler)
+	_, cancel := context.WithCancel(context.Background())
+	m.cancel = cancel
+	return m
 }
