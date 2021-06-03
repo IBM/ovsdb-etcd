@@ -10,7 +10,6 @@ import (
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
-	"go.uber.org/zap"
 	"k8s.io/klog/v2"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
@@ -73,13 +72,11 @@ func (l *lock) cancel() {
 var EtcdClientTimeout = time.Second
 
 func NewEtcdClient(endpoints []string) (*clientv3.Client, error) {
-	logcfg := zap.NewProductionConfig()
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:          endpoints,
 		DialTimeout:        30 * time.Second,
 		MaxCallSendMsgSize: 120 * 1024 * 1024,
 		MaxCallRecvMsgSize: 0, /* max */
-		LogConfig:          &logcfg,
 	})
 	if err != nil {
 		return nil, err
