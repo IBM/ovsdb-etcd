@@ -441,22 +441,22 @@ func NewTransaction(cli *clientv3.Client, request *libovsdb.Transact) *Transacti
 }
 
 type TxnEvents struct {
-	DBName string `json:database`
-	Tables []string `json:tables`
+	DBName string   `json:"dbname"`
+	Tables []string `json:"tables"`
 }
 
 func removeDuplicates(array []string) []string {
-    if len(array) == 0 {
-        return array
-    }
-    j := 1
-    for i := 1; i < len(array); i++ {
-        if array[i] != array[i-1] {
-            array[j] = array[i]
-            j++
-        }
-    }
-    return array[:j]
+	if len(array) == 0 {
+		return array
+	}
+	j := 1
+	for i := 1; i < len(array); i++ {
+		if array[i] != array[i-1] {
+			array[j] = array[i]
+			j++
+		}
+	}
+	return array[:j]
 }
 
 func (txn *Transaction) Events() *TxnEvents {
