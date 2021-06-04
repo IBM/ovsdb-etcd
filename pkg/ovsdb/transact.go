@@ -169,9 +169,6 @@ func (txn *Transaction) etcdTranaction() (*clientv3.TxnResponse, error) {
 		return nil, err
 	}
 
-	// clear etcd ops (for next transaction)
-	txn.etcd.Clear()
-
 	return txn.etcd.Res, nil
 }
 
@@ -366,12 +363,21 @@ func (mapUUID MapUUID) ResolvRow(row *map[string]interface{}) error {
 }
 
 type Etcd struct {
-	Cli  *clientv3.Client
-	Ctx  context.Context
-	If   []clientv3.Cmp
-	Then []clientv3.Op
-	Else []clientv3.Op
-	Res  *clientv3.TxnResponse
+	Cli    *clientv3.Client
+	Ctx    context.Context
+	If     []clientv3.Cmp
+	Then   []clientv3.Op
+	Else   []clientv3.Op
+	Res    *clientv3.TxnResponse
+	Events []*clientv3.Event
+}
+
+func EventsDump(original []*clientv3.Event) string {
+	printable := []clientv3.Event{}
+	for _, ev := range original {
+		printable = append(printable, *ev)
+	}
+	return fmt.Sprintf("%v", printable)
 }
 
 func NewEtcd(parent *Etcd) *Etcd {
@@ -384,6 +390,8 @@ func (etcd *Etcd) Clear() {
 	etcd.If = []clientv3.Cmp{}
 	etcd.Then = []clientv3.Op{}
 	etcd.Else = []clientv3.Op{}
+	etcd.Res = nil
+	etcd.Events = []*clientv3.Event{}
 }
 
 func (etcd Etcd) String() string {
@@ -528,6 +536,7 @@ func (txn *Transaction) Commit() error {
 	}
 
 	/* fetch needed data from database needed to perform the operation */
+	txn.etcd.Clear()
 	for i, ovsOp := range txn.request.Operations {
 		err := ovsOpCallbackMap[ovsOp.Op][0](txn, &ovsOp, &txn.response.Result[i])
 		if err != nil {
@@ -538,7 +547,7 @@ func (txn *Transaction) Commit() error {
 		}
 
 		if err = txn.cache.Validate(txn.schemas); err != nil {
-			panic(fmt.Sprintf("validation of %+v failed: %s", ovsOp, err.Error()))
+			panic(fmt.Sprintf("validation of %s failed: %s", ovsOp, err.Error()))
 		}
 	}
 	_, err = txn.etcdTranaction()
@@ -549,6 +558,7 @@ func (txn *Transaction) Commit() error {
 	}
 
 	/* commit actual transactional changes to database */
+	txn.etcd.Clear()
 	for i, ovsOp := range txn.request.Operations {
 		err = ovsOpCallbackMap[ovsOp.Op][1](txn, &ovsOp, &txn.response.Result[i])
 		if err != nil {
@@ -562,6 +572,7 @@ func (txn *Transaction) Commit() error {
 			panic(fmt.Sprintf("validation of %s failed: %s", ovsOp, err.Error()))
 		}
 	}
+
 	txn.etcdRemoveDup()
 	_, err = txn.etcdTranaction()
 	if err != nil {
@@ -1318,20 +1329,85 @@ func etcdGetByWhere(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libo
 	return nil
 }
 
-func etcdPutRow(txn *Transaction, key *common.Key, row *map[string]interface{}) error {
+func etcdCreateRow(txn *Transaction, k *common.Key, row *map[string]interface{}) error {
+	key := k.String()
 	val, err := makeValue(row)
 	if err != nil {
 		return err
 	}
 
-	etcdOp := clientv3.OpPut(key.String(), val)
+	etcdOp := clientv3.OpPut(key, val)
 	txn.etcd.Then = append(txn.etcd.Then, etcdOp)
+
+	etcdEvent := &clientv3.Event{
+		Type: mvccpb.PUT,
+		Kv: &mvccpb.KeyValue{
+			Key:            []byte(key),
+			Value:          []byte(val),
+			CreateRevision: 1,
+			ModRevision:    1,
+		},
+	}
+	txn.etcd.Events = append(txn.etcd.Events, etcdEvent)
+
 	return nil
 }
 
-func etcdDelRow(txn *Transaction, key *common.Key) error {
-	etcdOp := clientv3.OpDelete(key.String())
+func etcdModifyRow(txn *Transaction, k *common.Key, row *map[string]interface{}) error {
+	key := k.String()
+	val, err := makeValue(row)
+	if err != nil {
+		return err
+	}
+
+	etcdOp := clientv3.OpPut(key, val)
 	txn.etcd.Then = append(txn.etcd.Then, etcdOp)
+
+	prevVal, err := makeValue(txn.cache.Row(*k))
+	if err != nil {
+		return err
+	}
+
+	etcdEvent := &clientv3.Event{
+		Type: mvccpb.PUT,
+		Kv: &mvccpb.KeyValue{
+			Key:            []byte(key),
+			Value:          []byte(val),
+			CreateRevision: 1,
+			ModRevision:    2,
+		},
+		PrevKv: &mvccpb.KeyValue{
+			Key:            []byte(key),
+			Value:          []byte(prevVal),
+			CreateRevision: 1,
+			ModRevision:    1,
+		},
+	}
+	txn.etcd.Events = append(txn.etcd.Events, etcdEvent)
+	return nil
+}
+
+func etcdDeleteRow(txn *Transaction, k *common.Key) error {
+	key := k.String()
+	etcdOp := clientv3.OpDelete(key)
+	txn.etcd.Then = append(txn.etcd.Then, etcdOp)
+
+	prevVal, err := makeValue(txn.cache.Row(*k))
+	if err != nil {
+		return err
+	}
+
+	etcdEvent := &clientv3.Event{
+		Type: mvccpb.DELETE,
+		PrevKv: &mvccpb.KeyValue{
+			Key:            []byte(key),
+			Value:          []byte(prevVal),
+			CreateRevision: 1,
+			ModRevision:    1,
+		},
+	}
+	txn.etcd.Events = append(txn.etcd.Events, etcdEvent)
+
 	return nil
 }
 
@@ -1418,7 +1494,7 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
-	return etcdPutRow(txn, &key, row)
+	return etcdCreateRow(txn, &key, row)
 }
 
 /* select */
@@ -1481,7 +1557,7 @@ func doUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		}
 		key := common.NewDataKey(txn.request.DBName, *ovsOp.Table, uuid)
 		*(txn.cache.Row(key)) = *row
-		etcdPutRow(txn, &key, row)
+		etcdModifyRow(txn, &key, row)
 		ovsResult.IncrementCount()
 	}
 	return nil
@@ -1512,7 +1588,7 @@ func doMutate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		}
 		key := common.NewDataKey(txn.request.DBName, *ovsOp.Table, uuid)
 		*(txn.cache.Row(key)) = *row
-		etcdPutRow(txn, &key, row)
+		etcdModifyRow(txn, &key, row)
 		ovsResult.IncrementCount()
 	}
 	return nil
@@ -1538,7 +1614,7 @@ func doDelete(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 			continue
 		}
 		key := common.NewDataKey(txn.request.DBName, *ovsOp.Table, uuid)
-		etcdDelRow(txn, &key)
+		etcdDeleteRow(txn, &key)
 		ovsResult.IncrementCount()
 	}
 	return nil
