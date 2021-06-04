@@ -1091,7 +1091,7 @@ func TestTransactWaitEQ(t *testing.T) {
 	assert.Nil(t, resp.Error)
 }
 
-func TestTransactWaitEQColumnNil(t *testing.T) {
+func TestTransactWaitEQColumnsNil(t *testing.T) {
 	table := "table1"
 	timeout := 0
 	row1 := map[string]interface{}{
@@ -1127,6 +1127,51 @@ func TestTransactWaitEQColumnNil(t *testing.T) {
 				Op:      OP_WAIT,
 				Table:   &table,
 				Rows:    &rows,
+				Until:   &until,
+				Timeout: &timeout,
+			},
+		},
+	}
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t)
+	resp, _ := testTransact(t, req)
+	assert.Nil(t, resp.Error)
+}
+
+func TestTransactWaitEQRowsEmpty(t *testing.T) {
+	table := "table1"
+	timeout := 0
+	row1 := map[string]interface{}{
+		"key1": "val1a",
+		"key2": 1,
+	}
+	row2 := map[string]interface{}{
+		"key1": "val1b",
+		"key2": 1,
+	}
+	rows := []map[string]interface{}{}
+	columns := []string{"key1"}
+	until := FN_EQ
+	req := &libovsdb.Transact{
+		DBName: "simple",
+		Operations: []libovsdb.Operation{
+			{
+				Op:      OP_INSERT,
+				Table:   &table,
+				Row:     &row1,
+				Timeout: &timeout,
+			},
+			{
+				Op:      OP_INSERT,
+				Table:   &table,
+				Row:     &row2,
+				Timeout: &timeout,
+			},
+			{
+				Op:      OP_WAIT,
+				Table:   &table,
+				Rows:    &rows,
+				Columns: &columns,
 				Until:   &until,
 				Timeout: &timeout,
 			},

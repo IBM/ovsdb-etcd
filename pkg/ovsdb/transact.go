@@ -1525,6 +1525,10 @@ func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Ope
 		return errors.New(E_CONSTRAINT_VIOLATION)
 	}
 
+	if len(*ovsOp.Rows) == 0 {
+		return nil
+	}
+
 	if ovsOp.Until == nil {
 		klog.Errorf("missing until parameter")
 		return errors.New(E_CONSTRAINT_VIOLATION)
