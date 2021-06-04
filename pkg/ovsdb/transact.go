@@ -440,6 +440,47 @@ func NewTransaction(cli *clientv3.Client, request *libovsdb.Transact) *Transacti
 	return txn
 }
 
+type TxnEvents struct {
+	DBName string `json:database`
+	Tables []string `json:tables`
+}
+
+func removeDuplicates(array []string) []string {
+    if len(array) == 0 {
+        return array
+    }
+    j := 1
+    for i := 1; i < len(array); i++ {
+        if array[i] != array[i-1] {
+            array[j] = array[i]
+            j++
+        }
+    }
+    return array[:j]
+}
+
+func (txn *Transaction) Events() *TxnEvents {
+	events := &TxnEvents{}
+	events.DBName = txn.request.DBName
+	events.Tables = []string{}
+	for _, op := range txn.request.Operations {
+		switch op.Op {
+		case OP_INSERT, OP_UPDATE, OP_MUTATE, OP_DELETE:
+			events.Tables = append(events.Tables, *op.Table)
+		}
+	}
+	events.Tables = removeDuplicates(events.Tables)
+	return events
+}
+
+func (events TxnEvents) String() string {
+	buf, err := json.Marshal(events)
+	if err != nil {
+		panic("failed to marshal events")
+	}
+	return string(buf)
+}
+
 type ovsOpCallback func(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error
 
 var ovsOpCallbackMap = map[string][2]ovsOpCallback{
@@ -527,6 +568,7 @@ func (txn *Transaction) Commit() error {
 		return err
 	}
 
+	klog.V(5).Infof("Transact monitor events: %s", txn.Events())
 	return nil
 }
 
