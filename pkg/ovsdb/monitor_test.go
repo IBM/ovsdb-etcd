@@ -264,7 +264,7 @@ func TestMonitorNotifications1(t *testing.T) {
 	dataJson := prepareData(t, row, true)
 
 	events := []*clientv3.Event{
-		&clientv3.Event{Type: mvccpb.PUT, Kv: &mvccpb.KeyValue{Key: []byte("ovsdb/nb/dbName/T1/000"),
+		{Type: mvccpb.PUT, Kv: &mvccpb.KeyValue{Key: []byte("ovsdb/nb/dbName/T1/000"),
 			Value: dataJson, CreateRevision: 1, ModRevision: 1}}}
 
 	tableUpdates := ovsjson.TableUpdates{}
@@ -292,7 +292,7 @@ func TestMonitorNotifications2(t *testing.T) {
 	dataJson := prepareData(t, row, true)
 
 	events := []*clientv3.Event{
-		&clientv3.Event{Type: mvccpb.DELETE,
+		{Type: mvccpb.DELETE,
 			PrevKv: &mvccpb.KeyValue{Key: []byte("ovsdb/nb/dbName/T2/000"), Value: dataJson},
 			Kv:     &mvccpb.KeyValue{Key: []byte("ovsdb/nb/dbName/T2/000")}},
 	}
@@ -322,7 +322,7 @@ func TestMonitorNotifications3(t *testing.T) {
 	data2Json := prepareData(t, row2, true)
 
 	events := []*clientv3.Event{
-		&clientv3.Event{Type: mvccpb.PUT,
+		{Type: mvccpb.PUT,
 			PrevKv: &mvccpb.KeyValue{Key: []byte("ovsdb/nb/dbName/T3/000"), Value: data1Json},
 			Kv:     &mvccpb.KeyValue{Key: []byte("ovsdb/nb/dbName/T3/000"), Value: data2Json, CreateRevision: 1, ModRevision: 2}},
 	}

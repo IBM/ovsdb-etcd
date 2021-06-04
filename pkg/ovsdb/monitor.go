@@ -154,7 +154,7 @@ func (m *dbMonitor) cancelDbMonitor() {
 	}
 	m.key2Updaters = Key2Updaters{}
 	m.mu.Unlock()
-	for jsonValue, _ := range jasonValues {
+	for jsonValue := range jasonValues {
 		m.handler.monitorCanceledNotification(jsonValue)
 	}
 }
