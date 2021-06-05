@@ -1322,14 +1322,15 @@ func testColumnDefault(t *testing.T, from interface{}) interface{} {
 func TestTransactWaitMapEQ(t *testing.T) {
 	table := "table1"
 	timeout := 0
-	val1 := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1"}}
+	actual1 := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}
+	expected1 := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1"}}
 	row1 := map[string]interface{}{
-		"string": testColumnDefault(t, val1),
+		"string": testColumnDefault(t, actual1),
 	}
 	columns := []string{"string"}
 	rows := []map[string]interface{}{
 		{
-			"string": testColumnDefault(t, val1),
+			"string": testColumnDefault(t, expected1),
 		},
 	}
 	until := FN_EQ

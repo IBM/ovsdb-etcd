@@ -45,42 +45,62 @@ const (
 	E_SYNTAX_ERROR     = "syntax error or unknown column"
 )
 
-func isEqualSet(a, b interface{}) bool {
-	aSet := a.(libovsdb.OvsSet)
-	bSet := b.(libovsdb.OvsSet)
-	return reflect.DeepEqual(aSet.GoSet, bSet.GoSet) // XXX: should I sort first?
+func isEqualSet(expected, actual interface{}) bool {
+	expectedSet := expected.(libovsdb.OvsSet)
+	actualSet := actual.(libovsdb.OvsSet)
+	for _, expectedVal := range expectedSet.GoSet {
+		foundVal := false
+		for _, actualVal := range actualSet.GoSet {
+			if isEqualValue(expectedVal, actualVal) {
+				foundVal = true
+			}
+		}
+		if !foundVal {
+			return false
+		}
+	}
+	return true
 }
 
-func isEqualMap(a, b interface{}) bool {
-	aMap := a.(libovsdb.OvsMap)
-	bMap := b.(libovsdb.OvsMap)
-	return reflect.DeepEqual(aMap.GoMap, bMap.GoMap)
+func isEqualMap(expected, actual interface{}) bool {
+	expectedMap := expected.(libovsdb.OvsMap)
+	actualMap := actual.(libovsdb.OvsMap)
+	for key, expectedVal := range expectedMap.GoMap {
+		actualVal, ok := actualMap.GoMap[key]
+		if !ok {
+			return false
+		}
+		if !isEqualValue(expectedVal, actualVal) {
+			return false
+		}
+	}
+	return true
 }
 
-func isEqualValue(a, b interface{}) bool {
-	return reflect.DeepEqual(a, b)
+func isEqualValue(expected, actual interface{}) bool {
+	return reflect.DeepEqual(expected, actual)
 }
 
-func isEqualColumn(columnSchema *libovsdb.ColumnSchema, a, b interface{}) bool {
+func isEqualColumn(columnSchema *libovsdb.ColumnSchema, expected, actual interface{}) bool {
 	switch columnSchema.Type {
 	case libovsdb.TypeSet:
-		return isEqualSet(a, b)
+		return isEqualSet(expected, actual)
 	case libovsdb.TypeMap:
-		return isEqualMap(a, b)
+		return isEqualMap(expected, actual)
 	default:
-		return isEqualValue(a, b)
+		return isEqualValue(expected, actual)
 	}
 }
 
-func isEqualRow(tableSchema *libovsdb.TableSchema, aRow, bRow *map[string]interface{}) (bool, error) {
-	for column, a := range *aRow {
+func isEqualRow(tableSchema *libovsdb.TableSchema, expectedRow, actualRow *map[string]interface{}) (bool, error) {
+	for column, expected := range *expectedRow {
 		columnSchema, err := tableSchema.LookupColumn(column)
 		if err != nil {
 			klog.Errorf("Schema doesn't contain column %s", column)
 			return false, errors.New(E_CONSTRAINT_VIOLATION)
 		}
-		b := (*bRow)[column]
-		if !isEqualColumn(columnSchema, a, b) {
+		actual := (*actualRow)[column]
+		if !isEqualColumn(columnSchema, expected, actual) {
 			return false, nil
 		}
 
