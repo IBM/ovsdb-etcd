@@ -1612,6 +1612,11 @@ func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Ope
 		}
 
 		for _, expected := range *ovsOp.Rows {
+			err = RowPrepare(tableSchema, txn.mapUUID, &expected)
+			if err != nil {
+				return err
+			}
+
 			cond, err := isEqualRow(tableSchema, &expected, actual)
 			if err != nil {
 				klog.Errorf("wait: error in row compare %s", err)

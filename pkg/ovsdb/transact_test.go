@@ -159,8 +159,8 @@ var testSchemaMap *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 						Value: &libovsdb.BaseType{
 							Type: libovsdb.TypeString,
 						},
-						Min: 1,
-						Max: 1,
+						Min: 0,
+						Max: libovsdb.Unlimited,
 					},
 				},
 			},
@@ -1042,7 +1042,7 @@ func TestTransactDelete(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestTransactWaitEQ(t *testing.T) {
+func TestTransactWaitSimpleEQ(t *testing.T) {
 	table := "table1"
 	timeout := 0
 	row1 := map[string]interface{}{
@@ -1091,7 +1091,7 @@ func TestTransactWaitEQ(t *testing.T) {
 	assert.Nil(t, resp.Error)
 }
 
-func TestTransactWaitEQColumnsNil(t *testing.T) {
+func TestTransactWaitSimpleEQColumnsNil(t *testing.T) {
 	table := "table1"
 	timeout := 0
 	row1 := map[string]interface{}{
@@ -1138,7 +1138,7 @@ func TestTransactWaitEQColumnsNil(t *testing.T) {
 	assert.Nil(t, resp.Error)
 }
 
-func TestTransactWaitEQRowsEmpty(t *testing.T) {
+func TestTransactWaitSimpleEQRowsEmpty(t *testing.T) {
 	table := "table1"
 	timeout := 0
 	row1 := map[string]interface{}{
@@ -1183,7 +1183,7 @@ func TestTransactWaitEQRowsEmpty(t *testing.T) {
 	assert.Nil(t, resp.Error)
 }
 
-func TestTransactWaitNE(t *testing.T) {
+func TestTransactWaitSimpleNE(t *testing.T) {
 	table := "table1"
 	timeout := 0
 	row1 := map[string]interface{}{
@@ -1232,7 +1232,7 @@ func TestTransactWaitNE(t *testing.T) {
 	assert.Nil(t, resp.Error)
 }
 
-func TestTransactWaitEQError(t *testing.T) {
+func TestTransactWaitSimpleEQError(t *testing.T) {
 	table := "table1"
 	timeout := 0
 	row1 := map[string]interface{}{
@@ -1271,7 +1271,7 @@ func TestTransactWaitEQError(t *testing.T) {
 	assert.Equal(t, E_TIMEOUT, *resp.Error)
 }
 
-func TestTransactWaitNEError(t *testing.T) {
+func TestTransactWaitSimpleNEError(t *testing.T) {
 	table := "table1"
 	timeout := 0
 	row1 := map[string]interface{}{
@@ -1308,6 +1308,54 @@ func TestTransactWaitNEError(t *testing.T) {
 	resp, _ := testTransact(t, req)
 	assert.NotNil(t, resp.Error)
 	assert.Equal(t, E_TIMEOUT, *resp.Error)
+}
+
+func testColumnDefault(t *testing.T, from interface{}) interface{} {
+	buf, err := json.Marshal(from)
+	assert.Nil(t, err)
+	to := []interface{}{}
+	err = json.Unmarshal(buf, &to)
+	assert.Nil(t, err)
+	return to
+}
+
+func TestTransactWaitMapEQ(t *testing.T) {
+	table := "table1"
+	timeout := 0
+	val1 := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1"}}
+	row1 := map[string]interface{}{
+		"string": testColumnDefault(t, val1),
+	}
+	columns := []string{"string"}
+	rows := []map[string]interface{}{
+		{
+			"string": testColumnDefault(t, val1),
+		},
+	}
+	until := FN_EQ
+	req := &libovsdb.Transact{
+		DBName: "map",
+		Operations: []libovsdb.Operation{
+			{
+				Op:      OP_INSERT,
+				Table:   &table,
+				Row:     &row1,
+				Timeout: &timeout,
+			},
+			{
+				Op:      OP_WAIT,
+				Table:   &table,
+				Rows:    &rows,
+				Columns: &columns,
+				Until:   &until,
+				Timeout: &timeout,
+			},
+		},
+	}
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t)
+	resp, _ := testTransact(t, req)
+	assert.Nil(t, resp.Error)
 }
 
 func TestTransactCommit(t *testing.T) {
