@@ -348,7 +348,7 @@ func (ch *Handler) getMonitoredData(updatersMap Key2Updaters) (ovsjson.TableUpda
 		// validate that Initial is required
 		reqInitial := false
 		for _, updater := range updaters {
-			reqInitial := reqInitial || libovsdb.MSIsTrue(updater.Select.Initial)
+			reqInitial = reqInitial || libovsdb.MSIsTrue(updater.Select.Initial)
 			if reqInitial {
 				break
 			}
