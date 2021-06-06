@@ -77,7 +77,23 @@ type dbMonitor struct {
 	// an array of <dbMonitor-request> objects for a monitored table
 	key2Updaters Key2Updaters
 
-	handler *Handler
+	revChecker revisionChecker
+	handler    *Handler
+}
+
+type revisionChecker struct {
+	revision int64
+	mu       sync.Mutex
+}
+
+func (rc *revisionChecker) isNewRevision(newRevision int64) bool {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	if newRevision > rc.revision {
+		rc.revision = newRevision
+		return true
+	}
+	return false
 }
 
 func newMonitor(dbName string, handler *Handler) *dbMonitor {
@@ -124,23 +140,29 @@ func (m *dbMonitor) start() {
 				m.cancelDbMonitor()
 				return
 			}
-			m.notify(wresp.Events)
+			m.notify(wresp.Events, wresp.Header.Revision)
 		}
 	}()
 }
 
-func (m *dbMonitor) notify(events []*clientv3.Event) {
+func (m *dbMonitor) notify(events []*clientv3.Event, revision int64) {
 	if len(events) == 0 {
 		return
 	}
-	result, err := m.prepareTableUpdate(events)
-	if err != nil {
-		klog.Errorf("%v", err)
-	} else {
-		for jValue, tableUpdates := range result {
-			m.handler.notify(jValue, tableUpdates)
+	if m.revChecker.isNewRevision(revision) {
+		result, err := m.prepareTableUpdate(events)
+		if err != nil {
+			klog.Errorf("%v", err)
+		} else {
+			for jValue, tableUpdates := range result {
+				m.handler.notify(jValue, tableUpdates)
+			}
 		}
+	} else {
+		klog.V(7).Infof("revisionChecker returned false. Old revision: %d, notification revision: %d",
+			m.revChecker.revision, revision)
 	}
+
 }
 
 func (m *dbMonitor) cancelDbMonitor() {

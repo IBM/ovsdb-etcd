@@ -49,11 +49,14 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	}
 	txn := NewTransaction(ch.etcdClient, req)
 	txn.schemas = ch.db.GetSchemas()
-	txn.Commit()
+	rev, err := txn.Commit()
 
+	if err != nil {
+		return nil, err
+	}
 	if monitor, ok := ch.monitors[txn.request.DBName]; ok {
 		klog.V(5).Infof("Transact sending to monitor to %v: %s", ch.getClientAddress(), EventsDump(txn.etcd.Events))
-		monitor.notify(txn.etcd.Events)
+		monitor.notify(txn.etcd.Events, rev)
 	}
 
 	klog.V(5).Infof("Transact response to %v: %s", ch.getClientAddress(), txn.response)

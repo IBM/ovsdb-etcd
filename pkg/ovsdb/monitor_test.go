@@ -283,7 +283,7 @@ func TestMonitorNotifications1(t *testing.T) {
 	}
 	handler.SetConnection(&jrpcServerMock, nil)
 	monitor := handler.monitors[DB_NAME]
-	monitor.notify(events)
+	monitor.notify(events, 1)
 }
 
 func TestMonitorNotifications2(t *testing.T) {
@@ -311,7 +311,7 @@ func TestMonitorNotifications2(t *testing.T) {
 	}
 	handler.SetConnection(&jrpcServerMock, nil)
 	monitor := handler.monitors[DB_NAME]
-	monitor.notify(events)
+	monitor.notify(events, 2)
 }
 
 func TestMonitorNotifications3(t *testing.T) {
@@ -342,7 +342,7 @@ func TestMonitorNotifications3(t *testing.T) {
 	}
 	handler.SetConnection(&jrpcServerMock, nil)
 	monitor := handler.monitors[DB_NAME]
-	monitor.notify(events)
+	monitor.notify(events, 3)
 }
 
 func initHandler(t *testing.T) *Handler {
