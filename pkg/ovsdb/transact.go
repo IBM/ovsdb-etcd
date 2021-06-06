@@ -531,7 +531,7 @@ func (txn *Transaction) AddSchema(databaseSchema *libovsdb.DatabaseSchema) {
 	txn.schemas.Add(databaseSchema)
 }
 
-func (txn *Transaction) Commit() error {
+func (txn *Transaction) Commit() (int64, error) {
 	txn.lock.Lock(txn.request.DBName)
 	defer txn.lock.Unlock(txn.request.DBName)
 
@@ -552,7 +552,7 @@ func (txn *Transaction) Commit() error {
 		err := errors.New(E_CONSTRAINT_VIOLATION)
 		errStr := err.Error()
 		txn.response.Error = &errStr
-		return err
+		return -1, err
 	}
 
 	/* fetch needed data from database needed to perform the operation */
@@ -563,7 +563,7 @@ func (txn *Transaction) Commit() error {
 			errStr := err.Error()
 			txn.response.Result[i].SetError(errStr)
 			txn.response.Error = &errStr
-			return err
+			return -1, err
 		}
 
 		if err = txn.cache.Validate(txn.schemas); err != nil {
@@ -574,7 +574,7 @@ func (txn *Transaction) Commit() error {
 	if err != nil {
 		errStr := err.Error()
 		txn.response.Error = &errStr
-		return err
+		return -1, err
 	}
 
 	/* commit actual transactional changes to database */
@@ -585,7 +585,7 @@ func (txn *Transaction) Commit() error {
 			errStr := err.Error()
 			txn.response.Result[i].SetError(errStr)
 			txn.response.Error = &errStr
-			return err
+			return -1, err
 		}
 
 		if err = txn.cache.Validate(txn.schemas); err != nil {
@@ -594,14 +594,14 @@ func (txn *Transaction) Commit() error {
 	}
 
 	txn.etcdRemoveDup()
-	_, err = txn.etcdTranaction()
+	trResponse, err := txn.etcdTranaction()
 	if err != nil {
 		errStr := err.Error()
 		txn.response.Error = &errStr
-		return err
+		return -1, err
 	}
 
-	return nil
+	return trResponse.Header.Revision, nil
 }
 
 // XXX: move to db
