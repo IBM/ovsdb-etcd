@@ -220,7 +220,7 @@ func NewHandler(tctx context.Context, db Databaser, cli *clientv3.Client) *Handl
 }
 
 func (ch *Handler) Cleanup() error {
-	klog.Info("CLEAN UP do something")
+	klog.Info("CLEAN UP do something from %v", ch.getClientAddress())
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
 	for _, m := range ch.databaseLocks {
@@ -265,11 +265,11 @@ func (ch *Handler) notify(jsonValueString string, updates ovsjson.TableUpdates) 
 }
 
 func (ch *Handler) monitorCanceledNotification(jsonValue interface{}) {
-	klog.V(5).Infof("monitorCanceledNotification %v", jsonValue)
+	klog.V(5).Infof("monitorCanceledNotification %v to ", jsonValue, ch.getClientAddress())
 	err := ch.jrpcServer.Notify(ch.handlerContext, MONITOR_CANCELED, jsonValue)
 	if err != nil {
 		// TODO should we do something else
-		klog.Error(err)
+		klog.Error(" error monitorCanceledNotification to %v : %v", ch.getClientAddress(), err)
 	}
 }
 
@@ -317,7 +317,7 @@ func (ch *Handler) addMonitor(params []interface{}, notificationType ovsjson.Upd
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
 	if _, ok := ch.handlerMonitorData[jsonValueString]; ok {
-		return nil, fmt.Errorf("duplicate dbMonitor ID")
+		return nil, fmt.Errorf("duplicate monitor ID")
 	}
 	updatersMap := Key2Updaters{}
 	var updatersKeys []common.Key
