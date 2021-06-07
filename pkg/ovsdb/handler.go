@@ -29,8 +29,8 @@ type Handler struct {
 	jrpcServer     JrpcServer
 	handlerContext context.Context
 	clientCon      net.Conn
-
-	mu sync.Mutex
+	closed         bool // false by default
+	mu             sync.Mutex
 
 	// dbName->dbMonitor
 	monitors map[string]*dbMonitor
@@ -41,8 +41,12 @@ type Handler struct {
 }
 
 func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interface{}, error) {
-	klog.V(5).Infof("Transact request from %v, params %v", ch.getClientAddress(), params)
-	klog.Flush()
+	klog.V(5).Infof("Transact request from %v, params %v", ch.GetClientAddress(), params)
+	if ch.closed {
+		klog.V(5).Infof("Transact request from %v, the handler is closed", ch.GetClientAddress())
+		// prevents old transactions
+		return nil, nil
+	}
 	req, err := libovsdb.NewTransact(params)
 	if err != nil {
 		return nil, err
@@ -55,29 +59,29 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 		return nil, err
 	}
 	if monitor, ok := ch.monitors[txn.request.DBName]; ok {
-		klog.V(5).Infof("Transact sending to monitor to %v: %s", ch.getClientAddress(), EventsDump(txn.etcd.Events))
+		klog.V(5).Infof("Transact sending to monitor to %v: %s", ch.GetClientAddress(), EventsDump(txn.etcd.Events))
 		monitor.notify(txn.etcd.Events, rev)
 	}
 
-	klog.V(5).Infof("Transact response to %v: %s", ch.getClientAddress(), txn.response)
+	klog.V(5).Infof("Transact response to %v: %s", ch.GetClientAddress(), txn.response)
 	return txn.response.Result, nil
 }
 
 func (ch *Handler) Cancel(ctx context.Context, param interface{}) (interface{}, error) {
-	klog.V(5).Infof("Cancel request from %v, param %v", ch.getClientAddress(), param)
+	klog.V(5).Infof("Cancel request from %v, param %v", ch.GetClientAddress(), param)
 
 	return "{Cancel}", nil
 }
 
 func (ch *Handler) Monitor(ctx context.Context, params []interface{}) (interface{}, error) {
-	klog.V(5).Infof("Monitor request from %v, params %v", ch.getClientAddress(), params)
+	klog.V(5).Infof("Monitor request from %v, params %v", ch.GetClientAddress(), params)
 	updatersMap, err := ch.addMonitor(params, ovsjson.Update)
 	if err != nil {
-		klog.Errorf("Monitor from %v, params %v got an error: %s", ch.getClientAddress(), params, err)
+		klog.Errorf("Monitor from %v, params %v got an error: %s", ch.GetClientAddress(), params, err)
 		return nil, err
 	}
 	data, err := ch.getMonitoredData(updatersMap)
-	klog.V(5).Infof("Monitor response to %v, params %v, err %v", ch.getClientAddress(), params, err)
+	klog.V(5).Infof("Monitor response to %v, params %v, err %v", ch.GetClientAddress(), params, err)
 	if err != nil {
 		ch.removeMonitor(params[1], false)
 		return nil, err
@@ -86,7 +90,7 @@ func (ch *Handler) Monitor(ctx context.Context, params []interface{}) (interface
 }
 
 func (ch *Handler) MonitorCancel(ctx context.Context, param interface{}) (interface{}, error) {
-	klog.V(5).Infof("MonitorCancel request from %v, param %v", ch.getClientAddress(), param)
+	klog.V(5).Infof("MonitorCancel request from %v, param %v", ch.GetClientAddress(), param)
 	err := ch.removeMonitor(param, true)
 	if err != nil {
 		return nil, err
@@ -95,7 +99,7 @@ func (ch *Handler) MonitorCancel(ctx context.Context, param interface{}) (interf
 }
 
 func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, error) {
-	klog.V(5).Infof("Lock request from %v, param %v", ch.getClientAddress(), param)
+	klog.V(5).Infof("Lock request from %v, param %v", ch.GetClientAddress(), param)
 	id, err := common.ParamsToString(param)
 	if err != nil {
 		return map[string]bool{"locked": false}, err
@@ -133,7 +137,7 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 		err = myLock.lock()
 		if err == nil {
 			// Send notification
-			klog.V(5).Infoln("%s Locked", id)
+			klog.V(5).Infof("%v %s Locked", ch.GetClientAddress(), id)
 			if err := ch.jrpcServer.Notify(ch.handlerContext, "locked", []string{id}); err != nil {
 				klog.Errorf("notification %v\n", err)
 				return
@@ -146,7 +150,7 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 }
 
 func (ch *Handler) Unlock(ctx context.Context, param interface{}) (interface{}, error) {
-	klog.V(5).Infof("Unlock request from %v, param %v", ch.getClientAddress(), param)
+	klog.V(5).Infof("Unlock request from %v, param %v", ch.GetClientAddress(), param)
 	id, err := common.ParamsToString(param)
 	if err != nil {
 		return ovsjson.EmptyStruct{}, err
@@ -164,20 +168,20 @@ func (ch *Handler) Unlock(ctx context.Context, param interface{}) (interface{}, 
 }
 
 func (ch *Handler) Steal(ctx context.Context, param interface{}) (interface{}, error) {
-	klog.V(5).Infof("Steal request from %v, param %v", ch.getClientAddress(), param)
+	klog.V(5).Infof("Steal request from %v, param %v", ch.GetClientAddress(), param)
 	// TODO
 	return "{Steal}", nil
 }
 
 func (ch *Handler) MonitorCond(ctx context.Context, params []interface{}) (interface{}, error) {
-	klog.V(1).Infof("MonitorCond request from %v, param %v", ch.getClientAddress(), params)
+	klog.V(1).Infof("MonitorCond request from %v, param %v", ch.GetClientAddress(), params)
 	updatersMap, err := ch.addMonitor(params, ovsjson.Update2)
 	if err != nil {
-		klog.Errorf("MonitorCond from remote %v got an error: %s", ch.getClientAddress(), err)
+		klog.Errorf("MonitorCond from remote %v got an error: %s", ch.GetClientAddress(), err)
 		return nil, err
 	}
 	data, err := ch.getMonitoredData(updatersMap)
-	klog.V(5).Infof("MonitorCond response to %v, params %v, err %v", ch.getClientAddress(), params, err)
+	klog.V(5).Infof("MonitorCond response to %v, params %v, err %v", ch.GetClientAddress(), params, err)
 	if err != nil {
 		ch.removeMonitor(params[1], false)
 		return nil, err
@@ -186,20 +190,20 @@ func (ch *Handler) MonitorCond(ctx context.Context, params []interface{}) (inter
 }
 
 func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) (interface{}, error) {
-	klog.V(5).Infof("MonitorCondChange request from %v, params %v", ch.getClientAddress(), params)
+	klog.V(5).Infof("MonitorCondChange request from %v, params %v", ch.GetClientAddress(), params)
 	// TODO implement
 	return "{Monitor_cond_change}", nil
 }
 
 func (ch *Handler) MonitorCondSince(ctx context.Context, params []interface{}) (interface{}, error) {
-	klog.V(5).Infof("MonitorCondSince request from %v, parameters %v", ch.getClientAddress(), params)
+	klog.V(5).Infof("MonitorCondSince request from %v, parameters %v", ch.GetClientAddress(), params)
 	updatersMap, err := ch.addMonitor(params, ovsjson.Update3)
 	if err != nil {
-		klog.Errorf("MonitorCondSince from remote %v got an error: %s", ch.getClientAddress(), err)
+		klog.Errorf("MonitorCondSince from remote %v got an error: %s", ch.GetClientAddress(), err)
 		return nil, err
 	}
 	data, err := ch.getMonitoredData(updatersMap)
-	klog.V(5).Infof("MonitorCondSince response to %v, params %v, err %v", ch.getClientAddress(), params, err)
+	klog.V(5).Infof("MonitorCondSince response to %v, params %v, err %v", ch.GetClientAddress(), params, err)
 	if err != nil {
 		ch.removeMonitor(params[1], false)
 		return nil, err
@@ -208,8 +212,17 @@ func (ch *Handler) MonitorCondSince(ctx context.Context, params []interface{}) (
 }
 
 func (ch *Handler) SetDbChangeAware(ctx context.Context, param interface{}) interface{} {
-	klog.V(5).Infof("SetDbChangeAware request from %v, param %v", ch.getClientAddress(), param)
+	klog.V(5).Infof("SetDbChangeAware request from %v, param %v", ch.GetClientAddress(), param)
 	return ovsjson.EmptyStruct{}
+}
+
+// RFC 7047 section 4.1.11
+// Can be used by both clients and servers to verify the liveness of a database connection.
+// "params": JSON array with any contents
+// Returns : "result": same as "params"
+func (ch *Handler) Echo(ctx context.Context, param interface{}) interface{} {
+	klog.V(5).Infof("Echo request from %v, parameters %v", ch.GetClientAddress(), param)
+	return param
 }
 
 func NewHandler(tctx context.Context, db Databaser, cli *clientv3.Client) *Handler {
@@ -220,9 +233,10 @@ func NewHandler(tctx context.Context, db Databaser, cli *clientv3.Client) *Handl
 }
 
 func (ch *Handler) Cleanup() error {
-	klog.Info("CLEAN UP do something from %v", ch.getClientAddress())
+	klog.Infof("CLEAN UP do something from %v", ch.GetClientAddress())
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
+	ch.closed = true
 	for _, m := range ch.databaseLocks {
 		m.unlock()
 	}
@@ -245,9 +259,9 @@ func (ch *Handler) notify(jsonValueString string, updates ovsjson.TableUpdates) 
 		return
 	}
 	if klog.V(5).Enabled() {
-		klog.V(5).Infof("Monitor notification jsonValue %v to %v: %s", monitorData.jsonValue, ch.getClientAddress(), updates)
+		klog.V(5).Infof("Monitor notification jsonValue %v to %v: %s", monitorData.jsonValue, ch.GetClientAddress(), updates)
 	} else {
-		klog.V(5).Infof("Monitor notification jsonValue %v to %v", monitorData.jsonValue, ch.getClientAddress())
+		klog.V(5).Infof("Monitor notification jsonValue %v to %v", monitorData.jsonValue, ch.GetClientAddress())
 	}
 	var err error
 	switch monitorData.notificationType {
@@ -260,16 +274,16 @@ func (ch *Handler) notify(jsonValueString string, updates ovsjson.TableUpdates) 
 	}
 	if err != nil {
 		// TODO should we do something else
-		klog.Error(err)
+		klog.Errorf("Monitor notification jsonValue %v to %v returned error: %v", monitorData.jsonValue, ch.GetClientAddress(), err)
 	}
 }
 
 func (ch *Handler) monitorCanceledNotification(jsonValue interface{}) {
-	klog.V(5).Infof("monitorCanceledNotification %v to ", jsonValue, ch.getClientAddress())
+	klog.V(5).Infof("monitorCanceledNotification %v to %v", jsonValue, ch.GetClientAddress())
 	err := ch.jrpcServer.Notify(ch.handlerContext, MONITOR_CANCELED, jsonValue)
 	if err != nil {
 		// TODO should we do something else
-		klog.Error(" error monitorCanceledNotification to %v : %v", ch.getClientAddress(), err)
+		klog.Errorf(" error monitorCanceledNotification to %v : %v", ch.GetClientAddress(), err)
 	}
 }
 
@@ -391,7 +405,7 @@ func (ch *Handler) getMonitoredData(updatersMap Key2Updaters) (ovsjson.TableUpda
 	return returnData, nil
 }
 
-func (ch *Handler) getClientAddress() string {
+func (ch *Handler) GetClientAddress() string {
 	if ch.clientCon != nil {
 		return ch.clientCon.RemoteAddr().String()
 	}

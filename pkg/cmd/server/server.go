@@ -15,9 +15,10 @@ import (
 	"os/signal"
 	"path"
 	"runtime"
+	"runtime/debug"
 	"strings"
-	"sync"
 	"syscall"
+	"time"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/ovsdb"
@@ -125,39 +126,40 @@ func main() {
 	}
 	service := ovsdb.NewService(db)
 	globServiceMap := createServiceMap(service)
-	wg := sync.WaitGroup{}
+	//wg := sync.WaitGroup{}
 
 	loop := func(lst net.Listener) error {
 		for {
 			conn, err := lst.Accept()
+			conn = ConnWrapper{intConn: conn}
 			if err != nil {
+				klog.V(5).Infof("connection from %v accept error %v  IsErrClosing %v", conn.RemoteAddr(), err, channel.IsErrClosing(err))
 				if channel.IsErrClosing(err) {
 					err = nil
 				} else {
 					klog.Infof("Error accepting new connection: %v", err)
 				}
-				wg.Wait()
+				//wg.Wait()
 				return err
 			}
 			ch := channel.RawJSON(conn, conn)
-			wg.Add(1)
+			//wg.Add(1)
 			go func() {
-				defer wg.Done()
+				//defer wg.Done()
 				tctx, cancel := context.WithCancel(context.Background())
 				handler := ovsdb.NewHandler(tctx, db, cli)
+				klog.V(5).Infof("new connection from %v", conn.RemoteAddr())
 				assigner := addClientHandlers(*globServiceMap, handler)
 				srv := jrpc2.NewServer(assigner, servOptions)
 				handler.SetConnection(srv, conn)
 				srv.Start(ch)
-				go func() {
-					defer cancel()
-					srv.Wait()
-					handler.Cleanup()
-				}()
 				stat := srv.WaitStatus()
+				klog.V(5).Infof("connection from %v, stopped %v closed %v, success %v, err %v", conn.RemoteAddr(), stat.Stopped(), stat.Closed(), stat.Success(), stat.Err)
 				if stat.Err != nil {
 					klog.Infof("Server exit: %v", stat.Err)
 				}
+				handler.Cleanup()
+				cancel()
 			}()
 		}
 	}
@@ -197,7 +199,6 @@ func createServiceMap(ovsdb *ovsdb.Service) *handler.Map {
 	out["list_dbs"] = handler.New(ovsdb.ListDbs)
 	out["get_schema"] = handler.New(ovsdb.GetSchema)
 	out["get_server_id"] = handler.New(ovsdb.GetServerId)
-	out["echo"] = handler.New(ovsdb.Echo)
 	out["convert"] = handler.New(ovsdb.Convert)
 	return &out
 }
@@ -215,6 +216,7 @@ func addClientHandlers(handlerMap handler.Map, ch *ovsdb.Handler) *handler.Map {
 	handlerMap["monitor_cond_since"] = handler.New(ch.MonitorCondSince)
 	handlerMap["monitor_cond_change"] = handler.New(ch.MonitorCondChange)
 	handlerMap["set_db_change_aware"] = handler.New(ch.SetDbChangeAware)
+	handlerMap["echo"] = handler.New(ch.Echo)
 	return &handlerMap
 }
 
@@ -255,4 +257,47 @@ func setupPIDFile(pidfile string) error {
 	}
 
 	return nil
+}
+
+// temporary for development purpose wrapper
+type ConnWrapper struct {
+	intConn net.Conn
+}
+
+func (cw ConnWrapper) Read(b []byte) (n int, err error) {
+	n, err = cw.intConn.Read(b)
+	klog.V(5).Infof("read from %v, i= %d err=%v\n ", cw.intConn.RemoteAddr(), n, err)
+	return
+}
+
+func (cw ConnWrapper) Write(b []byte) (n int, err error) {
+	n, err = cw.intConn.Write(b)
+	klog.V(5).Infof("write to %v, i= %d err=%v\n ", cw.intConn.RemoteAddr(), n, err)
+	return
+}
+
+func (cw ConnWrapper) Close() error {
+	klog.V(5).Infof("connection from %v called close", cw.intConn.RemoteAddr())
+	debug.PrintStack()
+	return cw.intConn.Close()
+}
+
+func (cw ConnWrapper) LocalAddr() net.Addr {
+	return cw.intConn.LocalAddr()
+}
+
+func (cw ConnWrapper) RemoteAddr() net.Addr {
+	return cw.intConn.RemoteAddr()
+}
+
+func (cw ConnWrapper) SetDeadline(t time.Time) error {
+	return cw.intConn.SetDeadline(t)
+}
+
+func (cw ConnWrapper) SetReadDeadline(t time.Time) error {
+	return cw.intConn.SetReadDeadline(t)
+}
+
+func (cw ConnWrapper) SetWriteDeadline(t time.Time) error {
+	return cw.intConn.SetWriteDeadline(t)
 }

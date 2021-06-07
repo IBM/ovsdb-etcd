@@ -203,12 +203,6 @@ type Servicer interface {
 	//
 	// 		"params": [<db-name>, <database-schema>]
 	Convert(ctx context.Context, param interface{}) (interface{}, error)
-
-	// RFC 7047 section 4.1.11
-	// Can be used by both clients and servers to verify the liveness of a database connection.
-	// "params": JSON array with any contents
-	// Returns : "result": same as "params"
-	Echo(ctx context.Context, param interface{}) interface{}
 }
 
 const (
@@ -269,11 +263,6 @@ func (s *Service) GetServerId(ctx context.Context) string {
 func (s *Service) Convert(ctx context.Context, param interface{}) (interface{}, error) {
 	klog.V(5).Infof("Convert request, parameters %v", param)
 	return "{Convert}", nil
-}
-
-func (s *Service) Echo(ctx context.Context, param interface{}) interface{} {
-	klog.V(7).Infof("Echo request, parameters %v", param)
-	return param
 }
 
 func NewService(db Databaser) *Service {
