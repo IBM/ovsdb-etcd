@@ -59,7 +59,7 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 		return nil, err
 	}
 	if monitor, ok := ch.monitors[txn.request.DBName]; ok {
-		klog.V(5).Infof("Transact sending to monitor to %v: %s", ch.GetClientAddress(), EventsDump(txn.etcd.Events))
+		klog.V(5).Infof("Transact sending to monitor to %v: %s", ch.GetClientAddress(), txn.etcd.EventsDump())
 		monitor.notify(txn.etcd.Events, rev)
 	}
 

@@ -135,8 +135,7 @@ func etcdOpKey(op clientv3.Op) string {
 	return string(k)
 }
 
-func (txn *Transaction) etcdRemoveDup() {
-	klog.V(6).Infof("etcd remove dups: if size(%d) then size(%d) else size(%d)", len(txn.etcd.If), len(txn.etcd.Then), len(txn.etcd.Else))
+func (txn *Transaction) etcdRemoveDupThen() {
 	newThen := []*clientv3.Op{}
 	for curr, op := range txn.etcd.Then {
 		key := etcdOpKey(op)
@@ -161,6 +160,64 @@ func (txn *Transaction) etcdRemoveDup() {
 			txn.etcd.Then = append(txn.etcd.Then, *op)
 		}
 	}
+}
+
+func etcdEventKey(ev *clientv3.Event) string {
+	if ev.Kv != nil {
+		return string(ev.Kv.Key)
+	}
+	if ev.PrevKv != nil {
+		return string(ev.PrevKv.Key)
+	}
+	panic(fmt.Sprintf("can't extract key from %v", ev))
+}
+
+func (txn *Transaction) etcdRemoveDupEvents() {
+	prevEvents := []*clientv3.Event{}
+	newEvents := []*clientv3.Event{}
+	for i, curr := range txn.etcd.Events {
+		prevEvents = append(prevEvents, txn.etcd.Events[i])
+		newEvents = append(newEvents, txn.etcd.Events[i])
+		if curr == nil {
+			txn.etcd.EventsNilCount++
+			continue
+		}
+		key := etcdEventKey(curr)
+		klog.V(6).Infof("adding key '%s' index %d", key, i)
+	}
+
+	prevKeyIndex := map[string]int{}
+	for i, curr := range newEvents {
+		if curr == nil {
+			continue
+		}
+		key := etcdEventKey(curr)
+		prevIndex, ok := prevKeyIndex[key]
+		if ok {
+			prev := prevEvents[prevIndex]
+			if etcdEventIsModify(curr) && etcdEventIsCreate(prev) {
+				newEvents[i] = etcdEventCreateFromModify(curr)
+			}
+			klog.V(6).Infof("removing key %s index %d", key, i)
+			newEvents[i] = nil
+		}
+		prevKeyIndex[key] = i
+	}
+
+	txn.etcd.Events = []*clientv3.Event{}
+	for _, curr := range newEvents {
+		if curr == nil {
+			continue
+		}
+		txn.etcd.Events = append(txn.etcd.Events, curr)
+	}
+}
+
+func (txn *Transaction) etcdRemoveDup() {
+	klog.V(6).Infof("etcd remove dups: %s", txn.etcd)
+	txn.etcdRemoveDupThen()
+	txn.etcdRemoveDupEvents()
+	txn.etcd.Assert()
 }
 
 func (txn *Transaction) etcdTranaction() (*clientv3.TxnResponse, error) {
@@ -383,18 +440,25 @@ func (mapUUID MapUUID) ResolvRow(row *map[string]interface{}) error {
 }
 
 type Etcd struct {
-	Cli    *clientv3.Client
-	Ctx    context.Context
-	If     []clientv3.Cmp
-	Then   []clientv3.Op
-	Else   []clientv3.Op
-	Res    *clientv3.TxnResponse
-	Events []*clientv3.Event
+	Cli            *clientv3.Client
+	Ctx            context.Context
+	If             []clientv3.Cmp
+	Then           []clientv3.Op
+	Else           []clientv3.Op
+	Res            *clientv3.TxnResponse
+	EventsNilCount int
+	Events         []*clientv3.Event
 }
 
-func EventsDump(original []*clientv3.Event) string {
+func (etcd *Etcd) Assert() {
+	if len(etcd.Then) != (len(etcd.Events) + etcd.EventsNilCount) {
+		panic(fmt.Sprintf("etcd: #then != #events: %s", etcd))
+	}
+}
+
+func (etcd *Etcd) EventsDump() string {
 	printable := []clientv3.Event{}
-	for _, ev := range original {
+	for _, ev := range etcd.Events {
 		printable = append(printable, *ev)
 	}
 	return fmt.Sprintf("%v", printable)
@@ -411,11 +475,13 @@ func (etcd *Etcd) Clear() {
 	etcd.Then = []clientv3.Op{}
 	etcd.Else = []clientv3.Op{}
 	etcd.Res = nil
+	etcd.EventsNilCount = 0
 	etcd.Events = []*clientv3.Event{}
+	etcd.Assert()
 }
 
 func (etcd Etcd) String() string {
-	return fmt.Sprintf("if size(%d) then size(%d) else size(%d)", len(etcd.If), len(etcd.Then), len(etcd.Else))
+	return fmt.Sprintf("#then %d, #events %d, #events-nil %d", len(etcd.Then), len(etcd.Events), etcd.EventsNilCount)
 }
 
 func (etcd *Etcd) Commit() error {
@@ -1349,6 +1415,69 @@ func etcdGetByWhere(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libo
 	return nil
 }
 
+func etcdEventIsCreate(ev *clientv3.Event) bool {
+	if ev.Type != mvccpb.PUT {
+		return false
+	}
+	return ev.Kv.CreateRevision == ev.Kv.ModRevision
+}
+
+func etcdEventIsModify(ev *clientv3.Event) bool {
+	if ev.Type != mvccpb.PUT {
+		return false
+	}
+	return ev.Kv.CreateRevision < ev.Kv.ModRevision
+}
+
+func etcdEventCreateFromModify(ev *clientv3.Event) *clientv3.Event {
+	key := string(ev.Kv.Key)
+	val := string(ev.Kv.Value)
+	return etcdEventCreate(key, val)
+}
+
+func etcdEventCreate(key, val string) *clientv3.Event {
+	return &clientv3.Event{
+		Type: mvccpb.PUT,
+		Kv: &mvccpb.KeyValue{
+			Key:            []byte(key),
+			Value:          []byte(val),
+			CreateRevision: 1,
+			ModRevision:    1,
+		},
+	}
+
+}
+
+func etcdEventModify(key, val, prevVal string) *clientv3.Event {
+	return &clientv3.Event{
+		Type: mvccpb.PUT,
+		Kv: &mvccpb.KeyValue{
+			Key:            []byte(key),
+			Value:          []byte(val),
+			CreateRevision: 1,
+			ModRevision:    2,
+		},
+		PrevKv: &mvccpb.KeyValue{
+			Key:            []byte(key),
+			Value:          []byte(prevVal),
+			CreateRevision: 1,
+			ModRevision:    1,
+		},
+	}
+}
+
+func etcdEventDelete(key, prevVal string) *clientv3.Event {
+	return &clientv3.Event{
+		Type: mvccpb.DELETE,
+		PrevKv: &mvccpb.KeyValue{
+			Key:            []byte(key),
+			Value:          []byte(prevVal),
+			CreateRevision: 1,
+			ModRevision:    1,
+		},
+	}
+}
+
 func etcdCreateRow(txn *Transaction, k *common.Key, row *map[string]interface{}) error {
 	key := k.String()
 	val, err := makeValue(row)
@@ -1359,16 +1488,9 @@ func etcdCreateRow(txn *Transaction, k *common.Key, row *map[string]interface{})
 	etcdOp := clientv3.OpPut(key, val)
 	txn.etcd.Then = append(txn.etcd.Then, etcdOp)
 
-	etcdEvent := &clientv3.Event{
-		Type: mvccpb.PUT,
-		Kv: &mvccpb.KeyValue{
-			Key:            []byte(key),
-			Value:          []byte(val),
-			CreateRevision: 1,
-			ModRevision:    1,
-		},
-	}
+	etcdEvent := etcdEventCreate(key, val)
 	txn.etcd.Events = append(txn.etcd.Events, etcdEvent)
+	txn.etcd.Assert()
 
 	return nil
 }
@@ -1388,22 +1510,10 @@ func etcdModifyRow(txn *Transaction, k *common.Key, row *map[string]interface{})
 		return err
 	}
 
-	etcdEvent := &clientv3.Event{
-		Type: mvccpb.PUT,
-		Kv: &mvccpb.KeyValue{
-			Key:            []byte(key),
-			Value:          []byte(val),
-			CreateRevision: 1,
-			ModRevision:    2,
-		},
-		PrevKv: &mvccpb.KeyValue{
-			Key:            []byte(key),
-			Value:          []byte(prevVal),
-			CreateRevision: 1,
-			ModRevision:    1,
-		},
-	}
+	etcdEvent := etcdEventModify(key, val, prevVal)
 	txn.etcd.Events = append(txn.etcd.Events, etcdEvent)
+	txn.etcd.Assert()
+
 	return nil
 }
 
@@ -1417,16 +1527,9 @@ func etcdDeleteRow(txn *Transaction, k *common.Key) error {
 		return err
 	}
 
-	etcdEvent := &clientv3.Event{
-		Type: mvccpb.DELETE,
-		PrevKv: &mvccpb.KeyValue{
-			Key:            []byte(key),
-			Value:          []byte(prevVal),
-			CreateRevision: 1,
-			ModRevision:    1,
-		},
-	}
+	etcdEvent := etcdEventDelete(key, prevVal)
 	txn.etcd.Events = append(txn.etcd.Events, etcdEvent)
+	txn.etcd.Assert()
 
 	return nil
 }
@@ -1773,6 +1876,9 @@ func doComment(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 	comment := *ovsOp.Comment
 	etcdOp := clientv3.OpPut(key.String(), comment)
 	txn.etcd.Then = append(txn.etcd.Then, etcdOp)
+	txn.etcd.Events = append(txn.etcd.Events, nil) /* so that events are aligned with then operations */
+	txn.etcd.Assert()
+
 	return nil
 }
 
