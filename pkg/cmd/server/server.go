@@ -125,8 +125,6 @@ func main() {
 		AllowV1:     true,
 	}
 	service := ovsdb.NewService(db)
-	globServiceMap := createServiceMap(service)
-	//wg := sync.WaitGroup{}
 
 	loop := func(lst net.Listener) error {
 		for {
@@ -139,17 +137,14 @@ func main() {
 				} else {
 					klog.Infof("Error accepting new connection: %v", err)
 				}
-				//wg.Wait()
 				return err
 			}
 			ch := channel.RawJSON(conn, conn)
-			//wg.Add(1)
 			go func() {
-				//defer wg.Done()
 				tctx, cancel := context.WithCancel(context.Background())
 				handler := ovsdb.NewHandler(tctx, db, cli)
 				klog.V(5).Infof("new connection from %v", conn.RemoteAddr())
-				assigner := addClientHandlers(*globServiceMap, handler)
+				assigner := createServicesMap(service, handler)
 				srv := jrpc2.NewServer(assigner, servOptions)
 				handler.SetConnection(srv, conn)
 				srv.Start(ch)
@@ -194,29 +189,26 @@ func main() {
 
 }
 
-func createServiceMap(ovsdb *ovsdb.Service) *handler.Map {
-	out := make(handler.Map)
-	out["list_dbs"] = handler.New(ovsdb.ListDbs)
-	out["get_schema"] = handler.New(ovsdb.GetSchema)
-	out["get_server_id"] = handler.New(ovsdb.GetServerId)
-	out["convert"] = handler.New(ovsdb.Convert)
-	return &out
-}
-
 // we pass handlerMap by value, so the function gets a proprietary copy of it.
-func addClientHandlers(handlerMap handler.Map, ch *ovsdb.Handler) *handler.Map {
-	handlerMap["transact"] = handler.New(ch.Transact)
-	handlerMap["cancel"] = handler.New(ch.Cancel)
-	handlerMap["monitor"] = handler.New(ch.Monitor)
-	handlerMap["monitor_cancel"] = handler.New(ch.MonitorCancel)
-	handlerMap["lock"] = handler.New(ch.Lock)
-	handlerMap["steal"] = handler.New(ch.Steal)
-	handlerMap["unlock"] = handler.New(ch.Unlock)
-	handlerMap["monitor_cond"] = handler.New(ch.MonitorCond)
-	handlerMap["monitor_cond_since"] = handler.New(ch.MonitorCondSince)
-	handlerMap["monitor_cond_change"] = handler.New(ch.MonitorCondChange)
-	handlerMap["set_db_change_aware"] = handler.New(ch.SetDbChangeAware)
-	handlerMap["echo"] = handler.New(ch.Echo)
+func createServicesMap(sharedService *ovsdb.Service, clientHandler *ovsdb.Handler) *handler.Map {
+	handlerMap := make(handler.Map)
+	handlerMap["list_dbs"] = handler.New(sharedService.ListDbs)
+	handlerMap["get_schema"] = handler.New(sharedService.GetSchema)
+	handlerMap["get_server_id"] = handler.New(sharedService.GetServerId)
+	handlerMap["convert"] = handler.New(sharedService.Convert)
+
+	handlerMap["transact"] = handler.New(clientHandler.Transact)
+	handlerMap["cancel"] = handler.New(clientHandler.Cancel)
+	handlerMap["monitor"] = handler.New(clientHandler.Monitor)
+	handlerMap["monitor_cancel"] = handler.New(clientHandler.MonitorCancel)
+	handlerMap["lock"] = handler.New(clientHandler.Lock)
+	handlerMap["steal"] = handler.New(clientHandler.Steal)
+	handlerMap["unlock"] = handler.New(clientHandler.Unlock)
+	handlerMap["monitor_cond"] = handler.New(clientHandler.MonitorCond)
+	handlerMap["monitor_cond_since"] = handler.New(clientHandler.MonitorCondSince)
+	handlerMap["monitor_cond_change"] = handler.New(clientHandler.MonitorCondChange)
+	handlerMap["set_db_change_aware"] = handler.New(clientHandler.SetDbChangeAware)
+	handlerMap["echo"] = handler.New(clientHandler.Echo)
 	return &handlerMap
 }
 
@@ -266,13 +258,13 @@ type ConnWrapper struct {
 
 func (cw ConnWrapper) Read(b []byte) (n int, err error) {
 	n, err = cw.intConn.Read(b)
-	klog.V(5).Infof("read from %v, i= %d err=%v\n ", cw.intConn.RemoteAddr(), n, err)
+	klog.V(7).Infof("read from %v, i= %d err=%v\n ", cw.intConn.RemoteAddr(), n, err)
 	return
 }
 
 func (cw ConnWrapper) Write(b []byte) (n int, err error) {
 	n, err = cw.intConn.Write(b)
-	klog.V(5).Infof("write to %v, i= %d err=%v\n ", cw.intConn.RemoteAddr(), n, err)
+	klog.V(7).Infof("write to %v, i= %d err=%v\n ", cw.intConn.RemoteAddr(), n, err)
 	return
 }
 

@@ -149,17 +149,19 @@ func (m *dbMonitor) notify(events []*clientv3.Event, revision int64) {
 	if len(events) == 0 {
 		return
 	}
+	klog.V(5).Infof("notify %v m.revChecker.revision %d, revision %d", m.handler.GetClientAddress(), m.revChecker.revision, revision)
 	if m.revChecker.isNewRevision(revision) {
 		result, err := m.prepareTableUpdate(events)
 		if err != nil {
 			klog.Errorf("%v", err)
 		} else {
 			for jValue, tableUpdates := range result {
+				klog.V(7).Infof("notify %v jsonValue =[%v] %v", m.handler.GetClientAddress(), jValue, tableUpdates)
 				m.handler.notify(jValue, tableUpdates)
 			}
 		}
 	} else {
-		klog.V(7).Infof("revisionChecker returned false. Old revision: %d, notification revision: %d",
+		klog.V(5).Infof("revisionChecker returned false. Old revision: %d, notification revision: %d",
 			m.revChecker.revision, revision)
 	}
 
@@ -230,6 +232,10 @@ func (m *dbMonitor) prepareTableUpdate(events []*clientv3.Event) (map[string]ovs
 			if ok {
 				klog.Warningf("Duplicate event for %s\n prevRowUpdate %v \n newRowUpdate %v",
 					key.ShortString(), tableUpdate[uuid], rowUpdate)
+				for n, eLog := range events {
+					klog.V(7).Infof("event %d type %s key %s value %s prevKey %s prevValue %s",
+						n, eLog.Type.String(), string(eLog.Kv.Key), string(eLog.Kv.Value), string(eLog.PrevKv.Key), string(eLog.PrevKv.Value))
+				}
 			}
 			tableUpdate[uuid] = *rowUpdate
 		}
