@@ -90,6 +90,7 @@ docker: docker-build docker-push
 
 export KUBECONFIG=${HOME}/admin.conf
 
+OVNDB_ETCD_TCPDUMP ?= 'true'
 .PHONY: ovnk-deploy
 ovnk-deploy:
 	@echo "checking for OVN_KUBERNETES_ROOT" && [ -n "${OVN_KUBERNETES_ROOT}" ]
@@ -100,6 +101,7 @@ ovnk-deploy:
 		--master-loglevel 7 \
 		--node-loglevel 7 \
 		--dbchecker-loglevel 7 \
+		--ovndb-etcd-tcpdump ${OVNDB_ETCD_TCPDUMP} \
 		--ovn-loglevel-northd '-vconsole:dbg -vfile:dbg' \
 		--ovn-loglevel-nbctld '-vconsole:dbg -vfile:dbg' \
 		--ovn-loglevel-controller '-vconsole:dbg -vfile:dbg'

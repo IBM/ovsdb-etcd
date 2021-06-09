@@ -32,6 +32,20 @@ export CR_REPO=docker.io
 export OVSDB_ETCD_REPOSITORY=$CR_USERNAME
 ```
 
+## turn off tcpdump logging (optional)
+
+tcpdump logging is turned on by deafult. one can turn it off using:
+
+```
+export OVNDB_ETCD_TCPDUMP='false'
+```
+
+it can be turned back on using:
+
+```
+export OVNDB_ETCD_TCPDUMP='true'
+```
+
 ## Push docker images (optional)
 
 Login to docker and push:
