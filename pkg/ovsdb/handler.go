@@ -53,7 +53,10 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	}
 	txn := NewTransaction(ch.etcdClient, req)
 	txn.schemas = ch.db.GetSchemas()
+	// temporary solution to provide consistency
+	ch.db.DbLock(req.DBName)
 	rev, err := txn.Commit()
+	ch.db.DbUnlock(req.DBName)
 
 	if err != nil {
 		return nil, err

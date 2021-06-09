@@ -24,14 +24,15 @@ type Databaser interface {
 	GetData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error)
 	PutData(ctx context.Context, key common.Key, obj interface{}) error
 	GetSchema(name string) map[string]interface{}
+	DbLock(dbName string)
+	DbUnlock(dbName string)
 }
 
 type DatabaseEtcd struct {
-	cli *clientv3.Client
-	// dataBaseName -> schema
-	Schemas libovsdb.Schemas
-	// TODO will be removed
+	cli        *clientv3.Client
+	Schemas    libovsdb.Schemas // dataBaseName -> schema
 	strSchemas map[string]map[string]interface{}
+	locks      map[string]*sync.Mutex
 	mu         sync.Mutex
 }
 
@@ -81,7 +82,15 @@ func NewEtcdClient(endpoints []string) (*clientv3.Client, error) {
 
 func NewDatabaseEtcd(cli *clientv3.Client) (Databaser, error) {
 	return &DatabaseEtcd{cli: cli,
-		Schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}}, nil
+		Schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}, locks: map[string]*sync.Mutex{}}, nil
+}
+
+func (con *DatabaseEtcd) DbLock(dbName string) {
+	con.locks[dbName].Lock()
+}
+
+func (con *DatabaseEtcd) DbUnlock(dbName string) {
+	con.locks[dbName].Unlock()
 }
 
 func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error) {
@@ -111,7 +120,10 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 		return err
 	}
 	schemaName := schemaMap["name"].(string)
+	con.mu.Lock()
 	con.strSchemas[schemaName] = schemaMap
+	con.locks[schemaName] = &sync.Mutex{}
+	con.mu.Unlock()
 	schemaSet, err := libovsdb.NewOvsSet(string(data))
 	srv := _Server.Database{Model: "standalone", Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
 		Connected: true, Leader: true, Schema: *schemaSet, Version: libovsdb.UUID{GoUUID: uuid.NewString()}}
@@ -248,3 +260,6 @@ func (con *DatabaseMock) CreateMonitor(dbName string, handler *Handler) *dbMonit
 	m.cancel = cancel
 	return m
 }
+
+func (con *DatabaseMock) DbLock(dbName string)   {}
+func (con *DatabaseMock) DbUnlock(dbName string) {}
