@@ -75,15 +75,15 @@ docker-build: build
 	cp ${OVN_KUBERNETES_ROOT}/dist/images/ovndb-raft-functions.sh dist/images/.
 	cp ${OVN_KUBERNETES_ROOT}/dist/images/ovnkube.sh dist/images/.
 	docker build . -t etcd -f dist/images/Dockerfile.etcd
+	docker tag etcd ${OVSDB_ETCD_REPOSITORY}/etcd
 	docker build . -t ovsdb-etcd -f dist/images/Dockerfile.ovsdb-etcd
+	docker tag ovsdb-etcd ${OVSDB_ETCD_REPOSITORY}/ovsdb-etcd
 
 .PHONY: docker-push
 docker-push:
 	@echo "checking for OVSDB_ETCD_REPOSITORY" && [ -n "${OVSDB_ETCD_REPOSITORY}" ]
-	docker tag ovsdb-etcd ${OVSDB_ETCD_REPOSITORY}/ovsdb-etcd
-	docker push ${OVSDB_ETCD_REPOSITORY}/ovsdb-etcd
-	docker tag etcd ${OVSDB_ETCD_REPOSITORY}/etcd
 	docker push ${OVSDB_ETCD_REPOSITORY}/etcd
+	docker push ${OVSDB_ETCD_REPOSITORY}/ovsdb-etcd
 
 .PHONY: docker
 docker: docker-build docker-push
