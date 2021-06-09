@@ -512,36 +512,6 @@ type TxnLock struct {
 	databases map[string]*sync.Mutex
 }
 
-func NewTxnLock() *TxnLock {
-	return &TxnLock{
-		databases: map[string]*sync.Mutex{},
-	}
-}
-
-func (lock *TxnLock) Lock(dbname string) {
-	lock.root.Lock()
-	defer lock.root.Unlock()
-	db, ok := lock.databases[dbname]
-	if !ok {
-		lock.databases[dbname] = new(sync.Mutex)
-	}
-	db, ok = lock.databases[dbname]
-	if !ok {
-		panic(fmt.Sprintf("missing transaction lock for database %s", dbname))
-	}
-	db.Lock()
-}
-
-func (lock *TxnLock) Unlock(dbname string) {
-	lock.root.Lock()
-	defer lock.root.Unlock()
-	db, ok := lock.databases[dbname]
-	if !ok {
-		panic(fmt.Sprintf("missing transaction lock for database %s", dbname))
-	}
-	defer db.Unlock()
-}
-
 type Transaction struct {
 	/* lock */
 	lock *TxnLock
@@ -562,7 +532,6 @@ type Transaction struct {
 func NewTransaction(cli *clientv3.Client, request *libovsdb.Transact) *Transaction {
 	klog.V(6).Infof("new transaction [with size %d]: %s", len(request.Operations), request)
 	txn := new(Transaction)
-	txn.lock = NewTxnLock()
 	txn.cache = Cache{}
 	txn.mapUUID = MapUUID{}
 	txn.schemas = libovsdb.Schemas{}
@@ -598,9 +567,6 @@ func (txn *Transaction) AddSchema(databaseSchema *libovsdb.DatabaseSchema) {
 }
 
 func (txn *Transaction) Commit() (int64, error) {
-	txn.lock.Lock(txn.request.DBName)
-	defer txn.lock.Unlock(txn.request.DBName)
-
 	var err error
 
 	/* verify that select is not intermixed with other operations */
