@@ -142,7 +142,7 @@ func (txn *Transaction) etcdRemoveDupThen() {
 	newThen := []*clientv3.Op{}
 	for curr, op := range txn.etcd.Then {
 		key := etcdOpKey(op)
-		txn.log.V(6).Info("adding key", key, "index", curr)
+		txn.log.V(6).Info("adding key", "key", key, "index", curr)
 		newThen = append(newThen, &txn.etcd.Then[curr])
 	}
 
