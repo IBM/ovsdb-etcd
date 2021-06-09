@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"reflect"
 	"sync"
@@ -15,7 +16,8 @@ import (
 	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
-	"k8s.io/klog/v2/klogr"
+	klog "k8s.io/klog/v2"
+	klogr "k8s.io/klog/v2/klogr"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
@@ -46,6 +48,12 @@ const (
 	E_PERMISSION_ERROR = "permission error"
 	E_SYNTAX_ERROR     = "syntax error or unknown column"
 )
+
+func init() {
+	fs := flag.NewFlagSet("fs", flag.PanicOnError)
+	klog.InitFlags(fs)
+	fs.Set("v", "10")
+}
 
 func isEqualSet(expected, actual interface{}) bool {
 	expectedSet := expected.(libovsdb.OvsSet)
@@ -546,7 +554,7 @@ func NewTransaction(cli *clientv3.Client, request *libovsdb.Transact) *Transacti
 	txn := new(Transaction)
 	txn.txnid = shortuuid.New()
 	txn.log = klogr.NewWithOptions().WithValues("txnid", txn.txnid)
-	txn.log.Info("new transaction", "size", len(request.Operations), "request", request)
+	txn.log.V(5).Info("new transaction", "size", len(request.Operations), "request", request)
 	txn.cache = Cache{}
 	txn.mapUUID = MapUUID{}
 	txn.schemas = libovsdb.Schemas{}
@@ -648,6 +656,7 @@ func (txn *Transaction) Commit() (int64, error) {
 		return -1, err
 	}
 
+	txn.log.V(5).Info("commit transaction", "response", txn.response)
 	return trResponse.Header.Revision, nil
 }
 
@@ -1904,7 +1913,7 @@ func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Ope
 			}
 
 			cond, err := isEqualRow(txn, tableSchema, &expected, actual)
-			log.Info("checking row equal", "expected", expected, "result", cond)
+			log.V(5).Info("checking row equal", "expected", expected, "result", cond)
 			if err != nil {
 				log.Error(err, "error in row compare", "expected", expected)
 				return err
