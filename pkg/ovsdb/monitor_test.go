@@ -259,7 +259,8 @@ const (
 )
 
 func TestMonitorNotifications1(t *testing.T) {
-	handler := initHandler(t)
+	jsonValue := `null`
+	handler := initHandler(t, jsonValue)
 	row := map[string]interface{}{"c1": "v1", "c2": "v2"}
 	dataJson := prepareData(t, row, true)
 
@@ -282,12 +283,13 @@ func TestMonitorNotifications1(t *testing.T) {
 		t:          t,
 	}
 	handler.SetConnection(&jrpcServerMock, nil)
+	handler.startNotifier(jsonValueToString(nil))
 	monitor := handler.monitors[DB_NAME]
-	monitor.notify(events, 1)
+	monitor.notify(events, 1, nil)
 }
 
 func TestMonitorNotifications2(t *testing.T) {
-	handler := initHandler(t)
+	handler := initHandler(t, "[\"monid\",\"update2\"]")
 	row := map[string]interface{}{"c1": "v1", "c2": "v2"}
 	dataJson := prepareData(t, row, true)
 
@@ -311,11 +313,11 @@ func TestMonitorNotifications2(t *testing.T) {
 	}
 	handler.SetConnection(&jrpcServerMock, nil)
 	monitor := handler.monitors[DB_NAME]
-	monitor.notify(events, 2)
+	monitor.notify(events, 2, nil)
 }
 
 func TestMonitorNotifications3(t *testing.T) {
-	handler := initHandler(t)
+	handler := initHandler(t, "[\"monid\",\"update3\"]")
 	row1 := map[string]interface{}{"c1": "v1", "c2": "v2"}
 	data1Json := prepareData(t, row1, true)
 	row2 := map[string]interface{}{"c2": "v3"}
@@ -342,27 +344,28 @@ func TestMonitorNotifications3(t *testing.T) {
 	}
 	handler.SetConnection(&jrpcServerMock, nil)
 	monitor := handler.monitors[DB_NAME]
-	monitor.notify(events, 3)
+	monitor.notify(events, 3, nil)
 }
 
-func initHandler(t *testing.T) *Handler {
+func initHandler(t *testing.T, jsonValue string) *Handler {
 	common.SetPrefix("ovsdb/nb")
 	db, _ := NewDatabaseMock()
 	ctx := context.Background()
 	handler := NewHandler(ctx, db, nil)
 
-	msg := `["dbName", null ,{"T1":[{"columns":[]}]}]`
+	msg := `["dbName",` + jsonValue + `,{"T1":[{"columns":[]}]}]`
 	var params []interface{}
 	err := json.Unmarshal([]byte(msg), &params)
 	assert.Nil(t, err)
 	handler.addMonitor(params, ovsjson.Update)
 
+	msg = `["dbName",` + jsonValue + `,{"T2":[{"columns":[]}]}]`
 	msg = `["dbName", ["monid","update2"],{"T2":[{"columns":[]}]}]`
 	err = json.Unmarshal([]byte(msg), &params)
 	assert.Nil(t, err)
 	handler.addMonitor(params, ovsjson.Update2)
 
-	msg = `["dbName", ["monid","update3"], {"T3":[{"columns":[]}]}, "00000000-0000-0000-0000-000000000000"]`
+	msg = `["dbName",` + jsonValue + `, {"T3":[{"columns":[]}]}, "00000000-0000-0000-0000-000000000000"]`
 	err = json.Unmarshal([]byte(msg), &params)
 	assert.Nil(t, err)
 	handler.addMonitor(params, ovsjson.Update3)

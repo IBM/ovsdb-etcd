@@ -4,16 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
-	"sync"
-
-	clientv3 "go.etcd.io/etcd/client/v3"
-	"go.etcd.io/etcd/client/v3/concurrency"
-	"k8s.io/klog/v2"
-
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
+	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.etcd.io/etcd/client/v3/concurrency"
+	"k8s.io/klog/v2"
+	"net"
+	"sync"
 )
 
 type JrpcServer interface {
@@ -61,9 +59,14 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	if err != nil {
 		return nil, err
 	}
-	if monitor, ok := ch.monitors[txn.request.DBName]; ok {
+	monitor, ok := ch.monitors[txn.request.DBName]
+	if ok {
 		klog.V(5).Infof("Transact sending to monitor to %v: %s", ch.GetClientAddress(), txn.etcd.EventsDump())
-		monitor.notify(txn.etcd.Events, rev)
+		// we have to guarantee that a new monitor call if it runs concurrently with the transaction, returns first
+		var wg sync.WaitGroup
+		wg.Add(1)
+		monitor.notify(txn.etcd.Events, rev, &wg)
+		wg.Wait()
 	}
 
 	klog.V(5).Infof("Transact response to %v: %s", ch.GetClientAddress(), txn.response)
@@ -89,6 +92,8 @@ func (ch *Handler) Monitor(ctx context.Context, params []interface{}) (interface
 		ch.removeMonitor(params[1], false)
 		return nil, err
 	}
+	jsonValueString := jsonValueToString(params[1])
+	ch.startNotifier(jsonValueString)
 	return data, nil
 }
 
@@ -189,6 +194,8 @@ func (ch *Handler) MonitorCond(ctx context.Context, params []interface{}) (inter
 		ch.removeMonitor(params[1], false)
 		return nil, err
 	}
+	jsonValueString := jsonValueToString(params[1])
+	ch.startNotifier(jsonValueString)
 	return data, nil
 }
 
@@ -211,6 +218,8 @@ func (ch *Handler) MonitorCondSince(ctx context.Context, params []interface{}) (
 		ch.removeMonitor(params[1], false)
 		return nil, err
 	}
+	jsonValueString := jsonValueToString(params[1])
+	ch.startNotifier(jsonValueString)
 	return []interface{}{false, ovsjson.ZERO_UUID, data}, nil
 }
 
@@ -255,30 +264,19 @@ func (ch *Handler) SetConnection(jrpcSerer JrpcServer, clientCon net.Conn) {
 	ch.clientCon = clientCon
 }
 
-func (ch *Handler) notify(jsonValueString string, updates ovsjson.TableUpdates) {
-	monitorData, ok := ch.handlerMonitorData[jsonValueString]
+func (ch *Handler) notify(jsonValueString string, updates ovsjson.TableUpdates, wg *sync.WaitGroup) {
+	fmt.Printf("jasonValue %s\n", jsonValueString)
+	hmd, ok := ch.handlerMonitorData[jsonValueString]
 	if !ok {
 		klog.Errorf("Unknown jsonValue %s", jsonValueString)
 		return
 	}
-	if klog.V(5).Enabled() {
-		klog.V(5).Infof("Monitor notification jsonValue %v to %v: %s", monitorData.jsonValue, ch.GetClientAddress(), updates)
+	if klog.V(7).Enabled() {
+		klog.V(7).Infof("Monitor notification jsonValue %v to %v: %s", hmd.jsonValue, ch.GetClientAddress(), updates)
 	} else {
-		klog.V(5).Infof("Monitor notification jsonValue %v to %v", monitorData.jsonValue, ch.GetClientAddress())
+		klog.V(5).Infof("Monitor notification jsonValue %v to %v", hmd.jsonValue, ch.GetClientAddress())
 	}
-	var err error
-	switch monitorData.notificationType {
-	case ovsjson.Update:
-		err = ch.jrpcServer.Notify(ch.handlerContext, UPDATE, []interface{}{monitorData.jsonValue, updates})
-	case ovsjson.Update2:
-		err = ch.jrpcServer.Notify(ch.handlerContext, UPDATE2, []interface{}{monitorData.jsonValue, updates})
-	case ovsjson.Update3:
-		err = ch.jrpcServer.Notify(ch.handlerContext, UPDATE3, []interface{}{monitorData.jsonValue, ovsjson.ZERO_UUID, updates})
-	}
-	if err != nil {
-		// TODO should we do something else
-		klog.Errorf("Monitor notification jsonValue %v to %v returned error: %v", monitorData.jsonValue, ch.GetClientAddress(), err)
-	}
+	hmd.notificationChain <- notificationEvent{updates: updates, wg: wg}
 }
 
 func (ch *Handler) monitorCanceledNotification(jsonValue interface{}) {
@@ -356,12 +354,19 @@ func (ch *Handler) addMonitor(params []interface{}, notificationType ovsjson.Upd
 	}
 	monitor.addUpdaters(updatersMap)
 	ch.handlerMonitorData[jsonValueString] = handlerMonitorData{
-		dataBaseName:     cmpr.DatabaseName,
-		notificationType: notificationType,
-		updatersKeys:     updatersKeys,
-		jsonValue:        cmpr.JsonValue}
+		dataBaseName:      cmpr.DatabaseName,
+		notificationType:  notificationType,
+		updatersKeys:      updatersKeys,
+		jsonValue:         cmpr.JsonValue,
+		notificationChain: make(chan notificationEvent),
+	}
 
 	return updatersMap, nil
+}
+
+func (ch *Handler) startNotifier(jsonValue string) {
+	hmd := ch.handlerMonitorData[jsonValue]
+	go hmd.notifier(ch)
 }
 
 func (ch *Handler) getMonitoredData(updatersMap Key2Updaters) (ovsjson.TableUpdates, error) {
