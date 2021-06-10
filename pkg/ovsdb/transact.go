@@ -12,7 +12,6 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/jinzhu/copier"
-	shortuuid "github.com/lithammer/shortuuid/v3"
 	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -531,8 +530,7 @@ type TxnLock struct {
 
 type Transaction struct {
 	/* logger */
-	txnid string
-	log   logr.Logger
+	log logr.Logger
 
 	/* lock */
 	lock *TxnLock
@@ -550,10 +548,9 @@ type Transaction struct {
 	etcd *Etcd
 }
 
-func NewTransaction(cli *clientv3.Client, request *libovsdb.Transact) *Transaction {
+func NewTransaction(cli *clientv3.Client, address string, id string, request *libovsdb.Transact) *Transaction {
 	txn := new(Transaction)
-	txn.txnid = shortuuid.New()
-	txn.log = klogr.NewWithOptions().WithValues("txnid", txn.txnid)
+	txn.log = klogr.New().WithValues("address", address, "id", id)
 	txn.log.V(5).Info("new transaction", "size", len(request.Operations), "request", request)
 	txn.cache = Cache{}
 	txn.mapUUID = MapUUID{}

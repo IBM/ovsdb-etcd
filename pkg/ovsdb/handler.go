@@ -4,14 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"sync"
+
+	"github.com/creachadair/jrpc2"
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"k8s.io/klog/v2"
-	"net"
-	"sync"
 )
 
 type JrpcServer interface {
@@ -39,22 +41,27 @@ type Handler struct {
 }
 
 func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interface{}, error) {
-	klog.V(5).Infof("Transact request from %v, params %v", ch.GetClientAddress(), params)
+	req := jrpc2.InboundRequest(ctx)
+	if req.IsNotification() {
+		panic("was expecting a transaction with id")
+	}
+	id := req.ID()
+	klog.V(5).Infof("Transact client=%v id=%s params=%v", ch.GetClientAddress(), id, params)
 	if ch.closed {
 		klog.V(5).Infof("Transact request from %v, the handler is closed", ch.GetClientAddress())
 		// prevents old transactions
 		return nil, nil
 	}
-	req, err := libovsdb.NewTransact(params)
+	ovsReq, err := libovsdb.NewTransact(params)
 	if err != nil {
 		return nil, err
 	}
-	txn := NewTransaction(ch.etcdClient, req)
+	txn := NewTransaction(ch.etcdClient, ch.GetClientAddress(), id, ovsReq)
 	txn.schemas = ch.db.GetSchemas()
 	// temporary solution to provide consistency
-	ch.db.DbLock(req.DBName)
+	ch.db.DbLock(ovsReq.DBName)
 	rev, err := txn.Commit()
-	ch.db.DbUnlock(req.DBName)
+	ch.db.DbUnlock(ovsReq.DBName)
 
 	if err != nil {
 		return nil, err
