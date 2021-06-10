@@ -256,7 +256,7 @@ func testTransact(t *testing.T, req *libovsdb.Transact) (*libovsdb.TransactRespo
 	cli, err := testEtcdNewCli()
 	assert.Nil(t, err)
 	defer cli.Close()
-	txn := NewTransaction(cli, req)
+	txn := NewTransaction(cli, "127.0.0.1:6642", "11", req)
 	txn.AddSchema(testSchemaSimple)
 	txn.AddSchema(testSchemaAtomic)
 	txn.AddSchema(testSchemaMutable)
