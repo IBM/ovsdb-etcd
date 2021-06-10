@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"time"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"k8s.io/klog/v2"
@@ -35,9 +36,15 @@ type handlerMonitorData struct {
 	notificationType ovsjson.UpdateNotificationType
 
 	// updaters from the given json-value, key is the path in the monitor.
-	updatersKeys []common.Key
-	dataBaseName string
-	jsonValue    interface{}
+	updatersKeys      []common.Key
+	dataBaseName      string
+	jsonValue         interface{}
+	notificationChain chan notificationEvent
+}
+
+type notificationEvent struct {
+	updates ovsjson.TableUpdates
+	wg      *sync.WaitGroup
 }
 
 // Map from a key which represents a table paths (prefix/dbname/table) to arrays of updaters
@@ -140,12 +147,51 @@ func (m *dbMonitor) start() {
 				m.cancelDbMonitor()
 				return
 			}
-			m.notify(wresp.Events, wresp.Header.Revision)
+			m.notify(wresp.Events, wresp.Header.Revision, nil)
 		}
 	}()
 }
 
-func (m *dbMonitor) notify(events []*clientv3.Event, revision int64) {
+func (hm *handlerMonitorData) notifier(ch *Handler) {
+	// we need some time to allow to the monitor calls return data
+	time.Sleep(1 * time.Millisecond)
+	for {
+		select {
+		case <-ch.handlerContext.Done():
+			return
+
+		case notificationEvent := <-hm.notificationChain:
+			if ch.handlerContext.Err() != nil {
+				return
+			}
+			if klog.V(7).Enabled() {
+				klog.Infof("Send notification to %v, jsonValue %v notification %v",
+					ch.GetClientAddress(), hm.jsonValue, notificationEvent.updates)
+			} else {
+				klog.Infof("Send notification to %v, jsonValue %v", ch.GetClientAddress(), hm.jsonValue)
+			}
+
+			var err error
+			switch hm.notificationType {
+			case ovsjson.Update:
+				err = ch.jrpcServer.Notify(ch.handlerContext, UPDATE, []interface{}{hm.jsonValue, notificationEvent.updates})
+			case ovsjson.Update2:
+				err = ch.jrpcServer.Notify(ch.handlerContext, UPDATE2, []interface{}{hm.jsonValue, notificationEvent.updates})
+			case ovsjson.Update3:
+				err = ch.jrpcServer.Notify(ch.handlerContext, UPDATE3, []interface{}{hm.jsonValue, ovsjson.ZERO_UUID, notificationEvent.updates})
+			}
+			if err != nil {
+				// TODO should we do something else
+				klog.Errorf("Monitor notification jsonValue %v returned error: %v", hm.jsonValue, err)
+			}
+			if notificationEvent.wg != nil {
+				notificationEvent.wg.Done()
+			}
+		}
+	}
+}
+
+func (m *dbMonitor) notify(events []*clientv3.Event, revision int64, wg *sync.WaitGroup) {
 	if len(events) == 0 {
 		return
 	}
@@ -157,7 +203,7 @@ func (m *dbMonitor) notify(events []*clientv3.Event, revision int64) {
 		} else {
 			for jValue, tableUpdates := range result {
 				klog.V(7).Infof("notify %v jsonValue =[%v] %v", m.handler.GetClientAddress(), jValue, tableUpdates)
-				m.handler.notify(jValue, tableUpdates)
+				m.handler.notify(jValue, tableUpdates, wg)
 			}
 		}
 	} else {
