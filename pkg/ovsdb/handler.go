@@ -42,10 +42,10 @@ type Handler struct {
 
 func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interface{}, error) {
 	req := jrpc2.InboundRequest(ctx)
-	if req.IsNotification() {
-		panic("was expecting a transaction with id")
+	id := ""
+	if !req.IsNotification() {
+		id = req.ID()
 	}
-	id := req.ID()
 	klog.V(5).Infof("Transact client=%v id=%s params=%v", ch.GetClientAddress(), id, params)
 	if ch.closed {
 		klog.V(5).Infof("Transact request from %v, the handler is closed", ch.GetClientAddress())
