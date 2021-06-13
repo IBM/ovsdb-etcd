@@ -15,7 +15,6 @@ import (
 	"os/signal"
 	"path"
 	"runtime"
-	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -270,7 +269,6 @@ func (cw ConnWrapper) Write(b []byte) (n int, err error) {
 
 func (cw ConnWrapper) Close() error {
 	klog.V(5).Infof("connection from %v called close", cw.intConn.RemoteAddr())
-	debug.PrintStack()
 	return cw.intConn.Close()
 }
 
