@@ -3,6 +3,7 @@ package ovsdb
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"testing"
 
 	guuid "github.com/google/uuid"
@@ -260,7 +261,8 @@ const (
 
 func TestMonitorNotifications1(t *testing.T) {
 	jsonValue := `null`
-	handler := initHandler(t, jsonValue)
+	msg := `["dbName",` + jsonValue + `,{"T1":[{"columns":[]}]}]`
+	handler := initHandler(t, msg, ovsjson.Update)
 	row := map[string]interface{}{"c1": "v1", "c2": "v2"}
 	dataJson := prepareData(t, row, true)
 
@@ -285,11 +287,16 @@ func TestMonitorNotifications1(t *testing.T) {
 	handler.SetConnection(&jrpcServerMock, nil)
 	handler.startNotifier(jsonValueToString(nil))
 	monitor := handler.monitors[DB_NAME]
-	monitor.notify(events, 1, nil)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	monitor.notify(events, 1, &wg)
+	wg.Wait()
 }
 
 func TestMonitorNotifications2(t *testing.T) {
-	handler := initHandler(t, "[\"monid\",\"update2\"]")
+	msg := `["dbName", ["monid","update2"],{"T2":[{"columns":[]}]}]`
+	handler := initHandler(t, msg, ovsjson.Update2)
+	jsonValue := []interface{}{"monid", "update2"}
 	row := map[string]interface{}{"c1": "v1", "c2": "v2"}
 	dataJson := prepareData(t, row, true)
 
@@ -303,7 +310,7 @@ func TestMonitorNotifications2(t *testing.T) {
 	rowUpdate := ovsjson.RowUpdate{Delete: true}
 	tableUpdate[ROW_UUID] = rowUpdate
 	tableUpdates["T2"] = tableUpdate
-	expMsg, err := json.Marshal([]interface{}{[]interface{}{"monid", "update2"}, tableUpdates})
+	expMsg, err := json.Marshal([]interface{}{jsonValue, tableUpdates})
 	assert.Nil(t, err)
 
 	jrpcServerMock := jrpcServerMock{
@@ -312,12 +319,18 @@ func TestMonitorNotifications2(t *testing.T) {
 		t:          t,
 	}
 	handler.SetConnection(&jrpcServerMock, nil)
+	handler.startNotifier(jsonValueToString(jsonValue))
 	monitor := handler.monitors[DB_NAME]
-	monitor.notify(events, 2, nil)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	monitor.notify(events, 2, &wg)
+	wg.Wait()
 }
 
 func TestMonitorNotifications3(t *testing.T) {
-	handler := initHandler(t, "[\"monid\",\"update3\"]")
+	msg := `["dbName",["monid","update3"], {"T3":[{"columns":[]}]}, "00000000-0000-0000-0000-000000000000"]`
+	jsonValue := []interface{}{"monid", "update3"}
+	handler := initHandler(t, msg, ovsjson.Update3)
 	row1 := map[string]interface{}{"c1": "v1", "c2": "v2"}
 	data1Json := prepareData(t, row1, true)
 	row2 := map[string]interface{}{"c2": "v3"}
@@ -334,7 +347,7 @@ func TestMonitorNotifications3(t *testing.T) {
 	rowUpdate := ovsjson.RowUpdate{Modify: &row2}
 	tableUpdate[ROW_UUID] = rowUpdate
 	tableUpdates["T3"] = tableUpdate
-	expMsg, err := json.Marshal([]interface{}{[]interface{}{"monid", "update3"}, LAST_TNX, tableUpdates})
+	expMsg, err := json.Marshal([]interface{}{jsonValue, LAST_TNX, tableUpdates})
 	assert.Nil(t, err)
 
 	jrpcServerMock := jrpcServerMock{
@@ -343,32 +356,25 @@ func TestMonitorNotifications3(t *testing.T) {
 		t:          t,
 	}
 	handler.SetConnection(&jrpcServerMock, nil)
+	handler.startNotifier(jsonValueToString(jsonValue))
 	monitor := handler.monitors[DB_NAME]
-	monitor.notify(events, 3, nil)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	monitor.notify(events, 3, &wg)
+	wg.Wait()
 }
 
-func initHandler(t *testing.T, jsonValue string) *Handler {
+func initHandler(t *testing.T, msg string, notificationType ovsjson.UpdateNotificationType) *Handler {
 	common.SetPrefix("ovsdb/nb")
 	db, _ := NewDatabaseMock()
 	ctx := context.Background()
 	handler := NewHandler(ctx, db, nil)
 
-	msg := `["dbName",` + jsonValue + `,{"T1":[{"columns":[]}]}]`
 	var params []interface{}
 	err := json.Unmarshal([]byte(msg), &params)
 	assert.Nil(t, err)
-	handler.addMonitor(params, ovsjson.Update)
-
-	msg = `["dbName",` + jsonValue + `,{"T2":[{"columns":[]}]}]`
-	msg = `["dbName", ["monid","update2"],{"T2":[{"columns":[]}]}]`
-	err = json.Unmarshal([]byte(msg), &params)
+	_, err = handler.addMonitor(params, notificationType)
 	assert.Nil(t, err)
-	handler.addMonitor(params, ovsjson.Update2)
-
-	msg = `["dbName",` + jsonValue + `, {"T3":[{"columns":[]}]}, "00000000-0000-0000-0000-000000000000"]`
-	err = json.Unmarshal([]byte(msg), &params)
-	assert.Nil(t, err)
-	handler.addMonitor(params, ovsjson.Update3)
 
 	_, ok := handler.monitors[DB_NAME]
 	assert.True(t, ok)

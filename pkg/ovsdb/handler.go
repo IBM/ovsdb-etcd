@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"reflect"
 	"sync"
 
 	"github.com/creachadair/jrpc2"
@@ -93,8 +94,8 @@ func (ch *Handler) Monitor(ctx context.Context, params []interface{}) (interface
 		klog.Errorf("Monitor from %v, params %v got an error: %s", ch.GetClientAddress(), params, err)
 		return nil, err
 	}
-	data, err := ch.getMonitoredData(updatersMap)
-	klog.V(5).Infof("Monitor response to %v, params %v, err %v", ch.GetClientAddress(), params, err)
+	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
+	klog.V(5).Infof("Monitor response to %v, jsonValue %v, data %v, err %v", ch.GetClientAddress(), params[1], data, err)
 	if err != nil {
 		ch.removeMonitor(params[1], false)
 		return nil, err
@@ -195,7 +196,7 @@ func (ch *Handler) MonitorCond(ctx context.Context, params []interface{}) (inter
 		klog.Errorf("MonitorCond from remote %v got an error: %s", ch.GetClientAddress(), err)
 		return nil, err
 	}
-	data, err := ch.getMonitoredData(updatersMap)
+	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
 	klog.V(5).Infof("MonitorCond response to %v, params %v, err %v", ch.GetClientAddress(), params, err)
 	if err != nil {
 		ch.removeMonitor(params[1], false)
@@ -208,8 +209,63 @@ func (ch *Handler) MonitorCond(ctx context.Context, params []interface{}) (inter
 
 func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) (interface{}, error) {
 	klog.V(5).Infof("MonitorCondChange request from %v, params %v", ch.GetClientAddress(), params)
-	// TODO implement
-	return "{Monitor_cond_change}", nil
+	if len(params) != 3 {
+		err := fmt.Errorf("wrong params length for MonitorCondChange %d , params %v", len(params), params)
+		klog.Errorf("%v", err)
+		return nil, err
+	}
+	oldJsonValue := params[0]
+	newJsonValue := params[1]
+	mcrs := map[string][]ovsjson.MonitorCondRequest{}
+	buf, err := json.Marshal(params[2])
+	if err != nil {
+		klog.Errorf("marshal conditional request returned %v", err)
+		return nil, err
+	}
+	if err := json.Unmarshal(buf, &mcrs); err != nil {
+		obj := map[string]ovsjson.MonitorCondRequest{}
+		if err := json.Unmarshal(buf, &obj); err != nil {
+			return nil, fmt.Errorf("unmarshal dbMonitor condition requests returned: %v", err)
+		}
+		mcrs = map[string][]ovsjson.MonitorCondRequest{}
+		for k, v := range obj {
+			mcrs[k] = []ovsjson.MonitorCondRequest{v}
+		}
+	}
+	if reflect.DeepEqual(oldJsonValue, newJsonValue) {
+		klog.V(5).Info("MonitorCondChange, update existing monitor")
+		jsonValueString := jsonValueToString(oldJsonValue)
+		ch.mu.Lock()
+		defer ch.mu.Unlock()
+		monitorData, ok := ch.handlerMonitorData[jsonValueString]
+		if !ok {
+			klog.Errorf("update unexisting dbMonitor with jsonValue = %v", oldJsonValue)
+			err := fmt.Errorf("unknown monitor")
+			return nil, err
+		}
+		dbName := monitorData.dataBaseName
+		monitor, ok := ch.monitors[dbName]
+		if !ok {
+			klog.Warningf("there is no monitor to %s", monitorData.dataBaseName)
+		}
+		for tableName, mcrArray := range mcrs {
+			key := common.NewTableKey(dbName, tableName)
+			_, ok := monitor.key2Updaters[key]
+			if !ok {
+				klog.V(6).Infof("MonitorCondChange from %v, add new updater to %s, mcr = %v",
+					ch.GetClientAddress(), tableName, mcrArray)
+				var updaters []updater
+				for _, mcr := range mcrArray {
+					updater := mcrToUpdater(mcr, jsonValueString, monitorData.notificationType == ovsjson.Update)
+					updaters = append(updaters, *updater)
+				}
+				monitorData.updatersKeys = append(monitorData.updatersKeys, key)
+			} else {
+				// TODO update "existing" updaters, change "where"
+			}
+		}
+	}
+	return nil, nil
 }
 
 func (ch *Handler) MonitorCondSince(ctx context.Context, params []interface{}) (interface{}, error) {
@@ -219,7 +275,7 @@ func (ch *Handler) MonitorCondSince(ctx context.Context, params []interface{}) (
 		klog.Errorf("MonitorCondSince from remote %v got an error: %s", ch.GetClientAddress(), err)
 		return nil, err
 	}
-	data, err := ch.getMonitoredData(updatersMap)
+	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
 	klog.V(5).Infof("MonitorCondSince response to %v, params %v, err %v", ch.GetClientAddress(), params, err)
 	if err != nil {
 		ch.removeMonitor(params[1], false)
@@ -272,7 +328,6 @@ func (ch *Handler) SetConnection(jrpcSerer JrpcServer, clientCon net.Conn) {
 }
 
 func (ch *Handler) notify(jsonValueString string, updates ovsjson.TableUpdates, wg *sync.WaitGroup) {
-	fmt.Printf("jasonValue %s\n", jsonValueString)
 	hmd, ok := ch.handlerMonitorData[jsonValueString]
 	if !ok {
 		klog.Errorf("Unknown jsonValue %s", jsonValueString)
@@ -372,12 +427,18 @@ func (ch *Handler) addMonitor(params []interface{}, notificationType ovsjson.Upd
 }
 
 func (ch *Handler) startNotifier(jsonValue string) {
-	hmd := ch.handlerMonitorData[jsonValue]
-	go hmd.notifier(ch)
+	klog.V(6).Infof("start monitor notifier for %s", jsonValue)
+	hmd, ok := ch.handlerMonitorData[jsonValue]
+	if !ok {
+		klog.Errorf("there is no notifier for %s", jsonValue)
+	} else {
+		go hmd.notifier(ch)
+	}
+
 }
 
-func (ch *Handler) getMonitoredData(updatersMap Key2Updaters) (ovsjson.TableUpdates, error) {
-	returnData := ovsjson.TableUpdates{}
+func (ch *Handler) getMonitoredData(dbName string, updatersMap Key2Updaters) (ovsjson.TableUpdates, error) {
+	keys := []common.Key{}
 	for tableKey, updaters := range updatersMap {
 		if len(updaters) == 0 {
 			// nothing to update
@@ -391,32 +452,52 @@ func (ch *Handler) getMonitoredData(updatersMap Key2Updaters) (ovsjson.TableUpda
 				break
 			}
 		}
-		resp, err := ch.db.GetData(tableKey, false)
-		if err != nil {
-			return nil, err
+		if reqInitial {
+			keys = append(keys, tableKey)
 		}
-		d1 := ovsjson.TableUpdate{}
-		for _, kv := range resp.Kvs {
+	}
+	resp, err := ch.db.GetData(keys)
+	if err != nil {
+		return nil, err
+	}
+	returnData := ovsjson.TableUpdates{}
+	for _, opRes := range resp.Responses {
+		rangeResp := opRes.GetResponseRange()
+		for _, kv := range rangeResp.Kvs {
+			key, err := common.ParseKey(string(kv.Key))
+			if err != nil {
+				klog.Errorf("Parse key %s, returned %v", string(kv.Key), err)
+				return nil, err
+			}
+			tableKey := key.ToTableKey()
+			updaters := updatersMap[tableKey]
 			for _, updater := range updaters {
 				row, uuid, err := updater.prepareCreateRowInitial(&kv.Value)
 				if err != nil {
 					klog.Errorf("prepareCreateRowInitial returned %s", err)
 					return nil, err
 				}
-				klog.V(8).Infof("processing getMonitoredData %v  row %v", d1, row)
 				// TODO merge
 				if row != nil {
-					d1[uuid] = *row
+					tableUpdate, ok := returnData[tableKey.TableName]
+					if !ok {
+						tableUpdate = ovsjson.TableUpdate{}
+						returnData[tableKey.TableName] = tableUpdate
+					}
+					tableUpdate[uuid] = *row
 				} else {
 					klog.Info("row is nil")
 				}
 			}
 		}
-		if len(d1) > 0 {
-			returnData[tableKey.TableName] = d1
-		}
 	}
-	klog.V(6).Infof("getMonitoredData: %v", returnData)
+	monitor, ok := ch.monitors[dbName]
+	if !ok {
+		err := fmt.Errorf("there is no monitor for %s", dbName)
+		return nil, err
+	}
+	monitor.revChecker.revision = resp.Header.Revision
+	klog.V(6).Infof("getMonitoredData, revision %d returned Data %v", resp.Header.Revision, returnData)
 	return returnData, nil
 }
 
