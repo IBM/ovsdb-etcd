@@ -289,6 +289,7 @@ func TestTransactInsertSimple(t *testing.T) {
 	table := "table1"
 	row := map[string]interface{}{
 		"key1": "val1",
+		"key2": int(0),
 	}
 	req := &libovsdb.Transact{
 		DBName: "simple",
@@ -313,6 +314,7 @@ func testTransactInsertSimpleScale(t *testing.T, n int) {
 	table := "table1"
 	row := map[string]interface{}{
 		"key1": "val1",
+		"key2": int(0),
 	}
 	op := libovsdb.Operation{
 		Op:    OP_INSERT,
@@ -365,6 +367,7 @@ func TestTransactInsertSimpleWithUUID(t *testing.T) {
 	table := "table1"
 	row := map[string]interface{}{
 		"key1": "val1",
+		"key2": int(0),
 	}
 	req := &libovsdb.Transact{
 		DBName: "simple",
@@ -390,6 +393,7 @@ func TestTransactInsertSimpleWithUUIDName(t *testing.T) {
 	table := "table1"
 	row := map[string]interface{}{
 		"key1": "val1",
+		"key2": int(0),
 	}
 	uuidName := "myuuid"
 	req := &libovsdb.Transact{
