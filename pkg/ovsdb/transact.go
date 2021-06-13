@@ -52,7 +52,7 @@ const (
 func init() {
 	fs := flag.NewFlagSet("fs", flag.PanicOnError)
 	klog.InitFlags(fs)
-	//fs.Set("v", "10")
+	fs.Set("v", "10")
 }
 
 func isEqualSet(expected, actual interface{}) bool {
@@ -1686,7 +1686,7 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 	key := common.NewDataKey(txn.request.DBName, *ovsOp.Table, uuid)
 	row := txn.cache.Row(key)
 	*row = *ovsOp.Row
-	// txn.schemas.Default(txn.request.DBName, *ovsOp.Table, row)
+	txn.schemas.Default(txn.request.DBName, *ovsOp.Table, row)
 	setRowUUID(row, uuid)
 
 	err = txn.RowPrepare(tableSchema, txn.mapUUID, ovsOp.Row)
