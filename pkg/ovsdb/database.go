@@ -21,7 +21,8 @@ type Databaser interface {
 	CreateMonitor(dbName string, handler *Handler) *dbMonitor
 	AddSchema(schemaFile string) error
 	GetSchemas() libovsdb.Schemas
-	GetData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error)
+	GetKeyData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error)
+	GetData(keys []common.Key) (*clientv3.TxnResponse, error)
 	PutData(ctx context.Context, key common.Key, obj interface{}) error
 	GetSchema(name string) map[string]interface{}
 	DbLock(dbName string)
@@ -140,7 +141,7 @@ func (con *DatabaseEtcd) GetSchemas() libovsdb.Schemas {
 	return con.Schemas
 }
 
-func (con *DatabaseEtcd) GetData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
+func (con *DatabaseEtcd) GetKeyData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), EtcdClientTimeout)
 	var resp *clientv3.GetResponse
 	var err error
@@ -151,15 +152,31 @@ func (con *DatabaseEtcd) GetData(key common.Key, keysOnly bool) (*clientv3.GetRe
 	}
 	cancel()
 	if err != nil {
-		klog.Errorf("GetData: %s", err)
+		klog.Errorf("GetKeyData: %s", err)
 		return nil, err
 	}
 	if klog.V(8).Enabled() {
 		for k, v := range resp.Kvs {
-			klog.V(8).Infof("GetData k %v, v %v\n", k, v)
+			klog.V(8).Infof("GetKeyData k %v, v %v\n", k, v)
 		}
 	}
 	return resp, err
+}
+
+func (con *DatabaseEtcd) GetData(keys []common.Key) (*clientv3.TxnResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), EtcdClientTimeout)
+	ops := []clientv3.Op{}
+	for _, key := range keys {
+		ops = append(ops, clientv3.OpGet(key.String(), clientv3.WithPrefix()))
+	}
+	res, err := con.cli.Txn(ctx).Then(ops...).Commit()
+	cancel()
+	if err != nil {
+		klog.Errorf("GetData returned error: %v", err)
+	} else {
+		klog.Errorf("GetData succeded %v revision %d", res.Succeeded, res.Header.Revision)
+	}
+	return res, err
 }
 
 func (con *DatabaseEtcd) GetSchema(name string) map[string]interface{} {
@@ -238,8 +255,12 @@ func (con *DatabaseMock) GetSchemas() libovsdb.Schemas {
 	return libovsdb.Schemas{}
 }
 
-func (con *DatabaseMock) GetData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
+func (con *DatabaseMock) GetKeyData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
 	return con.Response.(*clientv3.GetResponse), con.Error
+}
+
+func (con *DatabaseMock) GetData(keys []common.Key) (*clientv3.TxnResponse, error) {
+	return con.Response.(*clientv3.TxnResponse), con.Error
 }
 
 func (con *DatabaseMock) PutData(ctx context.Context, key common.Key, obj interface{}) error {

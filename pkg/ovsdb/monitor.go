@@ -164,11 +164,11 @@ func (hm *handlerMonitorData) notifier(ch *Handler) {
 			if ch.handlerContext.Err() != nil {
 				return
 			}
-			if klog.V(7).Enabled() {
-				klog.Infof("Send notification to %v, jsonValue %v notification %v",
+			if klog.V(6).Enabled() {
+				klog.V(6).Infof("Send notification to %v, jsonValue %v notification %v",
 					ch.GetClientAddress(), hm.jsonValue, notificationEvent.updates)
 			} else {
-				klog.Infof("Send notification to %v, jsonValue %v", ch.GetClientAddress(), hm.jsonValue)
+				klog.V(5).Infof("Send notification to %v, jsonValue %v", ch.GetClientAddress(), hm.jsonValue)
 			}
 
 			var err error
@@ -195,7 +195,8 @@ func (m *dbMonitor) notify(events []*clientv3.Event, revision int64, wg *sync.Wa
 	if len(events) == 0 {
 		return
 	}
-	klog.V(5).Infof("notify %v m.revChecker.revision %d, revision %d", m.handler.GetClientAddress(), m.revChecker.revision, revision)
+	klog.V(5).Infof("notify %v m.revChecker.revision %d, revision %d wg == nil ->%v",
+		m.handler.GetClientAddress(), m.revChecker.revision, revision, wg == nil)
 	if m.revChecker.isNewRevision(revision) {
 		result, err := m.prepareTableUpdate(events)
 		if err != nil {
@@ -209,6 +210,9 @@ func (m *dbMonitor) notify(events []*clientv3.Event, revision int64, wg *sync.Wa
 	} else {
 		klog.V(5).Infof("revisionChecker returned false. Old revision: %d, notification revision: %d",
 			m.revChecker.revision, revision)
+		if wg != nil {
+			wg.Done()
+		}
 	}
 
 }

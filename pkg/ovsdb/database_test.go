@@ -39,7 +39,7 @@ func TestMockGetData(t *testing.T) {
 		Error:    expectedError,
 		Response: expectedResponse,
 	}
-	actualResponse, actualError := mock.GetData(common.GenerateDataKey("dbName", "tableName"), true)
+	actualResponse, actualError := mock.GetKeyData(common.GenerateDataKey("dbName", "tableName"), true)
 	assert.Equal(t, expectedError, actualError)
 	assert.Equal(t, expectedResponse, actualResponse)
 }

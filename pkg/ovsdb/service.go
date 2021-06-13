@@ -217,7 +217,7 @@ type Service struct {
 
 func (s *Service) ListDbs(ctx context.Context, param interface{}) ([]string, error) {
 	klog.V(5).Info("ListDbs request")
-	resp, err := s.db.GetData(common.NewTableKey(INT_SERVER, INT_DATABASES), true)
+	resp, err := s.db.GetKeyData(common.NewTableKey(INT_SERVER, INT_DATABASES), true)
 	if err != nil {
 		return nil, err
 	}
