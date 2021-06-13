@@ -210,7 +210,7 @@ func (txn *Transaction) etcdRemoveDupEvents() {
 				newEvents[i] = etcdEventCreateFromModify(curr)
 			}
 			txn.log.V(6).Info("removing key", "key", key, "index", i)
-			newEvents[i] = nil
+			newEvents[prevIndex] = nil
 		}
 		prevKeyIndex[key] = i
 	}
@@ -225,20 +225,19 @@ func (txn *Transaction) etcdRemoveDupEvents() {
 }
 
 func (txn *Transaction) etcdRemoveDup() {
-	txn.log.V(6).Info("etcd remove dups", "etcd", txn.etcd)
 	txn.etcdRemoveDupThen()
 	txn.etcdRemoveDupEvents()
 	txn.etcd.Assert()
 }
 
 func (txn *Transaction) etcdTranaction() (*clientv3.TxnResponse, error) {
-	txn.log.V(6).Info("etcd transaction", "etcd", txn.etcd)
+	txn.log.V(6).Info("etcd transaction", "etcd", txn.etcd.String())
 
 	// etcds := txn.etcd.Split() // split
 	etcds := []*Etcd{txn.etcd} // don't split
 
 	for i, child := range etcds {
-		txn.log.V(6).Info("etcd processing", "index", i, "child", child)
+		txn.log.V(6).Info("etcd processing", "index", i, "child", child.String())
 		errInternal := child.Commit()
 		if errInternal != nil {
 			err := errors.New(E_IO_ERROR)
@@ -476,7 +475,9 @@ func (etcd *Etcd) Assert() {
 func (etcd *Etcd) EventsDump() string {
 	printable := []clientv3.Event{}
 	for _, ev := range etcd.Events {
-		printable = append(printable, *ev)
+		if ev != nil {
+			printable = append(printable, *ev)
+		}
 	}
 	return fmt.Sprintf("%v", printable)
 }
@@ -646,7 +647,9 @@ func (txn *Transaction) Commit() (int64, error) {
 		}
 	}
 
+	txn.log.V(5).Info("events transaction", "events", txn.etcd.EventsDump())
 	txn.etcdRemoveDup()
+	txn.log.V(5).Info("events transaction (remove dup)", "events", txn.etcd.EventsDump())
 	trResponse, err := txn.etcdTranaction()
 	if err != nil {
 		errStr := err.Error()
