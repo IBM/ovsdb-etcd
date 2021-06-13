@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"reflect"
 	"sync"
 
 	"github.com/creachadair/jrpc2"
@@ -208,8 +209,63 @@ func (ch *Handler) MonitorCond(ctx context.Context, params []interface{}) (inter
 
 func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) (interface{}, error) {
 	klog.V(5).Infof("MonitorCondChange request from %v, params %v", ch.GetClientAddress(), params)
-	// TODO implement
-	return "{Monitor_cond_change}", nil
+	if len(params) != 3 {
+		err := fmt.Errorf("wrong params length for MonitorCondChange %d , params %v", len(params), params)
+		klog.Errorf("%v", err)
+		return nil, err
+	}
+	oldJsonValue := params[0]
+	newJsonValue := params[1]
+	mcrs := map[string][]ovsjson.MonitorCondRequest{}
+	buf, err := json.Marshal(params[2])
+	if err != nil {
+		klog.Errorf("marshal conditional request returned %v", err)
+		return nil, err
+	}
+	if err := json.Unmarshal(buf, &mcrs); err != nil {
+		obj := map[string]ovsjson.MonitorCondRequest{}
+		if err := json.Unmarshal(buf, &obj); err != nil {
+			return nil, fmt.Errorf("unmarshal dbMonitor condition requests returned: %v", err)
+		}
+		mcrs = map[string][]ovsjson.MonitorCondRequest{}
+		for k, v := range obj {
+			mcrs[k] = []ovsjson.MonitorCondRequest{v}
+		}
+	}
+	if reflect.DeepEqual(oldJsonValue, newJsonValue) {
+		klog.V(5).Info("MonitorCondChange, update existing monitor")
+		jsonValueString := jsonValueToString(oldJsonValue)
+		ch.mu.Lock()
+		defer ch.mu.Unlock()
+		monitorData, ok := ch.handlerMonitorData[jsonValueString]
+		if !ok {
+			klog.Errorf("update unexisting dbMonitor with jsonValue = %v", oldJsonValue)
+			err := fmt.Errorf("unknown monitor")
+			return nil, err
+		}
+		dbName := monitorData.dataBaseName
+		monitor, ok := ch.monitors[dbName]
+		if !ok {
+			klog.Warningf("there is no monitor to %s", monitorData.dataBaseName)
+		}
+		for tableName, mcrArray := range mcrs {
+			key := common.NewTableKey(dbName, tableName)
+			_, ok := monitor.key2Updaters[key]
+			if !ok {
+				klog.V(6).Infof("MonitorCondChange from %v, add new updater to %s, mcr = %v",
+					ch.GetClientAddress(), tableName, mcrArray)
+				var updaters []updater
+				for _, mcr := range mcrArray {
+					updater := mcrToUpdater(mcr, jsonValueString, monitorData.notificationType == ovsjson.Update)
+					updaters = append(updaters, *updater)
+				}
+				monitorData.updatersKeys = append(monitorData.updatersKeys, key)
+			} else {
+				// TODO update "existing" updaters, change "where"
+			}
+		}
+	}
+	return nil, nil
 }
 
 func (ch *Handler) MonitorCondSince(ctx context.Context, params []interface{}) (interface{}, error) {
