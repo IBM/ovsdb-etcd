@@ -678,6 +678,51 @@ func TestTransactUpdateSimple(t *testing.T) {
 	assert.Equal(t, "val2", dump["key1"])
 }
 
+func TestTransactUpdateSimple2Txn(t *testing.T) {
+	table := "table1"
+	row1 := map[string]interface{}{
+		"key1": "val1",
+		"key2": int(10),
+	}
+	row2 := map[string]interface{}{
+		"key1": "val2",
+	}
+	req1 := &libovsdb.Transact{
+		DBName: "simple",
+		Operations: []libovsdb.Operation{
+			{
+				Op:    OP_INSERT,
+				Table: &table,
+				Row:   &row1,
+			},
+		},
+	}
+	req2 := &libovsdb.Transact{
+		DBName: "simple",
+		Operations: []libovsdb.Operation{
+			{
+				Op:    OP_UPDATE,
+				Table: &table,
+				Row:   &row2,
+			},
+		},
+	}
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t)
+	/* txn 1 */
+	resp, _ := testTransact(t, req1)
+	assert.Nil(t, resp.Error)
+	dump := testEtcdDump(t, "simple", "table1")
+	assert.Equal(t, "val1", dump["key1"])
+	assert.Equal(t, float64(10), dump["key2"])
+	/* txn 2 */
+	resp, _ = testTransact(t, req2)
+	assert.Nil(t, resp.Error)
+	dump = testEtcdDump(t, "simple", "table1")
+	assert.Equal(t, "val2", dump["key1"])
+	assert.Equal(t, float64(10), dump["key2"])
+}
+
 func TestTransactUpdateWhere(t *testing.T) {
 	table := "table1"
 	uuid1 := libovsdb.UUID{GoUUID: "00000000-0000-0000-0000-000000000001"}
