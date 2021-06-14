@@ -150,7 +150,7 @@ func (txn *Transaction) etcdRemoveDupThen() {
 	newThen := []*clientv3.Op{}
 	for curr, op := range txn.etcd.Then {
 		key := etcdOpKey(op)
-		txn.log.V(6).Info("adding key", "key", key, "index", curr)
+		txn.log.V(6).Info("[then] adding key", "key", key, "index", curr)
 		newThen = append(newThen, &txn.etcd.Then[curr])
 	}
 
@@ -159,7 +159,7 @@ func (txn *Transaction) etcdRemoveDupThen() {
 		key := etcdOpKey(*op)
 		prev, ok := prevKeyIndex[key]
 		if ok {
-			txn.log.V(6).Info("removing key", "key", key, "index", prev)
+			txn.log.V(6).Info("[then] removing key", "key", key, "index", prev)
 			newThen[prev] = nil
 		}
 		prevKeyIndex[key] = curr
@@ -194,7 +194,7 @@ func (txn *Transaction) etcdRemoveDupEvents() {
 			continue
 		}
 		key := etcdEventKey(curr)
-		txn.log.V(6).Info("adding key", "key", key, "index", i)
+		txn.log.V(6).Info("[event] adding key", "key", key, "index", i)
 	}
 
 	prevKeyIndex := map[string]int{}
@@ -209,7 +209,7 @@ func (txn *Transaction) etcdRemoveDupEvents() {
 			if etcdEventIsModify(curr) && etcdEventIsCreate(prev) {
 				newEvents[i] = etcdEventCreateFromModify(curr)
 			}
-			txn.log.V(6).Info("removing key", "key", key, "index", i)
+			txn.log.V(6).Info("[event] removing key", "key", key, "index", prevIndex)
 			newEvents[prevIndex] = nil
 		}
 		prevKeyIndex[key] = i
@@ -1574,7 +1574,8 @@ func etcdModifyRow(txn *Transaction, k *common.Key, row *map[string]interface{})
 	etcdOp := clientv3.OpPut(key, val)
 	txn.etcd.Then = append(txn.etcd.Then, etcdOp)
 
-	prevVal, err := makeValue(txn.cache.Row(*k))
+	prevRow := txn.cache.Row(*k)
+	prevVal, err := makeValue(prevRow)
 	if err != nil {
 		return err
 	}
@@ -1763,8 +1764,8 @@ func doUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 			return err
 		}
 		key := common.NewDataKey(txn.request.DBName, *ovsOp.Table, uuid)
-		*(txn.cache.Row(key)) = *row
 		etcdModifyRow(txn, &key, row)
+		*(txn.cache.Row(key)) = *row
 		ovsResult.IncrementCount()
 	}
 	return nil
@@ -1796,8 +1797,8 @@ func doMutate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 			return err
 		}
 		key := common.NewDataKey(txn.request.DBName, *ovsOp.Table, uuid)
-		*(txn.cache.Row(key)) = *row
 		etcdModifyRow(txn, &key, row)
+		*(txn.cache.Row(key)) = *row
 		ovsResult.IncrementCount()
 	}
 	return nil
