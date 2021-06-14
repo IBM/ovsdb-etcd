@@ -4,12 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/creachadair/jrpc2"
-	"github.com/creachadair/jrpc2/channel"
-	"github.com/creachadair/jrpc2/handler"
-	"github.com/creachadair/jrpc2/metrics"
 	"io/ioutil"
-	"k8s.io/klog/v2"
 	"net"
 	"os"
 	"os/signal"
@@ -19,6 +14,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/creachadair/jrpc2"
+	"github.com/creachadair/jrpc2/channel"
+	"github.com/creachadair/jrpc2/handler"
+	"github.com/creachadair/jrpc2/metrics"
+
+	"github.com/go-logr/logr"
+	klog "k8s.io/klog/v2"
+	"k8s.io/klog/v2/klogr"
+
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/ovsdb"
 )
@@ -27,6 +31,7 @@ const UNIX_SOCKET = "/tmp/ovsdb-etcd.sock"
 const ETCD_LOCALHOST = "localhost:2379"
 
 var (
+	logLevel           = flag.String("v", "5", "Log verbosity level")
 	tcpAddress         = flag.String("tcp-address", "", "TCP service address")
 	unixAddress        = flag.String("unix-address", "", "UNIX service address")
 	etcdMembers        = flag.String("etcd-members", ETCD_LOCALHOST, "ETCD service addresses, separated by ',' ")
@@ -41,26 +46,36 @@ var (
 
 var GitCommit string
 
-func main() {
-	klog.InitFlags(nil)
-	flag.Parse()
-	defer klog.Flush()
+var log logr.Logger
 
-	klog.V(3).Infof("Start the ovsdb-etcd server \n the last commit: %s\n arguments:\n"+
-		"\ttcpAddress: %s\n\tunixAddressress: %s\n\tetcdMembersress: %s\n\tschemaBasedir: %s\n\tmaxTasks: %d\n"+
-		"\tdatabasePrefix: %s\n\tserviceName: %s\n\tschemaFile: %s\n\tloadServerData: %v\n\tpid_file: %s\n",
-		GitCommit, *tcpAddress, *unixAddress, *etcdMembers, *schemaBasedir, *maxTasks, *databasePrefix, *serviceName,
-		*schemaFile, *loadServerDataFlag, *pidfile)
+func main() {
+	flag.Parse()
+
+	fs := flag.NewFlagSet("fs", flag.PanicOnError)
+	klog.InitFlags(fs)
+	fs.Set("v", *logLevel)
+	defer klog.Flush()
+	log = klogr.New()
+
+	log.V(3).Info("start the ovsdb-etcd server", "git-commit", GitCommit,
+		"tcp-address", tcpAddress, "unix-address", unixAddress, "etcd-members",
+		etcdMembers, "schema-basedir", schemaBasedir, "max-tasks", maxTasks,
+		"database-prefix", databasePrefix, "service-name", serviceName,
+		"schema-file", schemaFile, "load-server-data-flag", loadServerDataFlag,
+		"pidfile", pidfile)
 
 	if len(*tcpAddress) == 0 && len(*unixAddress) == 0 {
-		klog.Fatal("You must provide a network-address (TCP and/or UNIX) to listen on")
+		log.Info("You must provide a network-address (TCP and/or UNIX) to listen on")
+		os.Exit(1)
 	}
 
 	if len(*databasePrefix) == 0 || strings.Contains(*databasePrefix, common.KEY_DELIMETER) {
-		klog.Fatal("Illegal databasePrefix %s", *databasePrefix)
+		log.Info("Illegal databasePrefix %s", *databasePrefix)
+		os.Exit(1)
 	}
 	if len(*serviceName) == 0 || strings.Contains(*serviceName, common.KEY_DELIMETER) {
-		klog.Fatal("Illegal serviceName %s", *serviceName)
+		log.Info("Illegal serviceName %s", *serviceName)
+		os.Exit(1)
 	}
 
 	if *pidfile != "" {
@@ -75,13 +90,15 @@ func main() {
 	common.SetPrefix(*databasePrefix + common.KEY_DELIMETER + *serviceName)
 
 	if len(*etcdMembers) == 0 {
-		klog.Fatal("Wrong ETCD members list", etcdMembers)
+		log.Info("Wrong ETCD members list", etcdMembers)
+		os.Exit(1)
 	}
 	etcdServers := strings.Split(*etcdMembers, ",")
 
 	cli, err := ovsdb.NewEtcdClient(etcdServers)
 	if err != nil {
-		klog.Fatal(err)
+		log.Error(err, "failed creating an etcd client")
+		os.Exit(1)
 	}
 	defer cli.Close()
 
@@ -89,18 +106,21 @@ func main() {
 
 	err = db.AddSchema(path.Join(*schemaBasedir, "_server.ovsschema"))
 	if err != nil {
-		klog.Fatal(err)
+		log.Error(err, "failed to add schema")
+		os.Exit(1)
 	}
 
 	err = db.AddSchema(path.Join(*schemaBasedir, *schemaFile))
 	if err != nil {
-		klog.Fatal(err)
+		log.Error(err, "failed to add schema")
+		os.Exit(1)
 	}
 	// TODO for development only, will be remove later
 	if *loadServerDataFlag {
 		err = loadServerData(db.(*ovsdb.DatabaseEtcd))
 		if err != nil {
-			klog.Fatal(err)
+			log.Error(err, "failed to load server data")
+			os.Exit(1)
 		}
 	}
 
@@ -130,11 +150,11 @@ func main() {
 			conn, err := lst.Accept()
 			conn = ConnWrapper{intConn: conn}
 			if err != nil {
-				klog.V(5).Infof("connection from %v accept error %v  IsErrClosing %v", conn.RemoteAddr(), err, channel.IsErrClosing(err))
+				log.V(5).Info("connection", "from", conn.RemoteAddr(), "error", err, "is-closing", channel.IsErrClosing(err))
 				if channel.IsErrClosing(err) {
 					err = nil
 				} else {
-					klog.Infof("Error accepting new connection: %v", err)
+					log.Error(err, "failed accepting new connection")
 				}
 				return err
 			}
@@ -142,15 +162,15 @@ func main() {
 			go func() {
 				tctx, cancel := context.WithCancel(context.Background())
 				handler := ovsdb.NewHandler(tctx, db, cli)
-				klog.V(5).Infof("new connection from %v", conn.RemoteAddr())
+				log.V(5).Info("new connection", "from", conn.RemoteAddr())
 				assigner := createServicesMap(service, handler)
 				srv := jrpc2.NewServer(assigner, servOptions)
 				handler.SetConnection(srv, conn)
 				srv.Start(ch)
 				stat := srv.WaitStatus()
-				klog.V(5).Infof("connection from %v, stopped %v closed %v, success %v, err %v", conn.RemoteAddr(), stat.Stopped(), stat.Closed(), stat.Success(), stat.Err)
+				log.V(5).Info("connection", "from", conn.RemoteAddr(), "stopped", stat.Stopped(), "closed", stat.Closed(), "success", stat.Success(), "err", stat.Err)
 				if stat.Err != nil {
-					klog.Infof("Server exit: %v", stat.Err)
+					log.Error(err, "Server exit")
 				}
 				handler.Cleanup()
 				cancel()
@@ -160,28 +180,30 @@ func main() {
 	if len(*tcpAddress) > 0 {
 		lst, err := net.Listen(jrpc2.Network(*tcpAddress), *tcpAddress)
 		if err != nil {
-			klog.Fatalln("Listen:", err)
+			log.Error(err, "failed listen")
 		}
-		klog.Infof("Listening at %v...", lst.Addr())
+		log.Info("listening", "on", lst.Addr())
 		//servOptions.Logger = log.New(os.Stderr, "[TCP.Server] ", log.LstdFlags|log.Lshortfile)
 
 		go loop(lst)
 	}
 	if runtime.GOOS == "linux" && len(*unixAddress) > 0 {
 		if err := os.RemoveAll(*unixAddress); err != nil {
-			klog.Fatal(err)
+			log.Error(err, "failed to remove all address")
+			os.Exit(1)
 		}
 		lst, err := net.Listen(jrpc2.Network(*unixAddress), *unixAddress)
 		if err != nil {
-			klog.Fatalln("Listen:", err)
+			log.Error(err, "failed listen")
+			os.Exit(1)
 		}
-		klog.Infof("Listening at %v...", lst.Addr())
+		log.Info("listening", "on", lst.Addr())
 		//servOptions.Logger = log.New(os.Stderr, "[UNIX.Server] ", log.LstdFlags|log.Lshortfile)
 		go loop(lst)
 	}
 	select {
 	case s := <-exitCh:
-		klog.Infof("Received signal %s. Shutting down", s)
+		log.Info("Received signal shutting down", "signal", s)
 		cancel()
 	case <-ctx.Done():
 	}
@@ -215,7 +237,7 @@ func delPidfile(pidfile string) {
 	if pidfile != "" {
 		if _, err := os.Stat(pidfile); err == nil {
 			if err := os.Remove(pidfile); err != nil {
-				klog.Errorf("%s delete failed: %v", pidfile, err)
+				log.Error(err, "delete failed", "pidfile", pidfile)
 			}
 		}
 	}
@@ -228,7 +250,7 @@ func setupPIDFile(pidfile string) error {
 	// Create if it doesn't exist, else exit with error
 	if os.IsNotExist(err) {
 		if err := ioutil.WriteFile(pidfile, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
-			klog.Errorf("Failed to write pidfile %s (%v). Ignoring..", pidfile, err)
+			log.Error(err, "failed to write pidfile. ignoring..", "pidfile", pidfile)
 		}
 	} else {
 		// get the pid and see if it exists
@@ -240,7 +262,7 @@ func setupPIDFile(pidfile string) error {
 		if os.IsNotExist(err1) {
 			// Left over pid from dead process
 			if err := ioutil.WriteFile(pidfile, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
-				klog.Errorf("Failed to write pidfile %s (%v). Ignoring..", pidfile, err)
+				log.Error(err, "failed to write pidfile. ignoring..", "pidfile", pidfile)
 			}
 		} else {
 			return fmt.Errorf("pidfile %s exists and ovnkube is running", pidfile)
@@ -257,18 +279,18 @@ type ConnWrapper struct {
 
 func (cw ConnWrapper) Read(b []byte) (n int, err error) {
 	n, err = cw.intConn.Read(b)
-	klog.V(7).Infof("read from %v, i= %d err=%v\n ", cw.intConn.RemoteAddr(), n, err)
+	log.V(7).Info("read", "from", cw.intConn.RemoteAddr(), "bytes", n, "error", err)
 	return
 }
 
 func (cw ConnWrapper) Write(b []byte) (n int, err error) {
 	n, err = cw.intConn.Write(b)
-	klog.V(7).Infof("write to %v, i= %d err=%v\n ", cw.intConn.RemoteAddr(), n, err)
+	log.V(7).Info("write", "from", cw.intConn.RemoteAddr(), "bytes", n, "error", err)
 	return
 }
 
 func (cw ConnWrapper) Close() error {
-	klog.V(5).Infof("connection from %v called close", cw.intConn.RemoteAddr())
+	log.V(5).Info("close", "from", cw.intConn.RemoteAddr())
 	return cw.intConn.Close()
 }
 

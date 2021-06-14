@@ -22,6 +22,7 @@ SERVER_FILES := \
 	$(ROOT_DIR)/pkg/cmd/server/testdata.go
 
 SERVER_ARGS := \
+		-v 2 \
 		-tcp-address $(TCP_ADDRESS) \
 		-unix-address $(UNIX_ADDRESS) \
 		-schema-basedir $(ROOT_DIR)/schemas \
