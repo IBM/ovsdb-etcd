@@ -154,7 +154,7 @@ func (m *dbMonitor) start() {
 
 func (hm *handlerMonitorData) notifier(ch *Handler) {
 	// we need some time to allow to the monitor calls return data
-	time.Sleep(1 * time.Millisecond)
+	time.Sleep(5 * time.Millisecond)
 	for {
 		select {
 		case <-ch.handlerContext.Done():

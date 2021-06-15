@@ -197,7 +197,8 @@ func (ch *Handler) MonitorCond(ctx context.Context, params []interface{}) (inter
 		return nil, err
 	}
 	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
-	klog.V(5).Infof("MonitorCond response to %v, params %v, err %v", ch.GetClientAddress(), params, err)
+	klog.V(5).Infof("MonitorCond response to %v, jsonValue %v, data %v, err %v",
+		ch.GetClientAddress(), params[1], data, err)
 	if err != nil {
 		ch.removeMonitor(params[1], false)
 		return nil, err
@@ -265,7 +266,7 @@ func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) 
 			}
 		}
 	}
-	return nil, nil
+	return ovsjson.EmptyStruct{}, nil
 }
 
 func (ch *Handler) MonitorCondSince(ctx context.Context, params []interface{}) (interface{}, error) {
@@ -276,7 +277,8 @@ func (ch *Handler) MonitorCondSince(ctx context.Context, params []interface{}) (
 		return nil, err
 	}
 	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
-	klog.V(5).Infof("MonitorCondSince response to %v, params %v, err %v", ch.GetClientAddress(), params, err)
+	klog.V(5).Infof("MonitorCondSince response to %v, jsonValue %v, data %v, err %v",
+		ch.GetClientAddress(), params[1], data, err)
 	if err != nil {
 		ch.removeMonitor(params[1], false)
 		return nil, err
