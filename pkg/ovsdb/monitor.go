@@ -254,6 +254,9 @@ func (m *dbMonitor) prepareTableUpdate(events []*clientv3.Event) (map[string]ovs
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, ev := range events {
+		if ev.Kv == nil {
+			continue
+		}
 		key, err := common.ParseKey(string(ev.Kv.Key))
 		if err != nil {
 			klog.Errorf("error: %v", err)
