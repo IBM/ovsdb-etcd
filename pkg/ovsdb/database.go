@@ -174,7 +174,7 @@ func (con *DatabaseEtcd) GetData(keys []common.Key) (*clientv3.TxnResponse, erro
 	if err != nil {
 		klog.Errorf("GetData returned error: %v", err)
 	} else {
-		klog.Errorf("GetData succeded %v revision %d", res.Succeeded, res.Header.Revision)
+		klog.Infof("GetData succeeded %v revision %d", res.Succeeded, res.Header.Revision)
 	}
 	return res, err
 }

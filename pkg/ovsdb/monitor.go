@@ -202,6 +202,13 @@ func (m *dbMonitor) notify(events []*clientv3.Event, revision int64, wg *sync.Wa
 		if err != nil {
 			klog.Errorf("%v", err)
 		} else {
+			if len(result) == 0 {
+				klog.V(5).Infof("there is nothing to notify %v", m.handler.GetClientAddress())
+				if wg != nil {
+					wg.Done()
+				}
+				return
+			}
 			for jValue, tableUpdates := range result {
 				klog.V(7).Infof("notify %v jsonValue =[%v] %v", m.handler.GetClientAddress(), jValue, tableUpdates)
 				m.handler.notify(jValue, tableUpdates, wg)
