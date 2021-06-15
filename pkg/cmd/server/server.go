@@ -157,7 +157,7 @@ func main() {
 			ch := channel.RawJSON(conn, conn)
 			go func() {
 				tctx, cancel := context.WithCancel(context.Background())
-				handler := ovsdb.NewHandler(tctx, db, cli)
+				handler := ovsdb.NewHandler(tctx, db, cli, log)
 				log.V(5).Info("new connection", "from", conn.RemoteAddr())
 				assigner := createServicesMap(service, handler)
 				srv := jrpc2.NewServer(assigner, servOptions)

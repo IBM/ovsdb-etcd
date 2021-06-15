@@ -3,6 +3,7 @@ package ovsdb
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"sync"
 	"testing"
 
@@ -10,11 +11,19 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	klog "k8s.io/klog/v2"
+	klogr "k8s.io/klog/v2/klogr"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
 )
+
+func init() {
+	fs := flag.NewFlagSet("fs", flag.PanicOnError)
+	klog.InitFlags(fs)
+	fs.Set("v", "10")
+}
 
 func TestMonitorRowUpdate(t *testing.T) {
 
@@ -150,7 +159,7 @@ func TestMonitorRowUpdate(t *testing.T) {
 func TestMonitorAddRemoveMonitor(t *testing.T) {
 	db, _ := NewDatabaseMock()
 	ctx := context.Background()
-	handler := NewHandler(ctx, db, nil)
+	handler := NewHandler(ctx, db, nil, klogr.New())
 	expMsg, err := json.Marshal([]interface{}{"monid", "OVN_Northbound"})
 	assert.Nil(t, err)
 	jrpcServerMock := jrpcServerMock{
@@ -368,7 +377,7 @@ func initHandler(t *testing.T, msg string, notificationType ovsjson.UpdateNotifi
 	common.SetPrefix("ovsdb/nb")
 	db, _ := NewDatabaseMock()
 	ctx := context.Background()
-	handler := NewHandler(ctx, db, nil)
+	handler := NewHandler(ctx, db, nil, klogr.New())
 
 	var params []interface{}
 	err := json.Unmarshal([]byte(msg), &params)
