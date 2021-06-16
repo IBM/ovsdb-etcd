@@ -3,15 +3,24 @@ package ovsdb
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	klog "k8s.io/klog/v2"
+	klogr "k8s.io/klog/v2/klogr"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 )
+
+func init() {
+	fs := flag.NewFlagSet("fs", flag.PanicOnError)
+	klog.InitFlags(fs)
+	fs.Set("v", "10")
+}
 
 var testSchemaSimple *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 	Name:    "simple",
@@ -256,7 +265,7 @@ func testTransact(t *testing.T, req *libovsdb.Transact) (*libovsdb.TransactRespo
 	cli, err := testEtcdNewCli()
 	assert.Nil(t, err)
 	defer cli.Close()
-	txn := NewTransaction(cli, "127.0.0.1:6642", "11", req)
+	txn := NewTransaction(cli, klogr.New(), req)
 	txn.AddSchema(testSchemaSimple)
 	txn.AddSchema(testSchemaAtomic)
 	txn.AddSchema(testSchemaMutable)

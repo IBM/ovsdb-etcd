@@ -9,9 +9,11 @@ import (
 	"sync"
 
 	"github.com/creachadair/jrpc2"
+	"github.com/go-logr/logr"
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
+	shortuuid "github.com/lithammer/shortuuid/v3"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"k8s.io/klog/v2"
@@ -24,6 +26,8 @@ type JrpcServer interface {
 }
 
 type Handler struct {
+	log logr.Logger
+
 	db         Databaser
 	etcdClient *clientv3.Client
 
@@ -47,9 +51,10 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	if !req.IsNotification() {
 		id = req.ID()
 	}
-	klog.V(5).Infof("Transact client=%v id=%s params=%v", ch.GetClientAddress(), id, params)
+	log := ch.log.WithValues("id", id)
+	log.V(5).Info("transact", "params", params)
 	if ch.closed {
-		klog.V(5).Infof("Transact request from %v, the handler is closed", ch.GetClientAddress())
+		log.V(5).Info("transact request, the handler is closed")
 		// prevents old transactions
 		return nil, nil
 	}
@@ -57,7 +62,7 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	if err != nil {
 		return nil, err
 	}
-	txn := NewTransaction(ch.etcdClient, ch.GetClientAddress(), id, ovsReq)
+	txn := NewTransaction(ch.etcdClient, log, ovsReq)
 	txn.schemas = ch.db.GetSchemas()
 	// temporary solution to provide consistency
 	ch.db.DbLock(ovsReq.DBName)
@@ -69,7 +74,7 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	}
 	monitor, ok := ch.monitors[txn.request.DBName]
 	if ok {
-		klog.V(5).Infof("Transact sending to monitor to %v: %s", ch.GetClientAddress(), txn.etcd.EventsDump())
+		//log.V(5).Info("transact sending to monitor", "events", txn.etcd.EventsDump())
 		// we have to guarantee that a new monitor call if it runs concurrently with the transaction, returns first
 		var wg sync.WaitGroup
 		wg.Add(1)
@@ -77,26 +82,27 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 		wg.Wait()
 	}
 
-	klog.V(5).Infof("Transact response to %v: %s", ch.GetClientAddress(), txn.response)
+	log.V(5).Info("transact response", "response", txn.response)
 	return txn.response.Result, nil
 }
 
 func (ch *Handler) Cancel(ctx context.Context, param interface{}) (interface{}, error) {
-	klog.V(5).Infof("Cancel request from %v, param %v", ch.GetClientAddress(), param)
+	ch.log.V(5).Info("cancel request", "param", param)
 
 	return "{Cancel}", nil
 }
 
 func (ch *Handler) Monitor(ctx context.Context, params []interface{}) (interface{}, error) {
-	klog.V(5).Infof("Monitor request from %v, params %v", ch.GetClientAddress(), params)
+	ch.log.V(5).Info("monitor request", "params", params)
 	updatersMap, err := ch.addMonitor(params, ovsjson.Update)
 	if err != nil {
-		klog.Errorf("Monitor from %v, params %v got an error: %s", ch.GetClientAddress(), params, err)
+		ch.log.Error(err, "monitor rquest failed", "params", params)
 		return nil, err
 	}
 	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
-	klog.V(5).Infof("Monitor response to %v, jsonValue %v, data %v, err %v", ch.GetClientAddress(), params[1], data, err)
+	ch.log.V(5).Info("monitor response", "jsonValue", params[1], "data", data)
 	if err != nil {
+		ch.log.Error(err, "failed to get monitored data")
 		ch.removeMonitor(params[1], false)
 		return nil, err
 	}
@@ -106,7 +112,7 @@ func (ch *Handler) Monitor(ctx context.Context, params []interface{}) (interface
 }
 
 func (ch *Handler) MonitorCancel(ctx context.Context, param interface{}) (interface{}, error) {
-	klog.V(5).Infof("MonitorCancel request from %v, param %v", ch.GetClientAddress(), param)
+	ch.log.V(5).Info("monitorCancel", "param", param)
 	err := ch.removeMonitor(param, true)
 	if err != nil {
 		return nil, err
@@ -115,7 +121,7 @@ func (ch *Handler) MonitorCancel(ctx context.Context, param interface{}) (interf
 }
 
 func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, error) {
-	klog.V(5).Infof("Lock request from %v, param %v", ch.GetClientAddress(), param)
+	ch.log.V(5).Info("lock request", "param", param)
 	id, err := common.ParamsToString(param)
 	if err != nil {
 		return map[string]bool{"locked": false}, err
@@ -126,7 +132,7 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 	if !ok {
 		myLock, err = ch.db.GetLock(ch.handlerContext, id)
 		if err != nil {
-			klog.Warningf("Lock returned error %v\n", err)
+			ch.log.Error(err, "lock failed", "lockid", id)
 			return nil, err
 		}
 		ch.mu.Lock()
@@ -145,7 +151,7 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 	if err == nil {
 		return map[string]bool{"locked": true}, nil
 	} else if err != concurrency.ErrLocked {
-		klog.Errorf("Locked %s got error %v", id, err)
+		ch.log.Error(err, "lock failed", "lockid", id)
 		// TOD is it correct?
 		return nil, err
 	}
@@ -153,20 +159,20 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 		err = myLock.lock()
 		if err == nil {
 			// Send notification
-			klog.V(5).Infof("%v %s Locked", ch.GetClientAddress(), id)
+			ch.log.V(5).Info("lock succeeded", "lockid", id)
 			if err := ch.jrpcServer.Notify(ch.handlerContext, "locked", []string{id}); err != nil {
 				klog.Errorf("notification %v\n", err)
 				return
 			}
 		} else {
-			klog.Errorf("Lock %s error %v\n", id, err)
+			ch.log.Error(err, "lock failed", "lockid", id)
 		}
 	}()
 	return map[string]bool{"locked": false}, nil
 }
 
 func (ch *Handler) Unlock(ctx context.Context, param interface{}) (interface{}, error) {
-	klog.V(5).Infof("Unlock request from %v, param %v", ch.GetClientAddress(), param)
+	ch.log.V(5).Info("unlock request", "param", param)
 	id, err := common.ParamsToString(param)
 	if err != nil {
 		return ovsjson.EmptyStruct{}, err
@@ -176,7 +182,7 @@ func (ch *Handler) Unlock(ctx context.Context, param interface{}) (interface{}, 
 	delete(ch.databaseLocks, id)
 	ch.mu.Unlock()
 	if !ok {
-		klog.V(4).Infof("Unlock non existing lock %s", id)
+		ch.log.V(4).Info("unlock: can't find lock", "lockid", id)
 		return ovsjson.EmptyStruct{}, nil
 	}
 	myLock.cancel()
@@ -184,22 +190,22 @@ func (ch *Handler) Unlock(ctx context.Context, param interface{}) (interface{}, 
 }
 
 func (ch *Handler) Steal(ctx context.Context, param interface{}) (interface{}, error) {
-	klog.V(5).Infof("Steal request from %v, param %v", ch.GetClientAddress(), param)
+	ch.log.V(5).Info("steal request", "param", param)
 	// TODO
 	return "{Steal}", nil
 }
 
 func (ch *Handler) MonitorCond(ctx context.Context, params []interface{}) (interface{}, error) {
-	klog.V(1).Infof("MonitorCond request from %v, param %v", ch.GetClientAddress(), params)
+	ch.log.V(1).Info("monitorCond request", "params", params)
 	updatersMap, err := ch.addMonitor(params, ovsjson.Update2)
 	if err != nil {
-		klog.Errorf("MonitorCond from remote %v got an error: %s", ch.GetClientAddress(), err)
+		ch.log.Error(err, "monitorCond from remote")
 		return nil, err
 	}
 	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
-	klog.V(5).Infof("MonitorCond response to %v, jsonValue %v, data %v, err %v",
-		ch.GetClientAddress(), params[1], data, err)
+	ch.log.V(5).Info("monitorCond response", "jsonValue", params[1], "data", data)
 	if err != nil {
+		ch.log.Error(err, "failed to get monitored data")
 		ch.removeMonitor(params[1], false)
 		return nil, err
 	}
@@ -209,10 +215,10 @@ func (ch *Handler) MonitorCond(ctx context.Context, params []interface{}) (inter
 }
 
 func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) (interface{}, error) {
-	klog.V(5).Infof("MonitorCondChange request from %v, params %v", ch.GetClientAddress(), params)
+	ch.log.V(5).Info("monitorCondChange request", "params", params)
 	if len(params) != 3 {
 		err := fmt.Errorf("wrong params length for MonitorCondChange %d , params %v", len(params), params)
-		klog.Errorf("%v", err)
+		ch.log.Error(err, "monitorCondChange request")
 		return nil, err
 	}
 	oldJsonValue := params[0]
@@ -220,7 +226,7 @@ func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) 
 	mcrs := map[string][]ovsjson.MonitorCondRequest{}
 	buf, err := json.Marshal(params[2])
 	if err != nil {
-		klog.Errorf("marshal conditional request returned %v", err)
+		ch.log.Error(err, "marshal conditional request returned")
 		return nil, err
 	}
 	if err := json.Unmarshal(buf, &mcrs); err != nil {
@@ -234,27 +240,26 @@ func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) 
 		}
 	}
 	if reflect.DeepEqual(oldJsonValue, newJsonValue) {
-		klog.V(5).Info("MonitorCondChange, update existing monitor")
+		ch.log.V(5).Info("MonitorCondChange, update existing monitor")
 		jsonValueString := jsonValueToString(oldJsonValue)
 		ch.mu.Lock()
 		defer ch.mu.Unlock()
 		monitorData, ok := ch.handlerMonitorData[jsonValueString]
 		if !ok {
-			klog.Errorf("update unexisting dbMonitor with jsonValue = %v", oldJsonValue)
 			err := fmt.Errorf("unknown monitor")
+			ch.log.Error(err, "update unexisting dbMonitor", "jsonValue", oldJsonValue)
 			return nil, err
 		}
 		dbName := monitorData.dataBaseName
 		monitor, ok := ch.monitors[dbName]
 		if !ok {
-			klog.Warningf("there is no monitor to %s", monitorData.dataBaseName)
+			ch.log.Info("MonitorCondChange there is no monitor", "dbname", monitorData.dataBaseName)
 		}
 		for tableName, mcrArray := range mcrs {
 			key := common.NewTableKey(dbName, tableName)
 			_, ok := monitor.key2Updaters[key]
 			if !ok {
-				klog.V(6).Infof("MonitorCondChange from %v, add new updater to %s, mcr = %v",
-					ch.GetClientAddress(), tableName, mcrArray)
+				ch.log.V(6).Info("MonitorCondChange", "table", tableName, "mcr", mcrArray)
 				var updaters []updater
 				for _, mcr := range mcrArray {
 					updater := mcrToUpdater(mcr, jsonValueString, monitorData.notificationType == ovsjson.Update)
@@ -270,16 +275,16 @@ func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) 
 }
 
 func (ch *Handler) MonitorCondSince(ctx context.Context, params []interface{}) (interface{}, error) {
-	klog.V(5).Infof("MonitorCondSince request from %v, parameters %v", ch.GetClientAddress(), params)
+	ch.log.V(5).Info("MonitorCondSince request", "params", params)
 	updatersMap, err := ch.addMonitor(params, ovsjson.Update3)
 	if err != nil {
-		klog.Errorf("MonitorCondSince from remote %v got an error: %s", ch.GetClientAddress(), err)
+		ch.log.Error(err, "MonitorCondSince failed")
 		return nil, err
 	}
 	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
-	klog.V(5).Infof("MonitorCondSince response to %v, jsonValue %v, data %v, err %v",
-		ch.GetClientAddress(), params[1], data, err)
+	ch.log.V(5).Info("MonitorCondSince response", "jsonValue", params[1], "data", data)
 	if err != nil {
+		ch.log.Error(err, "failed to get monitored data")
 		ch.removeMonitor(params[1], false)
 		return nil, err
 	}
@@ -289,7 +294,7 @@ func (ch *Handler) MonitorCondSince(ctx context.Context, params []interface{}) (
 }
 
 func (ch *Handler) SetDbChangeAware(ctx context.Context, param interface{}) interface{} {
-	klog.V(5).Infof("SetDbChangeAware request from %v, param %v", ch.GetClientAddress(), param)
+	ch.log.V(5).Info("SetDbChangeAware request", "param", param)
 	return ovsjson.EmptyStruct{}
 }
 
@@ -298,19 +303,24 @@ func (ch *Handler) SetDbChangeAware(ctx context.Context, param interface{}) inte
 // "params": JSON array with any contents
 // Returns : "result": same as "params"
 func (ch *Handler) Echo(ctx context.Context, param interface{}) interface{} {
-	klog.V(5).Infof("Echo request from %v, parameters %v", ch.GetClientAddress(), param)
+	ch.log.V(5).Info("Echo request", "param", param)
 	return param
 }
 
-func NewHandler(tctx context.Context, db Databaser, cli *clientv3.Client) *Handler {
+func NewHandler(tctx context.Context, db Databaser, cli *clientv3.Client, log logr.Logger) *Handler {
 	return &Handler{
-		handlerContext: tctx, db: db, databaseLocks: map[string]Locker{}, handlerMonitorData: map[string]handlerMonitorData{},
-		etcdClient: cli, monitors: map[string]*dbMonitor{},
+		handlerContext:     tctx,
+		db:                 db,
+		databaseLocks:      map[string]Locker{},
+		handlerMonitorData: map[string]handlerMonitorData{},
+		etcdClient:         cli,
+		monitors:           map[string]*dbMonitor{},
+		log:                log.WithValues("hid", shortuuid.New()),
 	}
 }
 
 func (ch *Handler) Cleanup() error {
-	klog.Infof("CLEAN UP do something from %v", ch.GetClientAddress())
+	ch.log.Info("CLEAN UP do something")
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
 	ch.closed = true
@@ -327,46 +337,47 @@ func (ch *Handler) Cleanup() error {
 func (ch *Handler) SetConnection(jrpcSerer JrpcServer, clientCon net.Conn) {
 	ch.jrpcServer = jrpcSerer
 	ch.clientCon = clientCon
+	ch.log = ch.log.WithValues("client", ch.GetClientAddress())
 }
 
 func (ch *Handler) notify(jsonValueString string, updates ovsjson.TableUpdates, wg *sync.WaitGroup) {
 	hmd, ok := ch.handlerMonitorData[jsonValueString]
 	if !ok {
-		klog.Errorf("Unknown jsonValue %s", jsonValueString)
+		ch.log.Info("Unknown jsonValue", "jsonValue", jsonValueString)
 		return
 	}
 	if klog.V(7).Enabled() {
-		klog.V(7).Infof("Monitor notification jsonValue %v to %v: %s", hmd.jsonValue, ch.GetClientAddress(), updates)
+		ch.log.V(7).Info("Monitor notification jsonValue", "jsonValue", hmd.jsonValue, "updates", updates)
 	} else {
-		klog.V(5).Infof("Monitor notification jsonValue %v to %v", hmd.jsonValue, ch.GetClientAddress())
+		ch.log.V(5).Info("Monitor notification jsonValue", "jsonValue", hmd.jsonValue)
 	}
 	hmd.notificationChain <- notificationEvent{updates: updates, wg: wg}
 }
 
 func (ch *Handler) monitorCanceledNotification(jsonValue interface{}) {
-	klog.V(5).Infof("monitorCanceledNotification %v to %v", jsonValue, ch.GetClientAddress())
+	ch.log.V(5).Info("monitorCanceledNotification", "jsonValue", jsonValue)
 	err := ch.jrpcServer.Notify(ch.handlerContext, MONITOR_CANCELED, jsonValue)
 	if err != nil {
 		// TODO should we do something else
-		klog.Errorf(" error monitorCanceledNotification to %v : %v", ch.GetClientAddress(), err)
+		ch.log.Error(err, "monitorCanceledNotification failed")
 	}
 }
 
 func (ch *Handler) removeMonitor(jsonValue interface{}, notify bool) error {
-	klog.V(5).Infof("removeMonitor %v", jsonValue)
+	ch.log.V(5).Info("removeMonitor failed", "jsonValue", jsonValue)
 
 	jsonValueString := jsonValueToString(jsonValue)
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
 	monitorData, ok := ch.handlerMonitorData[jsonValueString]
 	if !ok {
-		klog.Errorf("removing unexisting dbMonitor with jsonValue = %v", jsonValue)
+		ch.log.Info("removing unexisting dbMonitor", "jsonValue", jsonValue)
 		err := fmt.Errorf("unknown monitor")
 		return err
 	}
 	monitor, ok := ch.monitors[monitorData.dataBaseName]
 	if !ok {
-		klog.Warningf("there is no monitor to %s", monitorData.dataBaseName)
+		ch.log.Info("there is no monitor", "dbname", monitorData.dataBaseName)
 	}
 
 	monitor.removeUpdaters(monitorData.updatersKeys, jsonValueString)
@@ -429,10 +440,10 @@ func (ch *Handler) addMonitor(params []interface{}, notificationType ovsjson.Upd
 }
 
 func (ch *Handler) startNotifier(jsonValue string) {
-	klog.V(6).Infof("start monitor notifier for %s", jsonValue)
+	ch.log.V(6).Info("start monitor notifier", "jsonValue", jsonValue)
 	hmd, ok := ch.handlerMonitorData[jsonValue]
 	if !ok {
-		klog.Errorf("there is no notifier for %s", jsonValue)
+		ch.log.Info("there is no notifier", "jsonValue", jsonValue)
 	} else {
 		go hmd.notifier(ch)
 	}
@@ -468,7 +479,7 @@ func (ch *Handler) getMonitoredData(dbName string, updatersMap Key2Updaters) (ov
 		for _, kv := range rangeResp.Kvs {
 			key, err := common.ParseKey(string(kv.Key))
 			if err != nil {
-				klog.Errorf("Parse key %s, returned %v", string(kv.Key), err)
+				ch.log.Error(err, "parse failed", "key", string(kv.Key))
 				return nil, err
 			}
 			tableKey := key.ToTableKey()
@@ -476,7 +487,7 @@ func (ch *Handler) getMonitoredData(dbName string, updatersMap Key2Updaters) (ov
 			for _, updater := range updaters {
 				row, uuid, err := updater.prepareCreateRowInitial(&kv.Value)
 				if err != nil {
-					klog.Errorf("prepareCreateRowInitial returned %s", err)
+					ch.log.Error(err, "prepareCreateRowInitial returned")
 					return nil, err
 				}
 				// TODO merge
@@ -488,7 +499,7 @@ func (ch *Handler) getMonitoredData(dbName string, updatersMap Key2Updaters) (ov
 					}
 					tableUpdate[uuid] = *row
 				} else {
-					klog.Info("row is nil")
+					ch.log.Info("row is nil")
 				}
 			}
 		}
@@ -499,7 +510,7 @@ func (ch *Handler) getMonitoredData(dbName string, updatersMap Key2Updaters) (ov
 		return nil, err
 	}
 	monitor.revChecker.revision = resp.Header.Revision
-	klog.V(6).Infof("getMonitoredData, revision %d returned Data %v", resp.Header.Revision, returnData)
+	ch.log.V(6).Info("getMonitoredData failed", "revision", resp.Header.Revision, "data", returnData)
 	return returnData, nil
 }
 

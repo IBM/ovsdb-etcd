@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"reflect"
 	"sync"
@@ -16,8 +15,6 @@ import (
 	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
-	klog "k8s.io/klog/v2"
-	klogr "k8s.io/klog/v2/klogr"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
@@ -48,12 +45,6 @@ const (
 	E_PERMISSION_ERROR = "permission error"
 	E_SYNTAX_ERROR     = "syntax error or unknown column"
 )
-
-func init() {
-	fs := flag.NewFlagSet("fs", flag.PanicOnError)
-	klog.InitFlags(fs)
-	fs.Set("v", "10")
-}
 
 func isEqualSet(expected, actual interface{}) bool {
 	expectedSet := expected.(libovsdb.OvsSet)
@@ -550,9 +541,9 @@ type Transaction struct {
 	etcd *Etcd
 }
 
-func NewTransaction(cli *clientv3.Client, address string, id string, request *libovsdb.Transact) *Transaction {
+func NewTransaction(cli *clientv3.Client, log logr.Logger, request *libovsdb.Transact) *Transaction {
 	txn := new(Transaction)
-	txn.log = klogr.New().WithValues("address", address, "id", id, "txnid", shortuuid.New())
+	txn.log = log.WithValues("txnid", shortuuid.New())
 	txn.log.V(5).Info("new transaction", "size", len(request.Operations), "request", request)
 	txn.cache = Cache{}
 	txn.mapUUID = MapUUID{}
@@ -647,9 +638,9 @@ func (txn *Transaction) Commit() (int64, error) {
 		}
 	}
 
-	txn.log.V(5).Info("events transaction", "events", txn.etcd.EventsDump())
+	//txn.log.V(5).Info("events transaction", "events", txn.etcd.EventsDump())
 	txn.etcdRemoveDup()
-	txn.log.V(5).Info("events transaction (remove dup)", "events", txn.etcd.EventsDump())
+	//txn.log.V(5).Info("events transaction (remove dup)", "events", txn.etcd.EventsDump())
 	trResponse, err := txn.etcdTranaction()
 	if err != nil {
 		errStr := err.Error()
