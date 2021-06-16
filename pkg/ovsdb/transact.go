@@ -14,7 +14,6 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/jinzhu/copier"
-	shortuuid "github.com/lithammer/shortuuid/v3"
 	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -593,7 +592,7 @@ type Transaction struct {
 
 func NewTransaction(cli *clientv3.Client, log logr.Logger, request *libovsdb.Transact) *Transaction {
 	txn := new(Transaction)
-	txn.log = log.WithValues("txnid", shortuuid.New())
+	txn.log = log.WithValues()
 	txn.log.V(5).Info("new transaction", "size", len(request.Operations), "request", request)
 	txn.cache = Cache{}
 	txn.mapUUID = MapUUID{}

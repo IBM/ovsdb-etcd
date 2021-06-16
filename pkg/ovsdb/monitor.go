@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-logr/logr"
 	clientv3 "go.etcd.io/etcd/client/v3"
-	"k8s.io/klog/v2"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
@@ -33,6 +33,8 @@ type updater struct {
 }
 
 type handlerMonitorData struct {
+	log logr.Logger
+
 	notificationType ovsjson.UpdateNotificationType
 
 	// updaters from the given json-value, key is the path in the monitor.
@@ -70,6 +72,8 @@ func (k *Key2Updaters) removeUpdaters(key common.Key, jsonValue string) {
 }
 
 type dbMonitor struct {
+	log logr.Logger
+
 	// etcd watcher channel
 	watchChannel clientv3.WatchChan
 	// cancel function to close the etcd watcher
@@ -103,8 +107,13 @@ func (rc *revisionChecker) isNewRevision(newRevision int64) bool {
 	return false
 }
 
-func newMonitor(dbName string, handler *Handler) *dbMonitor {
-	m := dbMonitor{dataBaseName: dbName, handler: handler, key2Updaters: Key2Updaters{}}
+func newMonitor(dbName string, handler *Handler, log logr.Logger) *dbMonitor {
+	m := dbMonitor{
+		log:          log,
+		dataBaseName: dbName,
+		handler:      handler,
+		key2Updaters: Key2Updaters{},
+	}
 	return &m
 }
 
@@ -167,11 +176,10 @@ func (hm *handlerMonitorData) notifier(ch *Handler) {
 				}
 				return
 			}
-			if klog.V(6).Enabled() {
-				klog.V(6).Infof("Send notification to %v, jsonValue %v notification %v",
-					ch.GetClientAddress(), hm.jsonValue, notificationEvent.updates)
+			if hm.log.V(6).Enabled() {
+				hm.log.V(6).Info("send notification", "updates", notificationEvent.updates)
 			} else {
-				klog.V(5).Infof("Send notification to %v, jsonValue %v", ch.GetClientAddress(), hm.jsonValue)
+				hm.log.V(5).Info("send notification")
 			}
 
 			var err error
@@ -185,11 +193,10 @@ func (hm *handlerMonitorData) notifier(ch *Handler) {
 			}
 			if err != nil {
 				// TODO should we do something else
-				klog.Errorf("Monitor notification jsonValue %v returned error: %v", hm.jsonValue, err)
+				hm.log.Error(err, "monitor notification failed")
 			}
 			if notificationEvent.wg != nil {
-				klog.V(7).Infof("Sent notification to %v, jsonValue %v, call wg.done",
-					ch.GetClientAddress(), hm.jsonValue)
+				hm.log.V(7).Info("sent notification and call wg.done")
 				notificationEvent.wg.Done()
 			}
 		}
@@ -204,28 +211,26 @@ func (m *dbMonitor) notify(events []*clientv3.Event, revision int64, wg *sync.Wa
 		}
 	}()
 	if len(events) == 0 {
-		klog.V(5).Infof("there is events %v", m.handler.GetClientAddress())
+		m.log.V(5).Info("there is events")
 	}
-	klog.V(5).Infof("notify %v m.revChecker.revision %d, revision %d wg == nil ->%v",
-		m.handler.GetClientAddress(), m.revChecker.revision, revision, wg == nil)
+	m.log.V(5).Info("notify", "expected-revision", m.revChecker.revision, "revision", revision, "wg == nil", wg == nil)
 	if m.revChecker.isNewRevision(revision) {
 		result, err := m.prepareTableUpdate(events)
 		if err != nil {
-			klog.Errorf("%v", err)
+			m.log.Error(err, "prepareTableUpdate failed")
 		} else {
 			if len(result) == 0 {
-				klog.V(5).Infof("there is nothing to notify %v, event %+v", m.handler.GetClientAddress(), events)
+				m.log.V(5).Info("there is nothing to notify", "events", events)
 				return
 			}
 			for jValue, tableUpdates := range result {
 				sentToNotifier = true
-				klog.V(7).Infof("notify %v jsonValue =[%v] %v", m.handler.GetClientAddress(), jValue, tableUpdates)
+				m.log.V(7).Info("notify", "table-update", tableUpdates)
 				m.handler.notify(jValue, tableUpdates, wg)
 			}
 		}
 	} else {
-		klog.V(5).Infof("revisionChecker returned false. Old revision: %d, notification revision: %d",
-			m.revChecker.revision, revision)
+		m.log.V(5).Info("revisionChecker returned false", "old-revision", m.revChecker.revision, "notification-revision", revision)
 	}
 
 }
@@ -261,23 +266,23 @@ func (m *dbMonitor) prepareTableUpdate(events []*clientv3.Event) (map[string]ovs
 	defer m.mu.Unlock()
 	for _, ev := range events {
 		if ev.Kv == nil {
-			klog.V(5).Infof("Empty etcd event %+v", ev)
+			m.log.V(5).Info("empty etcd event", "event", fmt.Sprintf("%+v", ev))
 			continue
 		}
 		key, err := common.ParseKey(string(ev.Kv.Key))
 		if err != nil {
-			klog.Errorf("error: %v", err)
+			m.log.Error(err, "parseKey failed")
 			continue
 		}
 		updaters, ok := m.key2Updaters[key.ToTableKey()]
 		if !ok {
-			klog.Infof("There is no monitors for table path %s", key.TableKeyString())
+			m.log.Info("no monitors for table path", "table-path", key.TableKeyString())
 			continue
 		}
 		for _, updater := range updaters {
 			rowUpdate, uuid, err := updater.prepareRowUpdate(ev)
 			if err != nil {
-				klog.Errorf("prepareRowUpdate returned error %s, updater %v", err, updater)
+				m.log.Error(err, "prepareRowUpdate failed", "updater", updater)
 				continue
 			}
 			if rowUpdate == nil {
@@ -297,11 +302,9 @@ func (m *dbMonitor) prepareTableUpdate(events []*clientv3.Event) (map[string]ovs
 			// check if there is a rowUpdate for the same uuid
 			_, ok = tableUpdate[uuid]
 			if ok {
-				klog.Warningf("Duplicate event for %s\n prevRowUpdate %v \n newRowUpdate %v",
-					key.ShortString(), tableUpdate[uuid], rowUpdate)
+				m.log.Info("duplicate event", "key", key.ShortString(), "table-update", tableUpdate[uuid], "row-update", rowUpdate)
 				for n, eLog := range events {
-					klog.V(7).Infof("event %d type %s key %s value %s prevKey %s prevValue %s",
-						n, eLog.Type.String(), string(eLog.Kv.Key), string(eLog.Kv.Value), string(eLog.PrevKv.Key), string(eLog.PrevKv.Value))
+					m.log.V(7).Info("event", "index", n, "type", eLog.Type.String(), "key", string(eLog.Kv.Key), "value", string(eLog.Kv.Value), "prev-key", string(eLog.PrevKv.Key), "prev-value", string(eLog.PrevKv.Value))
 				}
 			}
 			tableUpdate[uuid] = *rowUpdate
