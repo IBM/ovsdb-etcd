@@ -12,16 +12,6 @@ git checkout ovsdb-etcd2
 export OVN_KUBERNETES_ROOT=$PWD
 popd
 ```
-## Build docker images
-
-clone and build and push:
-
-```bash
-git clone https://github.com/IBM/ovsdb-etcd
-pushd ovsdb-etcd
-make docker-build
-popd
-```
 
 ## Setup docker paramaters
 
@@ -30,6 +20,22 @@ export CR_PASSWORD=<DOCKER_PASSWORD>
 export CR_USERNAME=<DOCKER_USENAME>
 export CR_REPO=docker.io
 export OVSDB_ETCD_REPOSITORY=$CR_USERNAME
+```
+
+## Build and Push docker images
+Login to docker hub:
+
+```
+docker login $CR_REPO -u $CR_USERNAME --password-stdin
+```
+
+clone, build and push:
+
+```bash
+git clone https://github.com/IBM/ovsdb-etcd
+pushd ovsdb-etcd
+make docker
+popd
 ```
 
 ## turn off tcpdump logging (optional)
@@ -44,15 +50,6 @@ it can be turned back on using:
 
 ```
 export OVNDB_ETCD_TCPDUMP='true'
-```
-
-## Push docker images (optional)
-
-Login to docker and push:
-
-```
-echo $CR_PAT | docker login $CR_REPO -u $CR_USERNAME --password-stdin
-make docker-push
 ```
 
 ## Deploy ovn-kubernetes
