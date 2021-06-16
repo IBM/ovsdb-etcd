@@ -162,6 +162,9 @@ func (hm *handlerMonitorData) notifier(ch *Handler) {
 
 		case notificationEvent := <-hm.notificationChain:
 			if ch.handlerContext.Err() != nil {
+				if notificationEvent.wg != nil {
+					notificationEvent.wg.Done()
+				}
 				return
 			}
 			if klog.V(6).Enabled() {
@@ -185,6 +188,8 @@ func (hm *handlerMonitorData) notifier(ch *Handler) {
 				klog.Errorf("Monitor notification jsonValue %v returned error: %v", hm.jsonValue, err)
 			}
 			if notificationEvent.wg != nil {
+				klog.V(7).Infof("Sent notification to %v, jsonValue %v, call wg.done",
+					ch.GetClientAddress(), hm.jsonValue)
 				notificationEvent.wg.Done()
 			}
 		}
@@ -192,8 +197,14 @@ func (hm *handlerMonitorData) notifier(ch *Handler) {
 }
 
 func (m *dbMonitor) notify(events []*clientv3.Event, revision int64, wg *sync.WaitGroup) {
+	var sentToNotifier bool
+	defer func() {
+		if wg != nil && !sentToNotifier {
+			wg.Done()
+		}
+	}()
 	if len(events) == 0 {
-		return
+		klog.V(5).Infof("there is events %v", m.handler.GetClientAddress())
 	}
 	klog.V(5).Infof("notify %v m.revChecker.revision %d, revision %d wg == nil ->%v",
 		m.handler.GetClientAddress(), m.revChecker.revision, revision, wg == nil)
@@ -203,13 +214,11 @@ func (m *dbMonitor) notify(events []*clientv3.Event, revision int64, wg *sync.Wa
 			klog.Errorf("%v", err)
 		} else {
 			if len(result) == 0 {
-				klog.V(5).Infof("there is nothing to notify %v", m.handler.GetClientAddress())
-				if wg != nil {
-					wg.Done()
-				}
+				klog.V(5).Infof("there is nothing to notify %v, event %v", m.handler.GetClientAddress())
 				return
 			}
 			for jValue, tableUpdates := range result {
+				sentToNotifier = true
 				klog.V(7).Infof("notify %v jsonValue =[%v] %v", m.handler.GetClientAddress(), jValue, tableUpdates)
 				m.handler.notify(jValue, tableUpdates, wg)
 			}
@@ -217,9 +226,6 @@ func (m *dbMonitor) notify(events []*clientv3.Event, revision int64, wg *sync.Wa
 	} else {
 		klog.V(5).Infof("revisionChecker returned false. Old revision: %d, notification revision: %d",
 			m.revChecker.revision, revision)
-		if wg != nil {
-			wg.Done()
-		}
 	}
 
 }
@@ -255,6 +261,7 @@ func (m *dbMonitor) prepareTableUpdate(events []*clientv3.Event) (map[string]ovs
 	defer m.mu.Unlock()
 	for _, ev := range events {
 		if ev.Kv == nil {
+			klog.V(5).Infof("Empty etcd event %+v", ev)
 			continue
 		}
 		key, err := common.ParseKey(string(ev.Kv.Key))
