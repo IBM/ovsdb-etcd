@@ -214,7 +214,7 @@ func (m *dbMonitor) notify(events []*clientv3.Event, revision int64, wg *sync.Wa
 			klog.Errorf("%v", err)
 		} else {
 			if len(result) == 0 {
-				klog.V(5).Infof("there is nothing to notify %v, event %v", m.handler.GetClientAddress())
+				klog.V(5).Infof("there is nothing to notify %v, event %+v", m.handler.GetClientAddress(), events)
 				return
 			}
 			for jValue, tableUpdates := range result {
