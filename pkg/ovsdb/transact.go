@@ -1,11 +1,14 @@
 package ovsdb
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -63,6 +66,45 @@ func isEqualSet(expected, actual interface{}) bool {
 	return true
 }
 
+type Alphabetic []string
+
+func (list Alphabetic) Len() int { return len(list) }
+
+func (list Alphabetic) Swap(i, j int) { list[i], list[j] = list[j], list[i] }
+
+func (list Alphabetic) Less(i, j int) bool {
+	var si string = list[i]
+	var sj string = list[j]
+	var si_lower = strings.ToLower(si)
+	var sj_lower = strings.ToLower(sj)
+	if si_lower == sj_lower {
+		return si < sj
+	}
+	return si_lower < sj_lower
+}
+
+func splitAndSort(s string) string {
+	list := strings.Split(s, ",")
+
+	sort.Sort(Alphabetic(list))
+
+	var buffer bytes.Buffer
+	for _, val := range list {
+		buffer.WriteString(val)
+	}
+
+	return buffer.String()
+}
+
+func splitAndSortStrings(expectedVal, actualVal *interface{}) {
+	expectedValStr, expectedOK := (*expectedVal).(string)
+	actualValStr, actualOK := (*actualVal).(string)
+	if expectedOK && actualOK {
+		(*expectedVal) = splitAndSort(expectedValStr)
+		(*actualVal) = splitAndSort(actualValStr)
+	}
+}
+
 func isEqualMap(expected, actual interface{}) bool {
 	expectedMap := expected.(libovsdb.OvsMap)
 	actualMap := actual.(libovsdb.OvsMap)
@@ -71,6 +113,14 @@ func isEqualMap(expected, actual interface{}) bool {
 		if !ok {
 			return false
 		}
+
+		// the following is a due to discovering that some map values
+		// are a string encoding of either:
+		// map: "<key1:val1>:<key2:val2>..."
+		// set: "<val1>,<val2>..."
+		// thus we sort before comparison
+		splitAndSortStrings(&expectedVal, &actualVal)
+
 		if !isEqualValue(expectedVal, actualVal) {
 			return false
 		}
