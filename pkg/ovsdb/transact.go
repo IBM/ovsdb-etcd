@@ -470,7 +470,7 @@ func (etcd *Etcd) EventsDump() string {
 			printable = append(printable, *ev)
 		}
 	}
-	return fmt.Sprintf("%v", printable)
+	return fmt.Sprintf("%+v", printable)
 }
 
 func NewEtcd(parent *Etcd) *Etcd {
