@@ -295,8 +295,9 @@ func (txn *Transaction) etcdTranaction() (*clientv3.TxnResponse, error) {
 
 	err = txn.cache.Validate(txn, txn.schemas)
 	if err != nil {
+		xErr := errors.New(E_CONSTRAINT_VIOLATION)
 		txn.log.Error(err, "cache validate")
-		return nil, err
+		return nil, xErr
 	}
 
 	return txn.etcd.Res, nil
@@ -388,10 +389,9 @@ func (cache *Cache) Unmarshal(txn *Transaction, schemas libovsdb.Schemas) error 
 	for database, databaseCache := range *cache {
 		for table, tableCache := range databaseCache {
 			for _, row := range tableCache {
-				errInternal := schemas.Unmarshal(database, table, row)
-				if errInternal != nil {
-					err := errors.New(E_INTEGRITY_VIOLATION)
-					txn.log.Error(err, "failed schema unmarshal", "err", errInternal)
+				err := schemas.Unmarshal(database, table, row)
+				if err != nil {
+					txn.log.Error(err, "failed schema unmarshal")
 					return err
 				}
 			}
@@ -404,10 +404,9 @@ func (cache *Cache) Validate(txn *Transaction, schemas libovsdb.Schemas) error {
 	for database, databaseCache := range *cache {
 		for table, tableCache := range databaseCache {
 			for _, row := range tableCache {
-				errInternal := schemas.Validate(database, table, row)
-				if errInternal != nil {
-					err := errors.New(E_INTEGRITY_VIOLATION)
-					txn.log.Error(err, "failed schema vlaidate", "err", errInternal)
+				err := schemas.Validate(database, table, row)
+				if err != nil {
+					txn.log.Error(err, "failed schema validate")
 					return err
 				}
 			}
@@ -1479,6 +1478,43 @@ func (txn *Transaction) RowMutate(tableSchema *libovsdb.TableSchema, mapUUID Map
 	return nil
 }
 
+func columnUpdateMap(oldValue, newValue interface{}) interface{} {
+	oldMap := oldValue.(libovsdb.OvsMap)
+	newMap := newValue.(libovsdb.OvsMap)
+	retMap := libovsdb.OvsMap{}
+	copier.Copy(&retMap, &oldMap)
+	for k, v := range newMap.GoMap {
+		retMap.GoMap[k] = v
+	}
+	return retMap
+}
+
+func columnUpdateSet(oldValue, newValue interface{}) interface{} {
+	oldSet := oldValue.(libovsdb.OvsSet)
+	newSet := newValue.(libovsdb.OvsSet)
+	retSet := libovsdb.OvsSet{}
+	copier.Copy(&retSet, &oldSet)
+	for _, v := range newSet.GoSet {
+		if !inSet(&oldSet, v) {
+			retSet.GoSet = append(retSet.GoSet, v)
+		}
+	}
+	return retSet
+}
+
+func columnUpdateValue(oldValue, newValue interface{}) interface{} {
+	return newValue
+}
+
+func columnUpdate(columnSchema *libovsdb.ColumnSchema, oldValue, newValue interface{}) interface{} {
+	switch columnSchema.Type {
+	case libovsdb.TypeMap:
+		return columnUpdateMap(oldValue, newValue)
+	default:
+		return columnUpdateValue(oldValue, newValue)
+	}
+}
+
 func (txn *Transaction) RowUpdate(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, original *map[string]interface{}, update *map[string]interface{}) error {
 	for column, value := range *update {
 		columnSchema, err := tableSchema.LookupColumn(column)
@@ -1499,7 +1535,7 @@ func (txn *Transaction) RowUpdate(tableSchema *libovsdb.TableSchema, mapUUID Map
 			return err
 		}
 
-		(*original)[column] = value
+		(*original)[column] = columnUpdate(columnSchema, (*original)[column], value)
 	}
 	return nil
 }
