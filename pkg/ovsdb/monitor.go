@@ -213,7 +213,7 @@ func (m *dbMonitor) notify(events []*clientv3.Event, revision int64, wg *sync.Wa
 	if len(events) == 0 {
 		m.log.V(5).Info("there is events")
 	}
-	m.log.V(5).Info("notify", "expected-revision", m.revChecker.revision, "revision", revision, "wg == nil", wg == nil)
+	m.log.V(5).Info("notify", "revChecker.revision", m.revChecker.revision, "revision", revision, "wg == nil", wg == nil)
 	if m.revChecker.isNewRevision(revision) {
 		result, err := m.prepareTableUpdate(events)
 		if err != nil {
