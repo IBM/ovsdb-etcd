@@ -1,4 +1,7 @@
 .idea/
+dist/images/etcd
+dist/images/etcdctl
+.cache/
 pkg/cmd/client/client
 pkg/cmd/server/server
 dist/images/ovndb-raft-functions.sh
