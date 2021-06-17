@@ -790,10 +790,13 @@ func TestTransactUpdateWhere(t *testing.T) {
 func TestTransactUpdateMapOk(t *testing.T) {
 	table := "table1"
 	row1 := map[string]interface{}{
-		"string": libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "value1"}},
+		"string": libovsdb.OvsMap{GoMap: map[interface{}]interface{}{
+			"key1": "value1a",
+			"key2": "value2",
+		}},
 	}
 	row2 := map[string]interface{}{
-		"string": libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "value2"}},
+		"string": libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "value1b"}},
 	}
 	req := &libovsdb.Transact{
 		DBName: "map",
@@ -815,7 +818,10 @@ func TestTransactUpdateMapOk(t *testing.T) {
 	resp, txn := testTransact(t, req)
 	assert.Nil(t, resp.Error)
 	dump := testTransactDump(t, txn, "map", "table1")
-	assert.Equal(t, libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "value2"}}, dump["string"])
+	assert.Equal(t, libovsdb.OvsMap{GoMap: map[interface{}]interface{}{
+		"key1": "value1b",
+		"key2": "value2",
+	}}, dump["string"])
 }
 
 func TestTransactUpdateMapError(t *testing.T) {
