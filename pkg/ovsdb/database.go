@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-logr/logr"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"k8s.io/klog/v2"
@@ -18,7 +19,7 @@ import (
 
 type Databaser interface {
 	GetLock(ctx context.Context, id string) (Locker, error)
-	CreateMonitor(dbName string, handler *Handler) *dbMonitor
+	CreateMonitor(dbName string, handler *Handler, log logr.Logger) *dbMonitor
 	AddSchema(schemaFile string) error
 	GetSchemas() libovsdb.Schemas
 	GetKeyData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error)
@@ -195,8 +196,8 @@ func (con *DatabaseEtcd) PutData(ctx context.Context, key common.Key, obj interf
 	return nil
 }
 
-func (con *DatabaseEtcd) CreateMonitor(dbName string, handler *Handler) *dbMonitor {
-	m := newMonitor(dbName, handler)
+func (con *DatabaseEtcd) CreateMonitor(dbName string, handler *Handler, log logr.Logger) *dbMonitor {
+	m := newMonitor(dbName, handler, log)
 	ctxt, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
 	key := common.NewDBPrefixKey(dbName)
@@ -275,8 +276,8 @@ func (con *DatabaseMock) GetUUID() string {
 	return con.Response.(string)
 }
 
-func (con *DatabaseMock) CreateMonitor(dbName string, handler *Handler) *dbMonitor {
-	m := newMonitor(dbName, handler)
+func (con *DatabaseMock) CreateMonitor(dbName string, handler *Handler, log logr.Logger) *dbMonitor {
+	m := newMonitor(dbName, handler, log)
 	_, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
 	return m

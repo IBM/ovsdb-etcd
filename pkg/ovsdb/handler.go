@@ -421,14 +421,16 @@ func (ch *Handler) addMonitor(params []interface{}, notificationType ovsjson.Upd
 		updatersMap[key] = updaters
 		updatersKeys = append(updatersKeys, key)
 	}
+	log := ch.log.WithValues("jsonValue", cmpr.JsonValue)
 	monitor, ok := ch.monitors[cmpr.DatabaseName]
 	if !ok {
-		monitor = ch.db.CreateMonitor(cmpr.DatabaseName, ch)
+		monitor = ch.db.CreateMonitor(cmpr.DatabaseName, ch, log)
 		monitor.start()
 		ch.monitors[cmpr.DatabaseName] = monitor
 	}
 	monitor.addUpdaters(updatersMap)
 	ch.handlerMonitorData[jsonValueString] = handlerMonitorData{
+		log:               log,
 		dataBaseName:      cmpr.DatabaseName,
 		notificationType:  notificationType,
 		updatersKeys:      updatersKeys,
@@ -510,7 +512,7 @@ func (ch *Handler) getMonitoredData(dbName string, updatersMap Key2Updaters) (ov
 		return nil, err
 	}
 	monitor.revChecker.revision = resp.Header.Revision
-	ch.log.V(6).Info("getMonitoredData failed", "revision", resp.Header.Revision, "data", returnData)
+	ch.log.V(6).Info("getMonitoredData completed", "revision", resp.Header.Revision, "data", returnData)
 	return returnData, nil
 }
 
