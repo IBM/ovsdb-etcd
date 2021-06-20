@@ -7,8 +7,9 @@ RUN INSTALL_PKGS=" \
 	dnf install --best --refresh -y --setopt=tsflags=nodocs $INSTALL_PKGS && \
 	dnf clean all && rm -rf /var/cache/dnf/*
 
-COPY scripts/install_etcd.sh /root/install_etcd.sh
-RUN mkdir -p /var/run/openvswitch && /root/install_etcd.sh
+COPY dist/images/etcd /usr/local/bin/
+COPY dist/images/etcdctl /usr/local/bin/
+RUN mkdir -p /var/run/openvswitch
 
 # ovnkube.sh is the entry point. This script examines environment
 # variables to direct operation and configure ovn

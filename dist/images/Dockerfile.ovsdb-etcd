@@ -16,7 +16,8 @@ COPY dist/images/ovnkube.sh /root/
 COPY dist/images/ovndb-raft-functions.sh /root
 
 # so we will have etcdctl in the container, if we want to connect to the etcd
-COPY scripts/install_etcd.sh /root/install_etcd.sh
-RUN mkdir -p /var/run/openvswitch && /root/install_etcd.sh
+COPY dist/images/etcd /usr/local/bin/
+COPY dist/images/etcdctl /usr/local/bin/
+RUN mkdir -p /var/run/openvswitch
 
 WORKDIR /root

@@ -5,10 +5,41 @@ SERVER_FILES := \
 	$(ROOT_DIR)/pkg/cmd/server/server.go \
 	$(ROOT_DIR)/pkg/cmd/server/testdata.go
 
+CACHE := .cache
+ETCD_VERSION ?= v3.4.16
+ETCD_PACKAGE := etcd-${ETCD_VERSION}-linux-amd64
+ETCD_TAR := ${ETCD_PACKAGE}.tar.gz
+ETCD_URL := https://github.com/coreos/etcd/releases/download/${ETCD_VERSION}/${ETCD_TAR}
+ETCDCTL := ${ETCD_PACKAGE}/etcdctl
+ETCD := ${ETCD_PACKAGE}/etcd
+
+${CACHE}:
+	mkdir -p ${CACHE}
+
+${CACHE}/${ETCD_TAR}: ${CACHE}
+	cd ${CACHE} && curl -L ${ETCD_URL} -o ${ETCD_TAR}
+
+${CACHE}/${ETCD_PACKAGE}: ${CACHE}/${ETCD_TAR}
+	cd ${CACHE} && tar xvfz ${ETCD_TAR}
+	cd ${CACHE} && touch ${ETCD_PACKAGE}
+
+${CACHE}/${ETCDCTL} ${CACHE}/${ETCD}: ${CACHE}/${ETCD_PACKAGE}
+
 .PHONY: install-tools
-install-tools:
-	./scripts/install_etcd.sh
+install-tools: install-etcd
 	mkdir /tmp/openvswitch/
+
+.PHONY: install-etcd
+install-etcd: /usr/local/bin/etcd /usr/local/bin/etcdctl
+
+/usr/local/bin/etcd: ${CACHE}/${ETCD}
+	sudo cp $< $@
+
+/usr/local/bin/etcdctl: ${CACHE}/${ETCDCTL}
+	sudo cp $< $@
+
+docker-downloads: dist/images/etcd dist/images/etcdctl
+
 
 VERIFY += generate
 .PHONY: generate
@@ -69,9 +100,27 @@ south-server:
 tests:
 	go test -v ./...
 
+dist/images/etcd: ${CACHE}/${ETCD}
+	cp $< $@
+
+dist/images/etcdctl: ${CACHE}/${ETCDCTL}
+	cp $< $@
+
+docker-downloads: dist/images/etcd dist/images/etcdctl
+
+check-env:
+	@if [ -z "${OVN_KUBERNETES_ROOT}" ]; then \
+		echo "missing env OVN_KUBERNETES_ROOT"; \
+		exit 1; \
+	fi
+	@if [ -z "${OVSDB_ETCD_REPOSITORY}" ]; then \
+		echo "missing env OVSDB_ETCD_REPOSITORY"; \
+		exit 1; \
+	fi
+
+
 .PHONY: docker-build
-docker-build: build
-	@echo "checking for OVN_KUBERNETES_ROOT" && [ -n "${OVN_KUBERNETES_ROOT}" ]
+docker-build: check-env build docker-downloads
 	cp ${OVN_KUBERNETES_ROOT}/dist/images/ovndb-raft-functions.sh dist/images/.
 	cp ${OVN_KUBERNETES_ROOT}/dist/images/ovnkube.sh dist/images/.
 	docker build . -t etcd -f dist/images/Dockerfile.etcd
@@ -80,8 +129,7 @@ docker-build: build
 	docker tag ovsdb-etcd ${OVSDB_ETCD_REPOSITORY}/ovsdb-etcd
 
 .PHONY: docker-push
-docker-push:
-	@echo "checking for OVSDB_ETCD_REPOSITORY" && [ -n "${OVSDB_ETCD_REPOSITORY}" ]
+docker-push: check-env
 	docker push ${OVSDB_ETCD_REPOSITORY}/etcd
 	docker push ${OVSDB_ETCD_REPOSITORY}/ovsdb-etcd
 
@@ -92,9 +140,7 @@ export KUBECONFIG=${HOME}/admin.conf
 
 OVNDB_ETCD_TCPDUMP ?= 'true'
 .PHONY: ovnk-deploy
-ovnk-deploy:
-	@echo "checking for OVN_KUBERNETES_ROOT" && [ -n "${OVN_KUBERNETES_ROOT}" ]
-	@echo "checking for OVSDB_ETCD_REPOSITORY" && [ -n "${OVSDB_ETCD_REPOSITORY}" ]
+ovnk-deploy: check-env
 	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh \
 		--ovn-etcd-image "${OVSDB_ETCD_REPOSITORY}/etcd:latest" \
 		--ovn-ovsdb-etcd-image "${OVSDB_ETCD_REPOSITORY}/ovsdb-etcd:latest" \
@@ -111,6 +157,5 @@ ovnk-status:
 	kubectl -n=ovn-kubernetes get pods
 
 .PHONY: ovnk-delete
-ovnk-delete:
-	@echo "checking for OVN_KUBERNETES_ROOT" && [ -n "${OVN_KUBERNETES_ROOT}" ]
+ovnk-delete: check-env
 	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh --delete
