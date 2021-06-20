@@ -49,6 +49,10 @@ const (
 )
 
 func isEqualSet(expected, actual interface{}) bool {
+	return reflect.DeepEqual(expected, actual)
+}
+
+func isIncludesSet(expected, actual interface{}) bool {
 	expectedSet := expected.(libovsdb.OvsSet)
 	actualSet := actual.(libovsdb.OvsSet)
 	for _, expectedVal := range expectedSet.GoSet {
@@ -105,6 +109,10 @@ func splitAndSortStrings(expectedVal, actualVal *interface{}) {
 }
 
 func isEqualMap(expected, actual interface{}) bool {
+	return reflect.DeepEqual(expected, actual)
+}
+
+func isIncludesMap(expected, actual interface{}) bool {
 	expectedMap := expected.(libovsdb.OvsMap)
 	actualMap := actual.(libovsdb.OvsMap)
 	for key, expectedVal := range expectedMap.GoMap {
