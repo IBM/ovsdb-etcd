@@ -5,7 +5,7 @@ SERVER_FILES := \
 	$(ROOT_DIR)/pkg/cmd/server/server.go \
 	$(ROOT_DIR)/pkg/cmd/server/testdata.go
 
-CACHE := .cache
+CACHE := /tmp/.cache
 ETCD_VERSION ?= v3.4.16
 ETCD_PACKAGE := etcd-${ETCD_VERSION}-linux-amd64
 ETCD_TAR := ${ETCD_PACKAGE}.tar.gz
