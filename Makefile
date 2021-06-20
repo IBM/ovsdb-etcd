@@ -159,3 +159,20 @@ ovnk-status:
 .PHONY: ovnk-delete
 ovnk-delete: check-env
 	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh --delete
+
+.PHONY: ovnk-org-deploy
+ovnk-org-deploy:
+	@echo "checking for OVN_KUBERNETES_ROOT" && [ -n "${OVN_KUBERNETES_ROOT}" ]
+	cd ${OVN_KUBERNETES_ROOT} && git checkout d0fdcfbbb2702ed8482a0c1f6ba4561273399fdc
+	cd ${OVN_KUBERNETES_ROOT}/go-controller && make
+	cd ${OVN_KUBERNETES_ROOT}/dist/images && make fedora
+	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh \
+    		--master-loglevel 7 \
+    		--node-loglevel 7 \
+    		--dbchecker-loglevel 7 \
+    		--ovn-loglevel-nb '-vconsole:dbg -vfile:dbg' \
+    		--ovn-loglevel-sb '-vconsole:dbg -vfile:dbg' \
+    		--ovn-loglevel-northd '-vconsole:dbg -vfile:dbg' \
+    		--ovn-loglevel-nbctld '-vconsole:dbg -vfile:dbg' \
+    		--ovn-loglevel-controller '-vconsole:dbg -vfile:dbg'
+	cd ${OVN_KUBERNETES_ROOT} && git checkout ovsdb-etcd2
