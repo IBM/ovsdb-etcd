@@ -717,9 +717,13 @@ func makeValue(row *map[string]interface{}) (string, error) {
 	return string(b), nil
 }
 
-// TODO: we should not add uuid to etcd
 func setRowUUID(row *map[string]interface{}, uuid string) {
 	(*row)[COL_UUID] = libovsdb.UUID{GoUUID: uuid}
+}
+
+func setRowVersion(row *map[string]interface{}) {
+	version := common.GenerateUUID()
+	(*row)[COL_VERSION] = libovsdb.UUID{GoUUID: version}
 }
 
 const (
@@ -1769,10 +1773,10 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 	ovsResult.InitUUID(uuid)
 
 	key := common.NewDataKey(txn.request.DBName, *ovsOp.Table, uuid)
-	row := txn.cache.Row(key)
+	row := &map[string]interface{}{}
+
 	*row = *ovsOp.Row
 	txn.schemas.Default(txn.request.DBName, *ovsOp.Table, row)
-	setRowUUID(row, uuid)
 
 	err = txn.RowPrepare(tableSchema, txn.mapUUID, ovsOp.Row)
 	if err != nil {
@@ -1781,7 +1785,12 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		return err
 	}
 
-	return etcdCreateRow(txn, &key, row)
+	setRowUUID(row, uuid)
+	setRowVersion(row)
+	err = etcdCreateRow(txn, &key, row)
+	*(txn.cache.Row(key)) = *row
+
+	return err
 }
 
 /* select */
@@ -1847,6 +1856,8 @@ func doUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 			txn.log.Error(err, "failed to update row", "row", ovsOp.Row)
 			return err
 		}
+
+		setRowVersion(row)
 		key := common.NewDataKey(txn.request.DBName, *ovsOp.Table, uuid)
 		etcdModifyRow(txn, &key, row)
 		*(txn.cache.Row(key)) = *row
@@ -1880,6 +1891,8 @@ func doMutate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 			txn.log.Error(err, "failed to row mutate", "row", row, "mutations", ovsOp.Mutations)
 			return err
 		}
+
+		setRowVersion(row)
 		key := common.NewDataKey(txn.request.DBName, *ovsOp.Table, uuid)
 		etcdModifyRow(txn, &key, row)
 		*(txn.cache.Row(key)) = *row
