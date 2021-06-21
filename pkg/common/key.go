@@ -51,7 +51,7 @@ func ParseKey(keyStr string) (*Key, error) {
 	return &retKey, nil
 }
 
-func (k *Key) String() string {
+func (k Key) String() string {
 	if len(k.UUID) == 0 {
 		return k.TableKeyString()
 	}
@@ -59,7 +59,7 @@ func (k *Key) String() string {
 }
 
 // The helper function, that can be used for logging, when we don't need the prefix.
-func (k *Key) ShortString() string {
+func (k Key) ShortString() string {
 	return fmt.Sprintf("%s%s%s%s%s", k.DBName, KEY_DELIMETER, k.TableName, KEY_DELIMETER, k.UUID)
 }
 

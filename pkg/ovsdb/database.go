@@ -253,7 +253,7 @@ func (con *DatabaseMock) AddSchema(schemaFile string) error {
 }
 
 func (con *DatabaseMock) GetSchemas() libovsdb.Schemas {
-	return libovsdb.Schemas{}
+	return con.Response.(libovsdb.Schemas)
 }
 
 func (con *DatabaseMock) GetKeyData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
