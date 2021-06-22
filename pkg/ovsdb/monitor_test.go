@@ -1,6 +1,25 @@
 package ovsdb
 
-/*
+import (
+	"context"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"sync"
+	"testing"
+
+	guuid "github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"go.etcd.io/etcd/api/v3/mvccpb"
+	clientv3 "go.etcd.io/etcd/client/v3"
+	klog "k8s.io/klog/v2"
+	klogr "k8s.io/klog/v2/klogr"
+
+	"github.com/ibm/ovsdb-etcd/pkg/common"
+	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
+	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
+)
+
 func init() {
 	fs := flag.NewFlagSet("fs", flag.PanicOnError)
 	klog.InitFlags(fs)
@@ -238,41 +257,60 @@ func TestMonitorModifyRowMap(t *testing.T) {
 	}
 }
 
-
 func TestMonitorAddRemoveMonitor(t *testing.T) {
+	const (
+		databaseSchemaName           = "OVN_Northbound"
+		databaseSchemaVer            = "5.31.0"
+		logicalRouterTableSchemaName = "Logical_Router"
+		NB_GlobalTableSchemaName     = "NB_Global"
+		ACL_TableSchemaName          = "ACL"
+		monid                        = "monid"
+	)
+	var (
+		columnsNameKey = map[string]*libovsdb.ColumnSchema{
+			"name": {
+				Type: libovsdb.TypeString,
+			},
+			"key2": {
+				Type: libovsdb.TypeInteger,
+			},
+		}
+		columnsPriority = map[string]*libovsdb.ColumnSchema{
+			"priority": {
+				Type: libovsdb.TypeString,
+			},
+		}
+	)
 	var testSchemaSimple *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
-		Name:    "OVN_Northbound",
-		Version: "5.31.0",
+		Name:    databaseSchemaName,
+		Version: databaseSchemaVer,
 		Tables: map[string]libovsdb.TableSchema{
-			"NB_Global": {
-				Columns: map[string]*libovsdb.ColumnSchema{
-					"name": {
-						Type: libovsdb.TypeString,
-					},
-					"key2": {
-						Type: libovsdb.TypeInteger,
-					},
-				},
+			logicalRouterTableSchemaName: {
+				Columns: columnsNameKey,
 			},
-			"Logical_Router": {
-				Columns: map[string]*libovsdb.ColumnSchema{
-					"name": {
-						Type: libovsdb.TypeString,
-					},
-					"key2": {
-						Type: libovsdb.TypeInteger,
-					},
-				},
+			NB_GlobalTableSchemaName: {
+				Columns: columnsNameKey,
 			},
-
+			ACL_TableSchemaName: {
+				Columns: columnsPriority,
+			},
 		},
 	}
+
+	expKey2Updaters := Key2Updaters{}
 	schemas := libovsdb.Schemas{}
-	schemas["OVN_Northbound"] = testSchemaSimple
+	updateExpected := func(databaseSchemaName string, tableSchemaName string, columns []string, jsonValue interface{}, isV1 bool) {
+		key := common.NewTableKey(databaseSchemaName, tableSchemaName)
+		tableSchema := libovsdb.TableSchema{Columns: schemas[databaseSchemaName].Tables[tableSchemaName].Columns}
+		mcr := ovsjson.MonitorCondRequest{Columns: columns}
+		expKey2Updaters[key] = []updater{*mcrToUpdater(mcr, jsonValueToString(jsonValue), &tableSchema, isV1)}
+	}
+
+	schemas[databaseSchemaName] = testSchemaSimple
 	db := DatabaseMock{Response: schemas}
 	ctx := context.Background()
 	handler := NewHandler(ctx, &db, nil, klogr.New())
-	expMsg, err := json.Marshal([]interface{}{"monid", "OVN_Northbound"})
+	expMsg, err := json.Marshal([]interface{}{monid, databaseSchemaName})
 	assert.Nil(t, err)
 	jrpcServerMock := jrpcServerMock{
 		expMethod:  MONITOR_CANCELED,
@@ -281,34 +319,28 @@ func TestMonitorAddRemoveMonitor(t *testing.T) {
 	}
 	handler.SetConnection(&jrpcServerMock, nil)
 	// add First monitor
-	msg := `["OVN_Northbound",null,{"Logical_Router":[{"columns":["name"]}],"NB_Global":[{"columns":[]}]}]`
+	msg := fmt.Sprintf(`["%s",null,{"%s":[{"columns":[%s]}],"%s":[{"columns":[%s]}]}]`, databaseSchemaName, logicalRouterTableSchemaName, "\"name\"", NB_GlobalTableSchemaName, "")
 	var params []interface{}
 	err = json.Unmarshal([]byte(msg), &params)
 	assert.Nil(t, err)
 	_, err = handler.addMonitor(params, ovsjson.Update)
 	assert.Nil(t, err)
-	monitor, ok := handler.monitors["OVN_Northbound"]
+	monitor, ok := handler.monitors[databaseSchemaName]
 	assert.True(t, ok)
 	assert.Equal(t, handler, monitor.handler)
-	assert.Equal(t, "OVN_Northbound", monitor.dataBaseName)
-	expKey2Updaters := Key2Updaters{}
-	key := common.NewTableKey("OVN_Northbound", "Logical_Router")
-	columnSchema := libovsdb.ColumnSchema{Type: libovsdb.TypeString}
-	tableSchema := libovsdb.TableSchema{Columns: map[string]*libovsdb.ColumnSchema{"name":&columnSchema }}
-	mcr := ovsjson.MonitorCondRequest{Columns: []string{"name"}}
-	expKey2Updaters[key] = []updater{ *mcrToUpdater(mcr, jsonValueToString(nil), &tableSchema, true)}
-	key = common.NewTableKey("OVN_Northbound", "NB_Global")
-	expKey2Updaters[key] = []updater{*mcrToUpdater(mcr, jsonValueToString(nil), &tableSchema, true)}
+	assert.Equal(t, databaseSchemaName, monitor.dataBaseName)
+	updateExpected(databaseSchemaName, logicalRouterTableSchemaName, []string{"name"}, nil, true)
+	updateExpected(databaseSchemaName, NB_GlobalTableSchemaName, []string{}, nil, true)
 	assert.Equal(t, expKey2Updaters, monitor.key2Updaters)
 	cloned := cloneKey2Updaters(monitor.key2Updaters)
 
 	// add second monitor
-	msg = `["OVN_Northbound",["monid","OVN_Northbound"],{"ACL":[{"columns":["priority"]}]}]`
+	msg = fmt.Sprintf(`["%s",["%s","%s"],{"%s":[{"columns":[%s]}]}]`, databaseSchemaName, monid, databaseSchemaName, ACL_TableSchemaName, "\"priority\"")
 	err = json.Unmarshal([]byte(msg), &params)
 	assert.Nil(t, err)
-	handler.addMonitor(params, ovsjson.Update2)
-	key = common.NewTableKey("OVN_Northbound", "ACL")
-	expKey2Updaters[key] = []updater{*mcrToUpdater(mcr, jsonValueToString([]interface{}{"monid", "OVN_Northbound"}), &tableSchema, false)}
+	_, err = handler.addMonitor(params, ovsjson.Update2)
+	assert.Nil(t, err)
+	updateExpected(databaseSchemaName, ACL_TableSchemaName, []string{"priority"}, []interface{}{monid, databaseSchemaName}, false)
 	assert.Equal(t, expKey2Updaters, monitor.key2Updaters)
 
 	// remove the second monitor
@@ -364,9 +396,21 @@ const (
 )
 
 func TestMonitorNotifications1(t *testing.T) {
+	const (
+		databaseSchemaName = "dbName"
+		T1TableSchemaName  = "T1"
+	)
+	var testSchemaSimple *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
+		Name: databaseSchemaName,
+		Tables: map[string]libovsdb.TableSchema{
+			T1TableSchemaName: {},
+		},
+	}
+	schemas := libovsdb.Schemas{}
+	schemas[databaseSchemaName] = testSchemaSimple
 	jsonValue := `null`
 	msg := `["dbName",` + jsonValue + `,{"T1":[{"columns":[]}]}]`
-	handler := initHandler(t, msg, ovsjson.Update)
+	handler := initHandler(t, schemas, msg, ovsjson.Update)
 	row := map[string]interface{}{"c1": "v1", "c2": "v2"}
 	dataJson := prepareData(t, row, true)
 
@@ -398,8 +442,20 @@ func TestMonitorNotifications1(t *testing.T) {
 }
 
 func TestMonitorNotifications2(t *testing.T) {
+	const (
+		databaseSchemaName = "dbName"
+		T2TableSchemaName  = "T2"
+	)
+	var testSchemaSimple *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
+		Name: databaseSchemaName,
+		Tables: map[string]libovsdb.TableSchema{
+			T2TableSchemaName: {},
+		},
+	}
+	schemas := libovsdb.Schemas{}
+	schemas[databaseSchemaName] = testSchemaSimple
 	msg := `["dbName", ["monid","update2"],{"T2":[{"columns":[]}]}]`
-	handler := initHandler(t, msg, ovsjson.Update2)
+	handler := initHandler(t, schemas, msg, ovsjson.Update2)
 	jsonValue := []interface{}{"monid", "update2"}
 	row := map[string]interface{}{"c1": "v1", "c2": "v2"}
 	dataJson := prepareData(t, row, true)
@@ -432,9 +488,21 @@ func TestMonitorNotifications2(t *testing.T) {
 }
 
 func TestMonitorNotifications3(t *testing.T) {
+	const (
+		databaseSchemaName = "dbName"
+		T3TableSchemaName  = "T3"
+	)
+	var testSchemaSimple *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
+		Name: databaseSchemaName,
+		Tables: map[string]libovsdb.TableSchema{
+			T3TableSchemaName: {},
+		},
+	}
+	schemas := libovsdb.Schemas{}
+	schemas[databaseSchemaName] = testSchemaSimple
 	msg := `["dbName",["monid","update3"], {"T3":[{"columns":[]}]}, "00000000-0000-0000-0000-000000000000"]`
 	jsonValue := []interface{}{"monid", "update3"}
-	handler := initHandler(t, msg, ovsjson.Update3)
+	handler := initHandler(t, schemas, msg, ovsjson.Update3)
 	row1 := map[string]interface{}{"c1": "v1", "c2": "v2"}
 	data1Json := prepareData(t, row1, true)
 	row2 := map[string]interface{}{"c2": "v3"}
@@ -468,11 +536,12 @@ func TestMonitorNotifications3(t *testing.T) {
 	wg.Wait()
 }
 
-func initHandler(t *testing.T, msg string, notificationType ovsjson.UpdateNotificationType) *Handler {
+func initHandler(t *testing.T, schemas libovsdb.Schemas, msg string, notificationType ovsjson.UpdateNotificationType) *Handler {
 	common.SetPrefix("ovsdb/nb")
-	db, _ := NewDatabaseMock()
+	//db, _ := NewDatabaseMock()
+	db := DatabaseMock{Response: schemas}
 	ctx := context.Background()
-	handler := NewHandler(ctx, db, nil, klogr.New())
+	handler := NewHandler(ctx, &db, nil, klogr.New())
 
 	var params []interface{}
 	err := json.Unmarshal([]byte(msg), &params)
@@ -562,4 +631,3 @@ func TestSetsDifferenceDifferentSets(t *testing.T) {
 	diff := setsDifference(set1, set2)
 	assert.ElementsMatch(t, expectDiff.GoSet, diff.GoSet)
 }
-*/

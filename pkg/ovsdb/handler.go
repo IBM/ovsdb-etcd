@@ -215,7 +215,7 @@ func (ch *Handler) MonitorCond(ctx context.Context, params []interface{}) (inter
 }
 
 func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) (interface{}, error) {
-		ch.log.V(5).Info("monitorCondChange request", "params", params)
+	ch.log.V(5).Info("monitorCondChange request", "params", params)
 	if len(params) != 3 {
 		err := fmt.Errorf("wrong params length for MonitorCondChange %d , params %v", len(params), params)
 		ch.log.Error(err, "monitorCondChange request")
