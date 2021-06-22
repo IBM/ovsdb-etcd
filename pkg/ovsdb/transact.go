@@ -1473,21 +1473,20 @@ func (m *Mutation) Mutate(row *map[string]interface{}) error {
 	}
 }
 
-func (txn *Transaction) RowMutate(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, original *map[string]interface{}, mutations *[]interface{}) error {
+func (txn *Transaction) RowMutate(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, original *map[string]interface{}, mutations *[]interface{}) (*map[string]interface{}, error) {
 	mutated := &map[string]interface{}{}
 	copier.Copy(mutated, original)
 	for _, mt := range *mutations {
 		m, err := NewMutation(txn, tableSchema, mapUUID, mt.([]interface{}))
 		if err != nil {
-			return err
+			return nil, err
 		}
 		err = m.Mutate(mutated)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	copier.Copy(original, mutated)
-	return nil
+	return mutated, nil
 }
 
 func columnUpdateMap(oldValue, newValue interface{}) interface{} {
@@ -1527,29 +1526,31 @@ func columnUpdate(columnSchema *libovsdb.ColumnSchema, oldValue, newValue interf
 	}
 }
 
-func (txn *Transaction) RowUpdate(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, original *map[string]interface{}, update *map[string]interface{}) error {
+func (txn *Transaction) RowUpdate(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, currentRow *map[string]interface{}, update *map[string]interface{}) (*map[string]interface{}, error) {
+	newRow := new(map[string]interface{})
+	copier.Copy(newRow, currentRow)
 	for column, value := range *update {
 		columnSchema, err := tableSchema.LookupColumn(column)
 		if err != nil {
 			err = errors.New(E_CONSTRAINT_VIOLATION)
 			txn.log.Error(err, "failed column schema lookup", "column", column)
-			return err
+			return nil, err
 		}
 		switch column {
 		case COL_UUID, COL_VERSION:
 			err = errors.New(E_CONSTRAINT_VIOLATION)
 			txn.log.Error(err, "failed update of column", "column", column)
-			return err
+			return nil, err
 		}
 		if columnSchema.Mutable != nil && !*columnSchema.Mutable {
 			err = errors.New(E_CONSTRAINT_VIOLATION)
 			txn.log.Error(err, "failed update of unmutable column", "column", column)
-			return err
+			return nil, err
 		}
 
-		(*original)[column] = columnUpdate(columnSchema, (*original)[column], value)
+		(*newRow)[column] = columnUpdate(columnSchema, (*newRow)[column], value)
 	}
-	return nil
+	return newRow, nil
 }
 
 func etcdGetData(txn *Transaction, key *common.Key) {
@@ -1851,16 +1852,16 @@ func doUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 			return err
 		}
 
-		err = txn.RowUpdate(tableSchema, txn.mapUUID, row, ovsOp.Row)
+		newRow, err := txn.RowUpdate(tableSchema, txn.mapUUID, row, ovsOp.Row)
 		if err != nil {
 			txn.log.Error(err, "failed to update row", "row", ovsOp.Row)
 			return err
 		}
 
-		setRowVersion(row)
+		setRowVersion(newRow)
 		key := common.NewDataKey(txn.request.DBName, *ovsOp.Table, uuid)
-		etcdModifyRow(txn, &key, row)
-		*(txn.cache.Row(key)) = *row
+		etcdModifyRow(txn, &key, newRow)
+		*(txn.cache.Row(key)) = *newRow
 		ovsResult.IncrementCount()
 	}
 	return nil
@@ -1886,16 +1887,16 @@ func doMutate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		if !ok {
 			continue
 		}
-		err = txn.RowMutate(tableSchema, txn.mapUUID, row, ovsOp.Mutations)
+		newRow, err := txn.RowMutate(tableSchema, txn.mapUUID, row, ovsOp.Mutations)
 		if err != nil {
 			txn.log.Error(err, "failed to row mutate", "row", row, "mutations", ovsOp.Mutations)
 			return err
 		}
 
-		setRowVersion(row)
+		setRowVersion(newRow)
 		key := common.NewDataKey(txn.request.DBName, *ovsOp.Table, uuid)
-		etcdModifyRow(txn, &key, row)
-		*(txn.cache.Row(key)) = *row
+		etcdModifyRow(txn, &key, newRow)
+		*(txn.cache.Row(key)) = *newRow
 		ovsResult.IncrementCount()
 	}
 	return nil
