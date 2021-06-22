@@ -13,7 +13,7 @@ import (
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
-	shortuuid "github.com/lithammer/shortuuid/v3"
+	"github.com/lithammer/shortuuid/v3"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"k8s.io/klog/v2"
@@ -196,7 +196,7 @@ func (ch *Handler) Steal(ctx context.Context, param interface{}) (interface{}, e
 }
 
 func (ch *Handler) MonitorCond(ctx context.Context, params []interface{}) (interface{}, error) {
-	ch.log.V(1).Info("monitorCond request", "params", params)
+	ch.log.V(5).Info("monitorCond request", "params", params)
 	updatersMap, err := ch.addMonitor(params, ovsjson.Update2)
 	if err != nil {
 		ch.log.Error(err, "monitorCond from remote")
@@ -255,14 +255,22 @@ func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) 
 		if !ok {
 			ch.log.Info("MonitorCondChange there is no monitor", "dbname", monitorData.dataBaseName)
 		}
+		databaseSchema, ok := ch.db.GetSchemas()[dbName]
+		if !ok {
+			return nil, fmt.Errorf("there is no databaseSchema for %s", dbName)
+		}
 		for tableName, mcrArray := range mcrs {
 			key := common.NewTableKey(dbName, tableName)
 			_, ok := monitor.key2Updaters[key]
 			if !ok {
 				ch.log.V(6).Info("MonitorCondChange", "table", tableName, "mcr", mcrArray)
 				var updaters []updater
+				tableSchema, err := databaseSchema.LookupTable(tableName)
+				if err != nil {
+					return nil, err
+				}
 				for _, mcr := range mcrArray {
-					updater := mcrToUpdater(mcr, jsonValueString, monitorData.notificationType == ovsjson.Update)
+					updater := mcrToUpdater(mcr, jsonValueString, tableSchema, monitorData.notificationType == ovsjson.Update)
 					updaters = append(updaters, *updater)
 				}
 				monitorData.updatersKeys = append(monitorData.updatersKeys, key)
@@ -281,8 +289,9 @@ func (ch *Handler) MonitorCondSince(ctx context.Context, params []interface{}) (
 		ch.log.Error(err, "MonitorCondSince failed")
 		return nil, err
 	}
+
 	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
-	ch.log.V(5).Info("MonitorCondSince response", "jsonValue", params[1], "data", data)
+	ch.log.V(5).Info("MonitorCondSince response", "jsonValue", params[1], "data", fmt.Sprintf("%v", data))
 	if err != nil {
 		ch.log.Error(err, "failed to get monitored data")
 		ch.removeMonitor(params[1], false)
@@ -409,12 +418,21 @@ func (ch *Handler) addMonitor(params []interface{}, notificationType ovsjson.Upd
 	if _, ok := ch.handlerMonitorData[jsonValueString]; ok {
 		return nil, fmt.Errorf("duplicate monitor ID")
 	}
+	databaseSchema, ok := ch.db.GetSchemas()[cmpr.DatabaseName]
+	if !ok {
+		return nil, fmt.Errorf("there is no databaseSchema for %s", cmpr.DatabaseName)
+	}
 	updatersMap := Key2Updaters{}
 	var updatersKeys []common.Key
 	for tableName, mcrs := range cmpr.MonitorCondRequests {
 		var updaters []updater
+		tableSchema, err := databaseSchema.LookupTable(tableName)
+		if err != nil {
+			klog.Errorf("%v", err)
+			return nil, err
+		}
 		for _, mcr := range mcrs {
-			updater := mcrToUpdater(mcr, jsonValueString, notificationType == ovsjson.Update)
+			updater := mcrToUpdater(mcr, jsonValueString, tableSchema, notificationType == ovsjson.Update)
 			updaters = append(updaters, *updater)
 		}
 		key := common.NewTableKey(cmpr.DatabaseName, tableName)
@@ -457,12 +475,13 @@ func (ch *Handler) getMonitoredData(dbName string, updatersMap Key2Updaters) (ov
 	for tableKey, updaters := range updatersMap {
 		if len(updaters) == 0 {
 			// nothing to update
+			ch.log.Info("there is no updaters", "for table", tableKey.String())
 			continue
 		}
 		// validate that Initial is required
 		reqInitial := false
 		for _, updater := range updaters {
-			reqInitial = reqInitial || libovsdb.MSIsTrue(updater.Select.Initial)
+			reqInitial = reqInitial || libovsdb.MSIsTrue(updater.mcr.Select.Initial)
 			if reqInitial {
 				break
 			}

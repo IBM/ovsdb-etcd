@@ -1,24 +1,6 @@
 package ovsdb
 
-import (
-	"context"
-	"encoding/json"
-	"flag"
-	"sync"
-	"testing"
-
-	guuid "github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"go.etcd.io/etcd/api/v3/mvccpb"
-	clientv3 "go.etcd.io/etcd/client/v3"
-	klog "k8s.io/klog/v2"
-	klogr "k8s.io/klog/v2/klogr"
-
-	"github.com/ibm/ovsdb-etcd/pkg/common"
-	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
-	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
-)
-
+/*
 func init() {
 	fs := flag.NewFlagSet("fs", flag.PanicOnError)
 	klog.InitFlags(fs)
@@ -48,10 +30,17 @@ func TestMonitorRowUpdate(t *testing.T) {
 	data2Json, err := json.Marshal(data)
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
 
+	var tableSchema libovsdb.TableSchema
+	tableSchema.Columns = map[string]*libovsdb.ColumnSchema{}
+	columnSchema := libovsdb.ColumnSchema{Type: libovsdb.TypeString}
+	tableSchema.Columns["c1"] = &columnSchema
+	tableSchema.Columns["c2"] = &columnSchema
+	tableSchema.Columns["c3"] = &columnSchema
+
 	tests := map[string]struct {
 		updater updater
 		op      operation
-	}{"allColumns-v1": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{}, "", true),
+	}{"allColumns-v1": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{}, "", &tableSchema, true),
 		op: operation{PUT: {event: clientv3.Event{Type: mvccpb.PUT,
 			Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"),
 				Value: data1Json, CreateRevision: 1, ModRevision: 1}},
@@ -66,7 +55,7 @@ func TestMonitorRowUpdate(t *testing.T) {
 				Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"),
 					Value: data2Json, CreateRevision: 1, ModRevision: 2}},
 				expRowUpdate: &ovsjson.RowUpdate{Old: &map[string]interface{}{"c2": "v2"}, New: &map[string]interface{}{"c1": "v1", "c2": "v3"}}}}},
-		"SingleColumn-v1": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{Columns: []string{"c2"}}, "", true),
+		"SingleColumn-v1": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{Columns: []string{"c2"}}, "", &tableSchema, true),
 			op: operation{PUT: {event: clientv3.Event{Type: mvccpb.PUT,
 				Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"),
 					Value: data1Json, CreateRevision: 1, ModRevision: 1}},
@@ -79,7 +68,7 @@ func TestMonitorRowUpdate(t *testing.T) {
 					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json},
 					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data2Json, CreateRevision: 1, ModRevision: 2}},
 					expRowUpdate: &ovsjson.RowUpdate{Old: &map[string]interface{}{"c2": "v2"}, New: &map[string]interface{}{"c2": "v3"}}}}},
-		"ZeroColumn-v1": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{Columns: []string{"c3"}}, "", true),
+		"ZeroColumn-v1": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{Columns: []string{"c3"}}, "", &tableSchema, true),
 			op: operation{PUT: {event: clientv3.Event{Type: mvccpb.PUT,
 				Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json, CreateRevision: 1, ModRevision: 1}},
 				expRowUpdate: nil},
@@ -92,7 +81,7 @@ func TestMonitorRowUpdate(t *testing.T) {
 					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data2Json, CreateRevision: 1, ModRevision: 2}},
 					expRowUpdate: nil}}},
 
-		"allColumns-v2": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{}, "", false),
+		"allColumns-v2": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{}, "", &tableSchema, false),
 			op: operation{PUT: {event: clientv3.Event{Type: mvccpb.PUT,
 				Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json, CreateRevision: 1, ModRevision: 1}},
 				expRowUpdate: &ovsjson.RowUpdate{Insert: &map[string]interface{}{"c1": "v1", "c2": "v2"}}},
@@ -104,7 +93,7 @@ func TestMonitorRowUpdate(t *testing.T) {
 					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json},
 					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data2Json, CreateRevision: 1, ModRevision: 2}},
 					expRowUpdate: &ovsjson.RowUpdate{Modify: &map[string]interface{}{"c2": "v3"}}}}},
-		"SingleColumn-v2": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{Columns: []string{"c2"}}, "", false),
+		"SingleColumn-v2": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{Columns: []string{"c2"}}, "", &tableSchema, false),
 			op: operation{PUT: {event: clientv3.Event{Type: mvccpb.PUT,
 				Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json, CreateRevision: 1, ModRevision: 1}},
 				expRowUpdate: &ovsjson.RowUpdate{Insert: &map[string]interface{}{"c2": "v2"}}},
@@ -116,7 +105,7 @@ func TestMonitorRowUpdate(t *testing.T) {
 					PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json},
 					Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data2Json, CreateRevision: 1, ModRevision: 2}},
 					expRowUpdate: &ovsjson.RowUpdate{Modify: &map[string]interface{}{"c2": "v3"}}}}},
-		"ZeroColumn-v2": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{Columns: []string{"c3"}}, "", false),
+		"ZeroColumn-v2": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{Columns: []string{"c3"}}, "", &tableSchema, false),
 			op: operation{PUT: {event: clientv3.Event{Type: mvccpb.PUT,
 				Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: data1Json, CreateRevision: 1, ModRevision: 1}},
 				expRowUpdate: nil},
@@ -156,10 +145,133 @@ func TestMonitorRowUpdate(t *testing.T) {
 	}
 }
 
+func TestMonitorModifyRowMap(t *testing.T) {
+
+	const MODIFY = "modify"
+
+	type operation map[string]struct {
+		event        clientv3.Event
+		expRowUpdate *ovsjson.RowUpdate
+		err          error
+	}
+
+	data := map[string]interface{}{}
+	data[COL_UUID] = libovsdb.UUID{GoUUID: guuid.NewString()}
+	goMap := map[string]interface{}{}
+	goMap["theSame"] = "v1"
+	goMap["newKey"] = "v1"
+	goMap["newValue"] = "v1"
+	newColMap, err := libovsdb.NewOvsMap(goMap)
+	assert.Nil(t, err, "creation ovsMap")
+	data["map"] = newColMap
+
+	newData, err := json.Marshal(data)
+	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
+
+	goMap["newValue"] = "v2"
+	goMap["removedKey"] = "v2"
+	delete(goMap, "newKey")
+	goDeltaMap := map[string]interface{}{}
+	goDeltaMap["newKey"] = "v1"
+	goDeltaMap["newValue"] = "v2"
+	goDeltaMap["removedKey"] = "v2"
+	deltaMap, err := libovsdb.NewOvsMap(goDeltaMap)
+	assert.Nil(t, err, "creation ovsMap")
+
+	oldColMap, err := libovsdb.NewOvsMap(goMap)
+	assert.Nil(t, err, "creation ovsMap")
+	data["map"] = oldColMap
+
+	oldData, err := json.Marshal(data)
+	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
+
+	var tableSchema libovsdb.TableSchema
+	tableSchema.Columns = map[string]*libovsdb.ColumnSchema{}
+	columnType := libovsdb.ColumnType{Key: &libovsdb.BaseType{Type: "string"}, Value: &libovsdb.BaseType{Type: "string"}}
+	columnSchema := libovsdb.ColumnSchema{Type: libovsdb.TypeMap, TypeObj: &columnType}
+	tableSchema.Columns["map"] = &columnSchema
+
+	tests := map[string]struct {
+		updater updater
+		op      operation
+	}{"allColumns-v1": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{}, "", &tableSchema, true),
+		op: operation{MODIFY: {event: clientv3.Event{Type: mvccpb.PUT,
+			PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: oldData},
+			Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"),
+				Value: newData, CreateRevision: 1, ModRevision: 2}},
+			expRowUpdate: &ovsjson.RowUpdate{
+				Old: &map[string]interface{}{"map": deltaMap},
+				New: &map[string]interface{}{"map": newColMap}}}}},
+		"allColumns-v2": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{}, "", &tableSchema, false),
+			op: operation{MODIFY: {event: clientv3.Event{Type: mvccpb.PUT,
+				PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: oldData},
+				Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: newData, CreateRevision: 1, ModRevision: 2}},
+				expRowUpdate: &ovsjson.RowUpdate{
+					Modify: &map[string]interface{}{"map": deltaMap}}}}},
+	}
+	for name, ts := range tests {
+		updater := ts.updater
+		for opName, op := range ts.op {
+			row, _, err := updater.prepareRowUpdate(&op.event)
+			if op.err != nil {
+				assert.EqualErrorf(t, err, op.err.Error(), "[%s-%s test] expected error %s, got %v", name, opName, op.err.Error(), err)
+				continue
+			} else {
+				assert.Nilf(t, err, "[%s-%s test] returned unexpected error %v", name, opName, err)
+			}
+			if op.expRowUpdate == nil {
+				assert.Nilf(t, row, "[%s-%s test] returned unexpected row %#v", name, opName, row)
+			} else {
+				assert.NotNil(t, row, "[%s-%s test] returned nil row", name, opName)
+				if updater.isV1 {
+					ok, msg := row.ValidateRowUpdate()
+					assert.Truef(t, ok, "[%s-%s test]  Row update is not valid %s %#v", name, opName, msg, row)
+				} else {
+					ok, msg := row.ValidateRowUpdate2()
+					assert.Truef(t, ok, "[%s-%s test]  Row update is not valid %s %#v", name, opName, msg, row)
+				}
+				//fmt.Printf("op.expRowUpdate %+v\n", op.expRowUpdate)
+				//fmt.Printf("row %+v\n", row)
+				// TODO add compare
+			}
+		}
+	}
+}
+
+
 func TestMonitorAddRemoveMonitor(t *testing.T) {
-	db, _ := NewDatabaseMock()
+	var testSchemaSimple *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
+		Name:    "OVN_Northbound",
+		Version: "5.31.0",
+		Tables: map[string]libovsdb.TableSchema{
+			"NB_Global": {
+				Columns: map[string]*libovsdb.ColumnSchema{
+					"name": {
+						Type: libovsdb.TypeString,
+					},
+					"key2": {
+						Type: libovsdb.TypeInteger,
+					},
+				},
+			},
+			"Logical_Router": {
+				Columns: map[string]*libovsdb.ColumnSchema{
+					"name": {
+						Type: libovsdb.TypeString,
+					},
+					"key2": {
+						Type: libovsdb.TypeInteger,
+					},
+				},
+			},
+
+		},
+	}
+	schemas := libovsdb.Schemas{}
+	schemas["OVN_Northbound"] = testSchemaSimple
+	db := DatabaseMock{Response: schemas}
 	ctx := context.Background()
-	handler := NewHandler(ctx, db, nil, klogr.New())
+	handler := NewHandler(ctx, &db, nil, klogr.New())
 	expMsg, err := json.Marshal([]interface{}{"monid", "OVN_Northbound"})
 	assert.Nil(t, err)
 	jrpcServerMock := jrpcServerMock{
@@ -173,30 +285,20 @@ func TestMonitorAddRemoveMonitor(t *testing.T) {
 	var params []interface{}
 	err = json.Unmarshal([]byte(msg), &params)
 	assert.Nil(t, err)
-	handler.addMonitor(params, ovsjson.Update)
+	_, err = handler.addMonitor(params, ovsjson.Update)
+	assert.Nil(t, err)
 	monitor, ok := handler.monitors["OVN_Northbound"]
 	assert.True(t, ok)
 	assert.Equal(t, handler, monitor.handler)
 	assert.Equal(t, "OVN_Northbound", monitor.dataBaseName)
 	expKey2Updaters := Key2Updaters{}
 	key := common.NewTableKey("OVN_Northbound", "Logical_Router")
-	expKey2Updaters[key] = []updater{{
-		Columns:          map[string]bool{"name": true},
-		Where:            nil,
-		Select:           libovsdb.MonitorSelect{},
-		isV1:             true,
-		notificationType: 0,
-		jasonValueStr:    jsonValueToString(nil),
-	}}
+	columnSchema := libovsdb.ColumnSchema{Type: libovsdb.TypeString}
+	tableSchema := libovsdb.TableSchema{Columns: map[string]*libovsdb.ColumnSchema{"name":&columnSchema }}
+	mcr := ovsjson.MonitorCondRequest{Columns: []string{"name"}}
+	expKey2Updaters[key] = []updater{ *mcrToUpdater(mcr, jsonValueToString(nil), &tableSchema, true)}
 	key = common.NewTableKey("OVN_Northbound", "NB_Global")
-	expKey2Updaters[key] = []updater{{
-		Columns:          map[string]bool{},
-		Where:            nil,
-		Select:           libovsdb.MonitorSelect{},
-		isV1:             true,
-		notificationType: 0,
-		jasonValueStr:    jsonValueToString(nil),
-	}}
+	expKey2Updaters[key] = []updater{*mcrToUpdater(mcr, jsonValueToString(nil), &tableSchema, true)}
 	assert.Equal(t, expKey2Updaters, monitor.key2Updaters)
 	cloned := cloneKey2Updaters(monitor.key2Updaters)
 
@@ -206,14 +308,7 @@ func TestMonitorAddRemoveMonitor(t *testing.T) {
 	assert.Nil(t, err)
 	handler.addMonitor(params, ovsjson.Update2)
 	key = common.NewTableKey("OVN_Northbound", "ACL")
-	expKey2Updaters[key] = []updater{{
-		Columns:          map[string]bool{"priority": true},
-		Where:            nil,
-		Select:           libovsdb.MonitorSelect{},
-		isV1:             false,
-		notificationType: 0,
-		jasonValueStr:    jsonValueToString([]interface{}{"monid", "OVN_Northbound"}),
-	}}
+	expKey2Updaters[key] = []updater{*mcrToUpdater(mcr, jsonValueToString([]interface{}{"monid", "OVN_Northbound"}), &tableSchema, false)}
 	assert.Equal(t, expKey2Updaters, monitor.key2Updaters)
 
 	// remove the second monitor
@@ -431,3 +526,40 @@ func (j *jrpcServerMock) Notify(ctx context.Context, method string, params inter
 	assert.Equal(j.t, j.expMessage, buf)
 	return nil
 }
+
+func TestSetsDifferenceEquals(t *testing.T) {
+	set1 := libovsdb.OvsSet{GoSet: []interface{}{"one", "two"}}
+	set2 := libovsdb.OvsSet{GoSet: []interface{}{"two", "one"}}
+	expectDiff := libovsdb.OvsSet{}
+
+	diff := setsDifference(set1, set2)
+	assert.Equal(t, expectDiff, diff)
+}
+
+func TestSetsDifferenceSubset1(t *testing.T) {
+	set1 := libovsdb.OvsSet{GoSet: []interface{}{"one", "two", "three"}}
+	set2 := libovsdb.OvsSet{GoSet: []interface{}{"two", "one"}}
+	expectDiff := libovsdb.OvsSet{GoSet: []interface{}{"three"}}
+
+	diff := setsDifference(set1, set2)
+	assert.Equal(t, expectDiff, diff)
+}
+
+func TestSetsDifferenceSubset2(t *testing.T) {
+	set1 := libovsdb.OvsSet{GoSet: []interface{}{"one", "two"}}
+	set2 := libovsdb.OvsSet{GoSet: []interface{}{"two", "three", "one"}}
+	expectDiff := libovsdb.OvsSet{GoSet: []interface{}{"three"}}
+
+	diff := setsDifference(set1, set2)
+	assert.Equal(t, expectDiff, diff)
+}
+
+func TestSetsDifferenceDifferentSets(t *testing.T) {
+	set1 := libovsdb.OvsSet{GoSet: []interface{}{"one", "two", "four"}}
+	set2 := libovsdb.OvsSet{GoSet: []interface{}{"two", "three", "two"}}
+	expectDiff := libovsdb.OvsSet{GoSet: []interface{}{"one", "three", "four"}}
+
+	diff := setsDifference(set1, set2)
+	assert.ElementsMatch(t, expectDiff.GoSet, diff.GoSet)
+}
+*/
