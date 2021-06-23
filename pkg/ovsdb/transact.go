@@ -1417,7 +1417,9 @@ func (m *Mutation) insertToMap(original *libovsdb.OvsMap, toInsert interface{}) 
 	switch toInsert := toInsert.(type) {
 	case libovsdb.OvsMap:
 		for k, v := range toInsert.GoMap {
-			mutated.GoMap[k] = v
+			if _, ok := mutated.GoMap[k]; !ok {
+				mutated.GoMap[k] = v
+			}
 		}
 	default:
 		err := errors.New(E_CONSTRAINT_VIOLATION)
