@@ -405,7 +405,9 @@ func (u *updater) prepareModifyRowUpdate(event *clientv3.Event) (*ovsjson.RowUpd
 }
 
 func (u *updater) compareModifiedRows(modifiedRow, prevRow, deltaRow map[string]interface{}) error {
+	// the deltaRow will be "modified" in V2 or "old: in V1
 	for column, cValue := range modifiedRow {
+		var newValue interface{}
 		if !reflect.DeepEqual(cValue, prevRow[column]) {
 			columnSchema, err := u.tableSchema.LookupColumn(column)
 			if err != nil {
@@ -416,19 +418,26 @@ func (u *updater) compareModifiedRows(modifiedRow, prevRow, deltaRow map[string]
 				if err != nil {
 					return err
 				}
-				deltaRow[column] = deltaMap
+				if len(deltaMap.GoMap) > 0 {
+					newValue = deltaMap
+				}
 			} else if columnSchema.Type == libovsdb.TypeSet {
 				deltaSet, err := u.compareSets(modifiedRow[column], prevRow[column], columnSchema)
 				if err != nil {
 					return err
 				}
-				deltaRow[column] = deltaSet
-			} else {
-				if u.isV1 {
-					deltaRow[column] = prevRow[column]
-				} else {
-					deltaRow[column] = modifiedRow[column]
+				if len(deltaSet.GoSet) > 0 {
+					newValue = deltaSet
 				}
+			} else {
+				newValue = modifiedRow[column]
+			}
+		}
+		if newValue != nil {
+			if u.isV1 {
+				deltaRow[column] = prevRow[column]
+			} else {
+				deltaRow[column] = newValue
 			}
 		}
 	}
