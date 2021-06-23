@@ -138,41 +138,65 @@ docker: docker-build docker-push
 
 export KUBECONFIG=${HOME}/admin.conf
 
-OVNDB_ETCD_TCPDUMP ?= 'true'
-.PHONY: ovnk-deploy
-ovnk-deploy: check-env
+KUBECTL := kubectl --kubeconfig=${KUBECONFIG} -n=ovn-kubernetes
+
+KIND_FLAGS := \
+	--master-loglevel 7 \
+	--node-loglevel 7 \
+	--dbchecker-loglevel 7 \
+	--ovn-loglevel-northd '-vconsole:dbg -vfile:dbg' \
+	--ovn-loglevel-nbctld '-vconsole:dbg -vfile:dbg' \
+	--ovn-loglevel-controller '-vconsole:dbg -vfile:dbg'
+
+OVNDB_ETCD_TCPDUMP ?= true
+
+.PHONY: ovnkube-deploy
+ovnkube-deploy: check-env
+	cd ${OVN_KUBERNETES_ROOT} && git checkout origin/ovsdb-etcd2
+	cd ${OVN_KUBERNETES_ROOT}/go-controller && make
 	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh \
 		--ovn-etcd-image "${OVSDB_ETCD_REPOSITORY}/etcd:latest" \
 		--ovn-ovsdb-etcd-image "${OVSDB_ETCD_REPOSITORY}/ovsdb-etcd:latest" \
-		--master-loglevel 7 \
-		--node-loglevel 7 \
-		--dbchecker-loglevel 7 \
-		--ovndb-etcd-tcpdump ${OVNDB_ETCD_TCPDUMP} \
-		--ovn-loglevel-northd '-vconsole:dbg -vfile:dbg' \
-		--ovn-loglevel-nbctld '-vconsole:dbg -vfile:dbg' \
-		--ovn-loglevel-controller '-vconsole:dbg -vfile:dbg'
+		--ovndb-etcd-tcpdump "${OVNDB_ETCD_TCPDUMP}" \
+		$(KIND_FLAGS)
 
-.PHONY: ovnk-status
-ovnk-status:
-	kubectl -n=ovn-kubernetes get pods
-
-.PHONY: ovnk-delete
-ovnk-delete: check-env
-	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh --delete
-
-.PHONY: ovnk-org-deploy
-ovnk-org-deploy:
-	@echo "checking for OVN_KUBERNETES_ROOT" && [ -n "${OVN_KUBERNETES_ROOT}" ]
+.PHONY: ovnkube-deploy-org
+ovnkube-deploy-org: check-env
 	cd ${OVN_KUBERNETES_ROOT} && git checkout d0fdcfbbb2702ed8482a0c1f6ba4561273399fdc
 	cd ${OVN_KUBERNETES_ROOT}/go-controller && make
-	cd ${OVN_KUBERNETES_ROOT}/dist/images && make fedora
+	#cd ${OVN_KUBERNETES_ROOT}/dist/images && make fedora
 	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh \
-    		--master-loglevel 7 \
-    		--node-loglevel 7 \
-    		--dbchecker-loglevel 7 \
-    		--ovn-loglevel-nb '-vconsole:dbg -vfile:dbg' \
-    		--ovn-loglevel-sb '-vconsole:dbg -vfile:dbg' \
-    		--ovn-loglevel-northd '-vconsole:dbg -vfile:dbg' \
-    		--ovn-loglevel-nbctld '-vconsole:dbg -vfile:dbg' \
-    		--ovn-loglevel-controller '-vconsole:dbg -vfile:dbg'
-	cd ${OVN_KUBERNETES_ROOT} && git checkout ovsdb-etcd2
+		--ovn-loglevel-nb '-vconsole:dbg -vfile:dbg' \
+		--ovn-loglevel-sb '-vconsole:dbg -vfile:dbg' \
+		$(KIND_FLAGS)
+
+.PHONY: ovnkube-status
+ovnkube-status:
+	$(KUBECTL) get pods
+
+.PHONY: ovnkube-delete
+ovnkube-delete: check-env
+	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh --delete
+
+define kubectl-exec
+POD_NAME=$$($(KUBECTL) get pod --selector name=$1 \
+	--output=jsonpath={.items..metadata.name} | awk '{print $$1}'); \
+$(KUBECTL) exec -it $$POD_NAME -c $1 -- bash
+endef
+
+.PHONY: ovnkube-exec-master
+ovnkube-exec-master:
+	$(call kubectl-exec,ovnkube-master)
+
+.PHONY: ovnkube-exec-node
+ovnkube-exec-node:
+	$(call kubectl-exec,ovnkube-node)
+
+LOG_DIR ?= /tmp/log
+
+.PHONY: ovnkube-logs
+ovnkube-logs:
+	rm -rf ${LOG_DIR}/*
+	mkdir --parents ${LOG_DIR}
+	scripts/ovnkube-logs.sh ${LOG_DIR}
+	@echo "logs are at: ${LOG_DIR}"
