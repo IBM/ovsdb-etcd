@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -534,6 +535,196 @@ func TestMonitorNotifications3(t *testing.T) {
 	wg.Add(1)
 	monitor.notify(events, 3, &wg)
 	wg.Wait()
+}
+
+func marshalMap(uuid libovsdb.UUID, m map[string]string) ([]byte, error) {
+	ColMap, err := libovsdb.NewOvsMap(m)
+	if err != nil {
+		return []byte{}, err
+	}
+	data := map[string]interface{}{"ColMap": ColMap, COL_UUID: uuid}
+	return json.Marshal(data)
+}
+
+func marshalSet(uuid libovsdb.UUID, s []interface{}) ([]byte, error) {
+	set := libovsdb.OvsSet{GoSet: s}
+	data := map[string]interface{}{"ColSet": &set, COL_UUID: uuid}
+	return json.Marshal(data)
+}
+
+func getRowMapMutate(oldMap map[string]string, newMap map[string]string, isV1 bool) (*ovsjson.RowUpdate, string, error) {
+	uuid := libovsdb.UUID{GoUUID: guuid.NewString()}
+	oldData, err := marshalMap(uuid, oldMap)
+	if err != nil {
+		return nil, "", err
+	}
+	newData, err := marshalMap(uuid, newMap)
+	if err != nil {
+		return nil, "", err
+	}
+	columnType := libovsdb.ColumnType{Key: &libovsdb.BaseType{Type: "string"}, Value: &libovsdb.BaseType{Type: "string"}}
+	columnSchema := libovsdb.ColumnSchema{Type: libovsdb.TypeMap, TypeObj: &columnType}
+	tableSchema := libovsdb.TableSchema{Columns: map[string]*libovsdb.ColumnSchema{"ColMap": &columnSchema}}
+	event := clientv3.Event{Type: mvccpb.PUT,
+		PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: oldData},
+		Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"),
+			Value: newData, CreateRevision: 1, ModRevision: 2}}
+	updater := mcrToUpdater(ovsjson.MonitorCondRequest{}, "", &tableSchema, isV1)
+	return updater.prepareRowUpdate(&event)
+}
+
+func getRowSetMutate(oldSet []interface{}, newSet []interface{}, isV1 bool) (*ovsjson.RowUpdate, string, error) {
+	uuid := libovsdb.UUID{GoUUID: guuid.NewString()}
+	oldData, err := marshalSet(uuid, oldSet)
+	if err != nil {
+		return nil, "", err
+	}
+	newData, err := marshalSet(uuid, newSet)
+	if err != nil {
+		return nil, "", err
+	}
+	columnType := libovsdb.ColumnType{Key: &libovsdb.BaseType{Type: "string"}, Value: &libovsdb.BaseType{Type: "string"}}
+	columnSchema := libovsdb.ColumnSchema{Type: libovsdb.TypeSet, TypeObj: &columnType}
+	tableSchema := libovsdb.TableSchema{Columns: map[string]*libovsdb.ColumnSchema{"ColSet": &columnSchema}}
+	//FIXME we can remove remove code duplication on this part (see getRowMapMutate) one can export the following to external function
+	event := clientv3.Event{Type: mvccpb.PUT,
+		PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: oldData},
+		Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"),
+			Value: newData, CreateRevision: 1, ModRevision: 2}}
+	updater := mcrToUpdater(ovsjson.MonitorCondRequest{}, "", &tableSchema, isV1)
+	return updater.prepareRowUpdate(&event)
+}
+
+func marshallAndUnmatshall(v interface{}) (map[string]interface{}, error) {
+	marshalled, err := json.Marshal(v)
+	if err != nil {
+		return map[string]interface{}{}, err
+	}
+	return unmarshalData(marshalled)
+}
+
+func initExpectedRowSingleMap(
+	New *map[string]string,
+	Old *map[string]string,
+	Initial *map[string]string,
+	Insert *map[string]string,
+	Delete bool,
+	Modify *map[string]string,
+) (*ovsjson.RowUpdate, error) {
+	//getMap := func(m *map[string]string,includeElementName bool)(*map[string]interface{},error){
+	getMap := func(m *map[string]string, includeElementName bool) (*map[string]interface{}, error) {
+		if m == nil {
+			return nil, nil
+		}
+		ovsdbMap, err := libovsdb.NewOvsMap(*m)
+		if err != nil {
+			return nil, err
+		}
+		/*
+			uncomment to take into account "includeElementName" flag
+			var colMap []interface{}
+			if includeElementName {
+					colMap = []interface{}{"map",ovsdbMap}
+			}else{
+					colMap = []interface{}{ovsdbMap}
+			}
+			colMap_final,err := marshallAndUnmatshall(map[string]interface{}{"ColMap":colMap})
+		*/
+		colMap_final, err := marshallAndUnmatshall(map[string]interface{}{"ColMap": ovsdbMap}) //comment to take into account "includeElementName" flag
+		if err != nil {
+			return nil, err
+		}
+		return &colMap_final, nil
+	}
+	NewMap, err := getMap(New, true)
+	if err != nil {
+		return nil, err
+	}
+	OldMap, err := getMap(Old, false)
+	if err != nil {
+		return nil, err
+	}
+	InitialMap, err := getMap(Initial, true)
+	if err != nil {
+		return nil, err
+	}
+	InsertMap, err := getMap(Insert, true)
+	if err != nil {
+		return nil, err
+	}
+	ModifyMap, err := getMap(Modify, true)
+	if err != nil {
+		return nil, err
+	}
+	return &ovsjson.RowUpdate{New: NewMap, Old: OldMap, Initial: InitialMap, Insert: InsertMap, Delete: Delete, Modify: ModifyMap}, nil
+}
+
+func initExpectedRowSingleSet(
+	New *[]interface{},
+	Old *[]interface{},
+	Initial *[]interface{},
+	Insert *[]interface{},
+	Delete bool,
+	Modify *[]interface{},
+) *ovsjson.RowUpdate {
+	getSet := func(s *[]interface{}) *map[string]interface{} {
+		if s == nil {
+			return nil
+		}
+		return &map[string]interface{}{"ColSet": []interface{}{"set", &libovsdb.OvsSet{GoSet: *s}}}
+	}
+	NewMap := getSet(New)
+	OldMap := getSet(Old)
+	InitialMap := getSet(Initial)
+	InsertMap := getSet(Insert)
+	ModifyMap := getSet(Modify)
+	return &ovsjson.RowUpdate{New: NewMap, Old: OldMap, Initial: InitialMap, Insert: InsertMap, Delete: Delete, Modify: ModifyMap}
+}
+
+func rowsAreEqual(row1 ovsjson.RowUpdate, row2 ovsjson.RowUpdate) bool {
+	isEqualMaps := func(m1 *map[string]interface{}, m2 *map[string]interface{}) bool {
+		if m1 == nil && m2 == nil {
+			return true
+		}
+		if m1 == nil || m2 == nil {
+			return false
+		}
+		//for debug (with breakpoints) purpuse:
+		//res:= reflect.DeepEqual((*m1)["ColMap"],(*m2)["ColMap"])
+		//return res
+		return reflect.DeepEqual((*m1)["ColMap"], (*m2)["ColMap"])
+	}
+
+	return isEqualMaps((row1).New, (&(row2)).New) &&
+		isEqualMaps((row1).Initial, (&(row2)).Initial) &&
+		isEqualMaps((row1).Insert, (&(row2)).Insert) &&
+		reflect.DeepEqual(*&(row1).Delete, *&(row2).Delete) &&
+		isEqualMaps((row1).Modify, (&(row2)).Modify)
+}
+
+func TestMonitorMutateMapV1(t *testing.T) {
+	row, _, err := getRowMapMutate(map[string]string{"k1": "v1", "k2": "v2", "k3": "v3"},
+		map[string]string{"k1": "v1", "k3": "v5", "k4": "v4"}, true)
+	assert.Nil(t, err)
+	expectedRow, err := initExpectedRowSingleMap(&map[string]string{"k1": "v1", "k3": "v5", "k4": "v4"},
+		&map[string]string{"k1": "v1", "k2": "v2", "k3": "v3"},
+		nil, nil, false, nil)
+	assert.Nil(t, err)
+
+	a3 := rowsAreEqual(*row, *expectedRow)
+	fmt.Print(a3)
+	a4 := rowsAreEqual(*row, *row)
+	fmt.Print(a4)
+	return
+}
+
+func TestMonitorMutateSetV1(t *testing.T) {
+	row, _, err := getRowSetMutate([]interface{}{"e2", "e1"}, []interface{}{"e4", "e1"}, true)
+	assert.Nil(t, err)
+	expectedRow := initExpectedRowSingleSet(&[]interface{}{"e2", "e1"}, &[]interface{}{"e4", "e1"}, nil, nil, false, nil)
+	a3 := rowsAreEqual(*row, *expectedRow)
+	fmt.Print(a3)
+	return
 }
 
 func initHandler(t *testing.T, schemas libovsdb.Schemas, msg string, notificationType ovsjson.UpdateNotificationType) *Handler {
