@@ -280,20 +280,13 @@ func (txn *Transaction) etcdRemoveDup() {
 
 func (txn *Transaction) etcdTranaction() (*clientv3.TxnResponse, error) {
 	txn.log.V(6).Info("etcd transaction", "etcd", txn.etcd.String())
-
-	// etcds := txn.etcd.Split() // split
-	etcds := []*Etcd{txn.etcd} // don't split
-
-	for i, child := range etcds {
-		txn.log.V(6).Info("etcd processing", "index", i, "child", child.String())
-		errInternal := child.Commit()
-		if errInternal != nil {
-			err := errors.New(E_IO_ERROR)
-			txn.log.Error(err, "etcd processing", "err", errInternal)
-			return nil, err
-		}
-		txn.cache.GetFromEtcd(child.Res)
+	errInternal := txn.etcd.Commit()
+	if errInternal != nil {
+		err := errors.New(E_IO_ERROR)
+		txn.log.Error(err, "etcd transaction", "err", errInternal)
+		return nil, err
 	}
+	txn.cache.GetFromEtcd(txn.etcd.Res)
 
 	err := txn.cache.Unmarshal(txn, txn.schemas)
 	if err != nil {
@@ -519,14 +512,58 @@ func (etcd *Etcd) Assert() {
 	}
 }
 
-func (etcd *Etcd) EventsDump() string {
-	printable := []clientv3.Event{}
-	for _, ev := range etcd.Events {
+type EventKeyValue struct {
+	Key            string `json:"key"`
+	CreateRevision int64  `json:"create_revision"`
+	ModRevision    int64  `json:"mod_revision"`
+	Version        int64  `json:"version"`
+	Value          string `json:"value"`
+	Lease          int64  `json:"lease"`
+}
+
+func NewEventKeyValue(kv *mvccpb.KeyValue) *EventKeyValue {
+	if kv == nil {
+		return nil
+	}
+	return &EventKeyValue{
+		Key:            string(kv.Key),
+		CreateRevision: kv.CreateRevision,
+		ModRevision:    kv.ModRevision,
+		Version:        kv.Version,
+		Value:          string(kv.Value),
+		Lease:          kv.Lease,
+	}
+}
+
+type Event struct {
+	Type   string         `json:"type"`
+	Kv     *EventKeyValue `json:"kv"`
+	PrevKv *EventKeyValue `json:"prev_kv"`
+}
+
+func NewEvent(ev *clientv3.Event) Event {
+	return Event{
+		Type:   string(ev.Type),
+		Kv:     NewEventKeyValue(ev.Kv),
+		PrevKv: NewEventKeyValue(ev.PrevKv),
+	}
+}
+
+type EventList []Event
+
+func NewEventList(events []*clientv3.Event) EventList {
+	printable := EventList{}
+	for _, ev := range events {
 		if ev != nil {
-			printable = append(printable, *ev)
+			printable = append(printable, NewEvent(ev))
 		}
 	}
-	return fmt.Sprintf("%+v", printable)
+	return printable
+}
+
+func (evList EventList) String() string {
+	b, _ := json.Marshal(evList)
+	return string(b)
 }
 
 func NewEtcd(parent *Etcd) *Etcd {
@@ -546,7 +583,7 @@ func (etcd *Etcd) Clear() {
 }
 
 func (etcd Etcd) String() string {
-	return fmt.Sprintf("#then %d, #events %d, #events-nil %d", len(etcd.Then), len(etcd.Events), etcd.EventsNilCount)
+	return fmt.Sprintf("{txn-num-op=%d}", len(etcd.Then))
 }
 
 func (etcd *Etcd) Commit() error {
@@ -556,20 +593,6 @@ func (etcd *Etcd) Commit() error {
 	}
 	etcd.Res = res
 	return nil
-}
-
-func (etcd *Etcd) Split() []*Etcd {
-	split := []*Etcd{}
-	child := NewEtcd(etcd)
-	split = append(split, child)
-	for _, op := range etcd.Then {
-		child.Then = append(child.Then, op)
-		if len(child.Then) == ETCD_MAX_TXN_OPS {
-			child = NewEtcd(etcd)
-			split = append(split, child)
-		}
-	}
-	return split
 }
 
 type TxnLock struct {
@@ -694,9 +717,8 @@ func (txn *Transaction) Commit() (int64, error) {
 		}
 	}
 
-	//txn.log.V(5).Info("events transaction", "events", txn.etcd.EventsDump())
 	txn.etcdRemoveDup()
-	//txn.log.V(5).Info("events transaction (remove dup)", "events", txn.etcd.EventsDump())
+	txn.log.Info("events transaction", "events", NewEventList(txn.etcd.Events))
 	trResponse, err := txn.etcdTranaction()
 	if err != nil {
 		errStr := err.Error()
