@@ -419,7 +419,11 @@ func (u *updater) compareModifiedRows(modifiedRow, prevRow, deltaRow map[string]
 					return err
 				}
 				if len(deltaMap.GoMap) > 0 {
-					newValue = deltaMap
+					data, err := json.Marshal(deltaMap)
+					if err != nil {
+						return err
+					}
+					newValue = data
 				}
 			} else if columnSchema.Type == libovsdb.TypeSet {
 				deltaSet, err := u.compareSets(modifiedRow[column], prevRow[column], columnSchema)
@@ -427,7 +431,11 @@ func (u *updater) compareModifiedRows(modifiedRow, prevRow, deltaRow map[string]
 					return err
 				}
 				if len(deltaSet.GoSet) > 0 {
-					newValue = deltaSet
+					data, err := json.Marshal(deltaSet)
+					if err != nil {
+						return err
+					}
+					newValue = data
 				}
 			} else {
 				newValue = modifiedRow[column]
