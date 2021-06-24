@@ -201,7 +201,17 @@ var testSchemaUUID *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 						Value: &libovsdb.BaseType{
 							Type: libovsdb.TypeUUID,
 						},
-						Min: 1,
+						Min: 0,
+						Max: libovsdb.Unlimited,
+					},
+				},
+				"set": {
+					Type: libovsdb.TypeSet,
+					TypeObj: &libovsdb.ColumnType{
+						Key: &libovsdb.BaseType{
+							Type: libovsdb.TypeUUID,
+						},
+						Min: 0,
 						Max: libovsdb.Unlimited,
 					},
 				},
@@ -978,52 +988,48 @@ func TestTransactMutateSimple(t *testing.T) {
 	assert.Equal(t, float64(2), dump["key2"])
 }
 
-func TestTransactMutateMapNamedUUID(t *testing.T) {
-	namedUUID1 := "myuuid1"
-	namedUUID2 := "myuuid2"
-
-	table1 := "table1"
-	table1row1 := map[string]interface{}{}
+func TestTransactMutateSetNamedUUID(t *testing.T) {
+	uuid1 := "00000000-0000-0000-0000-000000000001"
+	uuid2 := "00000000-0000-0000-0000-000000000002"
 
 	table2 := "table2"
 	table2row1 := map[string]interface{}{
-		"map": libovsdb.OvsMap{GoMap: map[interface{}]interface{}{
-			"uuid1": libovsdb.UUID{GoUUID: namedUUID1},
+		"set": libovsdb.OvsSet{GoSet: []interface{}{
+			libovsdb.UUID{GoUUID: uuid1},
 		}},
 	}
 
 	mutations := []interface{}{
 		[]interface{}{
-			"map",
+			"set",
+			MT_DELETE,
+			libovsdb.OvsSet{GoSet: []interface{}{
+				libovsdb.UUID{GoUUID: uuid1},
+			}},
+		},
+		[]interface{}{
+			"set",
 			MT_INSERT,
-			libovsdb.OvsMap{GoMap: map[interface{}]interface{}{
-				"uuid2": libovsdb.UUID{GoUUID: namedUUID2},
+			libovsdb.OvsSet{GoSet: []interface{}{
+				libovsdb.UUID{GoUUID: uuid2},
 			}},
 		},
 	}
 
-	req := &libovsdb.Transact{
+	req1 := &libovsdb.Transact{
 		DBName: "uuid",
 		Operations: []libovsdb.Operation{
-			/* table1 */
-			{
-				Op:       OP_INSERT,
-				Table:    &table1,
-				Row:      &table1row1,
-				UUIDName: &namedUUID1,
-			},
-			{
-				Op:       OP_INSERT,
-				Table:    &table1,
-				Row:      &table1row1,
-				UUIDName: &namedUUID2,
-			},
-			/* table2 */
 			{
 				Op:    OP_INSERT,
 				Table: &table2,
 				Row:   &table2row1,
 			},
+		},
+	}
+
+	req2 := &libovsdb.Transact{
+		DBName: "uuid",
+		Operations: []libovsdb.Operation{
 			{
 				Op:        OP_MUTATE,
 				Table:     &table2,
@@ -1031,10 +1037,30 @@ func TestTransactMutateMapNamedUUID(t *testing.T) {
 			},
 		},
 	}
+
 	common.SetPrefix("ovsdb/nb")
 	testEtcdCleanup(t)
-	resp, _ := testTransact(t, req)
+
+	resp, _ := testTransact(t, req1)
 	assert.Nil(t, resp.Error)
+
+	resp, txn := testTransact(t, req2)
+	assert.Nil(t, resp.Error)
+	dump := testTransactDump(t, txn, "uuid", "table2")
+	assert.Equal(t, libovsdb.OvsSet{GoSet: []interface{}{libovsdb.UUID{GoUUID: uuid2}}}, dump["set"])
+	ev := txn.etcd.Events[0]
+
+	actual := string(ev.PrevKv.Value)
+	expected_substr := uuid1
+	assert.True(t, strings.Contains(actual, expected_substr), fmt.Sprintf("expected %s contains %s", actual, expected_substr))
+
+	actual = string(ev.Kv.Value)
+	expected_substr = uuid2
+	assert.True(t, strings.Contains(actual, expected_substr), fmt.Sprintf("expected %s contains %s", actual, expected_substr))
+
+	actual = string(ev.Kv.Value)
+	expected_substr = uuid1
+	assert.False(t, strings.Contains(actual, expected_substr), fmt.Sprintf("expected %s not contains %s", actual, expected_substr))
 }
 
 func TestTransactMutateSet(t *testing.T) {
