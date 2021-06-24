@@ -51,7 +51,7 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	if !req.IsNotification() {
 		id = req.ID()
 	}
-	log := ch.log.WithValues("id", id)
+	log := ch.log.WithValues("id", id, "txnid", shortuuid.New())
 	log.V(5).Info("transact", "params", params)
 	if ch.closed {
 		log.V(5).Info("transact request, the handler is closed")
@@ -324,7 +324,7 @@ func NewHandler(tctx context.Context, db Databaser, cli *clientv3.Client, log lo
 		handlerMonitorData: map[string]handlerMonitorData{},
 		etcdClient:         cli,
 		monitors:           map[string]*dbMonitor{},
-		log:                log.WithValues("hid", shortuuid.New()),
+		log:                log.WithValues(),
 	}
 }
 
