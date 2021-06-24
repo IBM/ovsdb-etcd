@@ -662,10 +662,8 @@ func (tableSchema *TableSchema) Unmarshal(row *map[string]interface{}) error {
 			var to interface{}
 			var err error
 			switch column {
-			case "_uuid":
+			case COL_UUID, COL_VERSION:
 				to, err = UnmarshalUUID(value)
-			case "_version":
-				to, err = UnmarshalString(value)
 			default:
 				to, err = columnSchema.Unmarshal(value)
 			}

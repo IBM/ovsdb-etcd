@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -822,6 +824,63 @@ func TestTransactUpdateMapOk(t *testing.T) {
 		"key1": "value1b",
 		"key2": "value2",
 	}}, dump["string"])
+}
+
+func TestTransactUpdateMap2Txn(t *testing.T) {
+	table := "table1"
+	row1 := map[string]interface{}{
+		"string": libovsdb.OvsMap{GoMap: map[interface{}]interface{}{
+			"key1": "value1a",
+			"key2": "value2",
+		}},
+	}
+	row2 := map[string]interface{}{
+		"string": libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "value1b"}},
+	}
+	req1 := &libovsdb.Transact{
+		DBName: "map",
+		Operations: []libovsdb.Operation{
+			{
+				Op:    OP_INSERT,
+				Table: &table,
+				Row:   &row1,
+			},
+		},
+	}
+	req2 := &libovsdb.Transact{
+		DBName: "map",
+		Operations: []libovsdb.Operation{
+			{
+				Op:    OP_UPDATE,
+				Table: &table,
+				Row:   &row2,
+			},
+		},
+	}
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t)
+
+	/* txn 1 */
+	resp, txn := testTransact(t, req1)
+	assert.Nil(t, resp.Error)
+	dump := testTransactDump(t, txn, "map", "table1")
+	assert.Equal(t, libovsdb.OvsMap{GoMap: map[interface{}]interface{}{
+		"key1": "value1a",
+		"key2": "value2",
+	}}, dump["string"])
+
+	/* txn 2 */
+	resp, txn = testTransact(t, req2)
+	assert.Nil(t, resp.Error)
+	dump = testTransactDump(t, txn, "map", "table1")
+	assert.Equal(t, libovsdb.OvsMap{GoMap: map[interface{}]interface{}{
+		"key1": "value1b",
+		"key2": "value2",
+	}}, dump["string"])
+	ev := txn.etcd.Events[0]
+	actual := string(ev.PrevKv.Value)
+	expected_substr := `["key1","value1a"]`
+	assert.True(t, strings.Contains(actual, expected_substr), fmt.Sprintf("expected %s contains %s", actual, expected_substr))
 }
 
 func TestTransactUpdateMapError(t *testing.T) {
