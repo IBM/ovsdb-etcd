@@ -9,6 +9,11 @@ import (
 	"strings"
 )
 
+const (
+	COL_UUID    = "_uuid"
+	COL_VERSION = "_version"
+)
+
 type Schemas map[string]*DatabaseSchema
 
 func (schemas *Schemas) AddFromFile(path string) error {
@@ -699,6 +704,12 @@ func (schemas *Schemas) Unmarshal(dbname, table string, row *map[string]interfac
 
 /* lookup */
 func (tableSchema *TableSchema) LookupColumn(column string) (*ColumnSchema, error) {
+	switch column {
+	case COL_VERSION, COL_UUID:
+		return &ColumnSchema{
+			Type: TypeUUID,
+		}, nil
+	}
 	columnSchema, ok := tableSchema.Columns[column]
 	if !ok {
 		return nil, fmt.Errorf("Missing schema for column %s", column)

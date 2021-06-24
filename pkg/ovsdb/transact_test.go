@@ -285,7 +285,7 @@ func testTransactDump(t *testing.T, txn *Transaction, dbname, table string) map[
 	assert.True(t, ok)
 	for _, row := range tableCache {
 		for k, v := range *row {
-			if k == COL_UUID || k == COL_VERSION {
+			if k == libovsdb.COL_UUID || k == libovsdb.COL_VERSION {
 				continue
 			}
 			dump[k] = v

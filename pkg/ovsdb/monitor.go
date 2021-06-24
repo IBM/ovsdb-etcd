@@ -531,11 +531,11 @@ func unmarshalData(data []byte) (map[string]interface{}, error) {
 }
 
 func getAndDeleteUUID(data map[string]interface{}) (string, error) {
-	uuidInt, ok := data[COL_UUID]
+	uuidInt, ok := data[libovsdb.COL_UUID]
 	if !ok {
-		return "", fmt.Errorf("row doesn't contain %s", COL_UUID)
+		return "", fmt.Errorf("row doesn't contain %s", libovsdb.COL_UUID)
 	}
-	delete(data, COL_UUID)
+	delete(data, libovsdb.COL_UUID)
 	uuid, ok := uuidInt.([]interface{})
 	if !ok {
 		return "", fmt.Errorf("wrong uuid type %T %v", uuidInt, uuidInt)
