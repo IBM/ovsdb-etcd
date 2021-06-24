@@ -1478,20 +1478,24 @@ func (m *Mutation) Mutate(row *map[string]interface{}) error {
 	}
 }
 
-func (txn *Transaction) RowMutate(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, original *map[string]interface{}, mutations *[]interface{}) (*map[string]interface{}, error) {
-	mutated := &map[string]interface{}{}
-	copier.Copy(mutated, original)
+func (txn *Transaction) RowMutate(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, oldRow *map[string]interface{}, mutations *[]interface{}) (*map[string]interface{}, error) {
+	newRow := &map[string]interface{}{}
+	copier.Copy(newRow, oldRow)
+	err := tableSchema.Unmarshal(newRow)
+	if err != nil {
+		return nil, err
+	}
 	for _, mt := range *mutations {
 		m, err := NewMutation(txn, tableSchema, mapUUID, mt.([]interface{}))
 		if err != nil {
 			return nil, err
 		}
-		err = m.Mutate(mutated)
+		err = m.Mutate(newRow)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return mutated, nil
+	return newRow, nil
 }
 
 func columnUpdateMap(oldValue, newValue interface{}) interface{} {
