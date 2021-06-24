@@ -41,7 +41,7 @@ func TestMonitorRowUpdate(t *testing.T) {
 	}
 
 	data := map[string]interface{}{"c1": "v1", "c2": "v2"}
-	data[COL_UUID] = libovsdb.UUID{GoUUID: guuid.NewString()}
+	data[libovsdb.COL_UUID] = libovsdb.UUID{GoUUID: guuid.NewString()}
 	data1Json, err := json.Marshal(data)
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
 
@@ -175,7 +175,7 @@ func TestMonitorModifyRowMap(t *testing.T) {
 	}
 
 	data := map[string]interface{}{}
-	data[COL_UUID] = libovsdb.UUID{GoUUID: guuid.NewString()}
+	data[libovsdb.COL_UUID] = libovsdb.UUID{GoUUID: guuid.NewString()}
 	goMap := map[string]interface{}{}
 	goMap["theSame"] = "v1"
 	goMap["newKey"] = "v1"
@@ -420,7 +420,7 @@ func TestMonitorNotifications1(t *testing.T) {
 
 	tableUpdates := ovsjson.TableUpdates{}
 	tableUpdate := ovsjson.TableUpdate{}
-	delete(row, COL_UUID)
+	delete(row, libovsdb.COL_UUID)
 	rowUpdate := ovsjson.RowUpdate{New: &row}
 	tableUpdate[ROW_UUID] = rowUpdate
 	tableUpdates["T1"] = tableUpdate
@@ -515,7 +515,7 @@ func TestMonitorNotifications3(t *testing.T) {
 	}
 	tableUpdates := ovsjson.TableUpdates{}
 	tableUpdate := ovsjson.TableUpdate{}
-	delete(row2, COL_UUID)
+	delete(row2, libovsdb.COL_UUID)
 	rowUpdate := ovsjson.RowUpdate{Modify: &row2}
 	tableUpdate[ROW_UUID] = rowUpdate
 	tableUpdates["T3"] = tableUpdate
@@ -556,7 +556,7 @@ func initHandler(t *testing.T, schemas libovsdb.Schemas, msg string, notificatio
 
 func prepareData(t *testing.T, data map[string]interface{}, withUUID bool) []byte {
 	if withUUID {
-		data[COL_UUID] = libovsdb.UUID{GoUUID: ROW_UUID}
+		data[libovsdb.COL_UUID] = libovsdb.UUID{GoUUID: ROW_UUID}
 	}
 	dataJson, err := json.Marshal(data)
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)

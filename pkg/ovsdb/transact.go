@@ -169,12 +169,6 @@ func isEqualRow(txn *Transaction, tableSchema *libovsdb.TableSchema, expectedRow
 
 // XXX: move to libovsdb
 const (
-	COL_UUID    = "_uuid"
-	COL_VERSION = "_version"
-)
-
-// XXX: move to libovsdb
-const (
 	OP_INSERT  = "insert"
 	OP_SELECT  = "select"
 	OP_UPDATE  = "update"
@@ -740,12 +734,12 @@ func makeValue(row *map[string]interface{}) (string, error) {
 }
 
 func setRowUUID(row *map[string]interface{}, uuid string) {
-	(*row)[COL_UUID] = libovsdb.UUID{GoUUID: uuid}
+	(*row)[libovsdb.COL_UUID] = libovsdb.UUID{GoUUID: uuid}
 }
 
 func setRowVersion(row *map[string]interface{}) {
 	version := common.GenerateUUID()
-	(*row)[COL_VERSION] = libovsdb.UUID{GoUUID: version}
+	(*row)[libovsdb.COL_VERSION] = libovsdb.UUID{GoUUID: version}
 }
 
 const (
@@ -782,14 +776,11 @@ func NewCondition(txn *Transaction, tableSchema *libovsdb.TableSchema, mapUUID M
 		return nil, err
 	}
 
-	var columnSchema *libovsdb.ColumnSchema
-	if column != COL_UUID && column != COL_VERSION {
-		columnSchema, err = tableSchema.LookupColumn(column)
-		if err != nil {
-			err = errors.New(E_CONSTRAINT_VIOLATION)
-			txn.log.Error(err, "failed schema lookup", "column", column)
-			return nil, err
-		}
+	columnSchema, err := tableSchema.LookupColumn(column)
+	if err != nil {
+		err = errors.New(E_CONSTRAINT_VIOLATION)
+		txn.log.Error(err, "failed schema lookup", "column", column)
+		return nil, err
 	}
 
 	fn, ok := condition[1].(string)
@@ -808,7 +799,7 @@ func NewCondition(txn *Transaction, tableSchema *libovsdb.TableSchema, mapUUID M
 			return nil, err
 		}
 		value = tmp
-	} else if column == COL_UUID {
+	} else if column == libovsdb.COL_UUID {
 		tmp, err := libovsdb.UnmarshalUUID(value)
 		if err != nil {
 			err = errors.New(E_INTERNAL_ERROR)
@@ -1052,16 +1043,6 @@ func (c *Condition) CompareMap(row *map[string]interface{}) (bool, error) {
 }
 
 func (c *Condition) Compare(row *map[string]interface{}) (bool, error) {
-	var err error
-	switch c.Column {
-	case COL_UUID:
-		return c.CompareUUID(row)
-	case COL_VERSION:
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		c.txn.log.Error(err, "unsupported field comparison", "column", COL_VERSION)
-		return false, err
-	}
-
 	switch c.ColumnSchema.Type {
 	case libovsdb.TypeInteger:
 		return c.CompareInteger(row)
@@ -1080,7 +1061,7 @@ func (c *Condition) Compare(row *map[string]interface{}) (bool, error) {
 	case libovsdb.TypeMap:
 		return c.CompareMap(row)
 	default:
-		err = errors.New(E_CONSTRAINT_VIOLATION)
+		err := errors.New(E_CONSTRAINT_VIOLATION)
 		c.txn.log.Error(err, "usupported type comparison", "type", c.ColumnSchema.Type)
 		return false, err
 	}
@@ -1099,7 +1080,7 @@ func (txn *Transaction) getUUIDIfExists(tableSchema *libovsdb.TableSchema, mapUU
 		txn.log.Error(err, "failed to create condition", "condition", cond2)
 		return "", err
 	}
-	if condition.Column != COL_UUID {
+	if condition.Column != libovsdb.COL_UUID {
 		return "", nil
 	}
 	if condition.Function != FN_EQ && condition.Function != FN_IN {
@@ -1471,7 +1452,7 @@ func (m *Mutation) MutateMap(row *map[string]interface{}) error {
 func (m *Mutation) Mutate(row *map[string]interface{}) error {
 	var err error
 	switch m.Column {
-	case COL_UUID, COL_VERSION:
+	case libovsdb.COL_UUID, libovsdb.COL_VERSION:
 		err = errors.New(E_CONSTRAINT_VIOLATION)
 		m.txn.log.Error(err, "can't mutate column", "column", m.Column)
 		return err
@@ -1561,7 +1542,7 @@ func (txn *Transaction) RowUpdate(tableSchema *libovsdb.TableSchema, mapUUID Map
 			return nil, err
 		}
 		switch column {
-		case COL_UUID, COL_VERSION:
+		case libovsdb.COL_UUID, libovsdb.COL_VERSION:
 			err = errors.New(E_CONSTRAINT_VIOLATION)
 			txn.log.Error(err, "failed update of column", "column", column)
 			return nil, err
