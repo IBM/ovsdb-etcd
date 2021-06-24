@@ -349,18 +349,18 @@ func (ch *Handler) SetConnection(jrpcSerer JrpcServer, clientCon net.Conn) {
 	ch.log = ch.log.WithValues("client", ch.GetClientAddress())
 }
 
-func (ch *Handler) notify(jsonValueString string, updates ovsjson.TableUpdates, wg *sync.WaitGroup) {
+func (ch *Handler) notify(jsonValueString string, updates ovsjson.TableUpdates, revision int64, wg *sync.WaitGroup) {
 	hmd, ok := ch.handlerMonitorData[jsonValueString]
 	if !ok {
-		ch.log.Info("Unknown jsonValue", "jsonValue", jsonValueString)
+		ch.log.Info("unknown jsonValue", "jsonValue", jsonValueString)
 		return
 	}
 	if klog.V(7).Enabled() {
-		ch.log.V(7).Info("Monitor notification jsonValue", "jsonValue", hmd.jsonValue, "updates", updates)
+		ch.log.V(7).Info("monitor notification jsonValue", "jsonValue", hmd.jsonValue, "revision", revision, "updates", updates)
 	} else {
-		ch.log.V(5).Info("Monitor notification jsonValue", "jsonValue", hmd.jsonValue)
+		ch.log.V(5).Info("monitor notification jsonValue", "jsonValue", hmd.jsonValue, "revision", revision)
 	}
-	hmd.notificationChain <- notificationEvent{updates: updates, wg: wg}
+	hmd.notificationChain <- notificationEvent{updates: updates, wg: wg, revision: revision}
 }
 
 func (ch *Handler) monitorCanceledNotification(jsonValue interface{}) {
