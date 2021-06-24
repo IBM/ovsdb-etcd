@@ -542,13 +542,13 @@ func marshalMap(uuid libovsdb.UUID, m map[string]string) ([]byte, error) {
 	if err != nil {
 		return []byte{}, err
 	}
-	data := map[string]interface{}{"ColMap": ColMap, COL_UUID: uuid}
+	data := map[string]interface{}{"ColMap": ColMap, libovsdb.COL_UUID: uuid}
 	return json.Marshal(data)
 }
 
 func marshalSet(uuid libovsdb.UUID, s []interface{}) ([]byte, error) {
 	set := libovsdb.OvsSet{GoSet: s}
-	data := map[string]interface{}{"ColSet": &set, COL_UUID: uuid}
+	data := map[string]interface{}{"ColSet": &set, libovsdb.COL_UUID: uuid}
 	return json.Marshal(data)
 }
 
