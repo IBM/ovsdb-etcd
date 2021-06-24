@@ -121,6 +121,7 @@ check-env:
 
 .PHONY: docker-build
 docker-build: check-env build docker-downloads
+	cd ${OVN_KUBERNETES_ROOT} && git checkout origin/ovsdb-etcd2
 	cp ${OVN_KUBERNETES_ROOT}/dist/images/ovndb-raft-functions.sh dist/images/.
 	cp ${OVN_KUBERNETES_ROOT}/dist/images/ovnkube.sh dist/images/.
 	docker build . -t etcd -f dist/images/Dockerfile.etcd
