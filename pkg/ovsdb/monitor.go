@@ -45,8 +45,9 @@ type handlerMonitorData struct {
 }
 
 type notificationEvent struct {
-	updates ovsjson.TableUpdates
-	wg      *sync.WaitGroup
+	updates  ovsjson.TableUpdates
+	revision int64
+	wg       *sync.WaitGroup
 }
 
 // Map from a key which represents a table paths (prefix/dbname/table) to arrays of updaters
@@ -177,9 +178,9 @@ func (hm *handlerMonitorData) notifier(ch *Handler) {
 				return
 			}
 			if hm.log.V(6).Enabled() {
-				hm.log.V(6).Info("send notification", "updates", notificationEvent.updates)
+				hm.log.V(6).Info("sending notification", "revision", notificationEvent.revision, "updates", notificationEvent.updates)
 			} else {
-				hm.log.V(5).Info("send notification")
+				hm.log.V(5).Info("sending notification", "revision", notificationEvent.revision)
 			}
 
 			var err error
@@ -214,7 +215,8 @@ func (m *dbMonitor) notify(events []*clientv3.Event, revision int64, wg *sync.Wa
 		m.log.V(5).Info("there is no events, return")
 		return
 	}
-	m.log.V(5).Info("notify", "revChecker.revision", m.revChecker.revision, "revision", revision, "wg == nil", wg == nil)
+	m.log.V(5).Info("notify:", "revChecker's  revision", m.revChecker.revision,
+		"notification revision", revision, "transactionNotification", wg != nil)
 	if m.revChecker.isNewRevision(revision) {
 		result, err := m.prepareTableUpdate(events)
 		if err != nil {
@@ -229,8 +231,8 @@ func (m *dbMonitor) notify(events []*clientv3.Event, revision int64, wg *sync.Wa
 			}
 			for jValue, tableUpdates := range result {
 				sentToNotifier = true
-				m.log.V(7).Info("notify", "table-update", tableUpdates)
-				m.handler.notify(jValue, tableUpdates, wg)
+				m.log.V(7).Info("notify", "revision", revision, "table-update", tableUpdates)
+				m.handler.notify(jValue, tableUpdates, revision, wg)
 			}
 		}
 	} else {
