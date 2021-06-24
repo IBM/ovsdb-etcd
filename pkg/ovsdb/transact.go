@@ -1534,6 +1534,10 @@ func columnUpdate(columnSchema *libovsdb.ColumnSchema, oldValue, newValue interf
 func (txn *Transaction) RowUpdate(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, currentRow *map[string]interface{}, update *map[string]interface{}) (*map[string]interface{}, error) {
 	newRow := new(map[string]interface{})
 	copier.Copy(newRow, currentRow)
+	err := tableSchema.Unmarshal(newRow)
+	if err != nil {
+		return nil, err
+	}
 	for column, value := range *update {
 		columnSchema, err := tableSchema.LookupColumn(column)
 		if err != nil {
