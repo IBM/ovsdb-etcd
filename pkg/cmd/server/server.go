@@ -35,7 +35,7 @@ var (
 	unixAddress        = flag.String("unix-address", "", "UNIX service address")
 	etcdMembers        = flag.String("etcd-members", ETCD_LOCALHOST, "ETCD service addresses, separated by ',' ")
 	schemaBasedir      = flag.String("schema-basedir", ".", "Schema base dir")
-	maxTasks           = flag.Int("max", 1, "Maximum concurrent tasks")
+	maxTasks           = flag.Int("max", 10, "Maximum concurrent tasks")
 	databasePrefix     = flag.String("database-prefix", "ovsdb", "Database prefix")
 	serviceName        = flag.String("service-name", "", "Deployment service name, e.g. 'nbdb' or 'sbdb'")
 	schemaFile         = flag.String("schema-file", "", "schema-file")

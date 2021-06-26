@@ -66,17 +66,17 @@ var _ = Describe("e2e", func() {
 					Expect(err).ShouldNot(HaveOccurred())
 					klog.Infof("listDbs result=%v", dbs)
 				})
-				Context("should be able to echo a messeges", func() {
+				Context("should be able to echo a messages", func() {
 					echo, err := echo(ctx, cli)
 					Expect(err).ShouldNot(HaveOccurred())
 					klog.Infof("echo result=%v", echo)
 				})
-				Context("should be able to echo a messeges", func() {
+				Context("should be able to echo a messages", func() {
 					echo, err := echo(ctx, cli)
 					Expect(err).ShouldNot(HaveOccurred())
 					klog.Infof("echo result=%v", echo)
 				})
-				Context("should be able to retrive the server ID", func() {
+				Context("should be able to retrieve the server ID", func() {
 					uuid, err := getServerId(ctx, cli)
 					Expect(err).ShouldNot(HaveOccurred())
 					klog.Infof("getServerId result=%v", uuid)

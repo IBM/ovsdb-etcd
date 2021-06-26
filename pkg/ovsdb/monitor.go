@@ -1,6 +1,7 @@
 package ovsdb
 
 import (
+	"container/list"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -47,7 +48,6 @@ type handlerMonitorData struct {
 type notificationEvent struct {
 	updates  ovsjson.TableUpdates
 	revision int64
-	wg       *sync.WaitGroup
 }
 
 // Map from a key which represents a table paths (prefix/dbname/table) to arrays of updaters
@@ -89,23 +89,63 @@ type dbMonitor struct {
 	// an array of <dbMonitor-request> objects for a monitored table
 	key2Updaters Key2Updaters
 
-	revChecker revisionChecker
-	handler    *Handler
+	//revChecker revisionChecker
+	tQueue  transactionsQueue
+	handler *Handler
 }
 
-type revisionChecker struct {
+type queueElement struct {
 	revision int64
-	mu       sync.Mutex
+	wg       *sync.WaitGroup
 }
 
-func (rc *revisionChecker) isNewRevision(newRevision int64) bool {
-	rc.mu.Lock()
-	defer rc.mu.Unlock()
-	if newRevision > rc.revision {
-		rc.revision = newRevision
-		return true
+type transactionsQueue struct {
+	queue *list.List
+	mu    sync.Mutex
+}
+
+func newTQueue() transactionsQueue {
+	return transactionsQueue{queue: list.New()}
+}
+
+func (tq *transactionsQueue) startTransaction() {
+	tq.mu.Lock()
+}
+
+func (tq *transactionsQueue) endTransaction(rev int64, wg *sync.WaitGroup) {
+	// we are holding the lock
+	qe := queueElement{revision: rev, wg: wg}
+	tq.queue.PushBack(qe)
+	tq.mu.Unlock()
+}
+
+func (tq *transactionsQueue) notificationSent(rev int64) {
+	klog.Infof("notificationSent rev %d", rev)
+	tq.mu.Lock()
+	defer tq.mu.Unlock()
+	klog.Infof("notificationSent rev %d, size %d", rev, tq.queue.Len())
+	for tq.queue.Len() > 0 {
+		element := tq.queue.Front()
+		qElement := (element.Value).(queueElement)
+		klog.Infof("notificationSent rev %d, qElement rev %d", rev, qElement.revision)
+		if qElement.revision <= rev {
+			tq.queue.Remove(element)
+			qElement.wg.Done()
+			klog.Infof("notificationSent rev %d called Done", rev)
+		} else {
+			return
+		}
 	}
-	return false
+}
+
+func (tq *transactionsQueue) cleanUp() {
+	// it is done at the end life of monitor, co we don't have to achieve lock
+	for tq.queue.Len() > 0 {
+		element := tq.queue.Front()
+		qElement := (element.Value).(queueElement)
+		qElement.wg.Done()
+		tq.queue.Remove(element)
+	}
 }
 
 func newMonitor(dbName string, handler *Handler, log logr.Logger) *dbMonitor {
@@ -114,6 +154,7 @@ func newMonitor(dbName string, handler *Handler, log logr.Logger) *dbMonitor {
 		dataBaseName: dbName,
 		handler:      handler,
 		key2Updaters: Key2Updaters{},
+		tQueue:       newTQueue(),
 	}
 	return &m
 }
@@ -157,7 +198,7 @@ func (m *dbMonitor) start() {
 				m.cancelDbMonitor()
 				return
 			}
-			m.notify(wresp.Events, wresp.Header.Revision, nil)
+			m.notify(wresp.Events, wresp.Header.Revision)
 		}
 	}()
 }
@@ -172,73 +213,60 @@ func (hm *handlerMonitorData) notifier(ch *Handler) {
 
 		case notificationEvent := <-hm.notificationChain:
 			if ch.handlerContext.Err() != nil {
-				if notificationEvent.wg != nil {
-					notificationEvent.wg.Done()
-				}
+				ch.monitors[hm.dataBaseName].tQueue.cleanUp()
 				return
 			}
-			if hm.log.V(6).Enabled() {
-				hm.log.V(6).Info("sending notification", "revision", notificationEvent.revision, "updates", notificationEvent.updates)
-			} else {
-				hm.log.V(5).Info("sending notification", "revision", notificationEvent.revision)
-			}
+			if notificationEvent.updates != nil {
+				if hm.log.V(6).Enabled() {
+					hm.log.V(6).Info("sending notification", "revision", notificationEvent.revision, "updates", notificationEvent.updates)
+				} else {
+					hm.log.V(5).Info("sending notification", "revision", notificationEvent.revision)
+				}
 
-			var err error
-			switch hm.notificationType {
-			case ovsjson.Update:
-				err = ch.jrpcServer.Notify(ch.handlerContext, UPDATE, []interface{}{hm.jsonValue, notificationEvent.updates})
-			case ovsjson.Update2:
-				err = ch.jrpcServer.Notify(ch.handlerContext, UPDATE2, []interface{}{hm.jsonValue, notificationEvent.updates})
-			case ovsjson.Update3:
-				err = ch.jrpcServer.Notify(ch.handlerContext, UPDATE3, []interface{}{hm.jsonValue, ovsjson.ZERO_UUID, notificationEvent.updates})
+				var err error
+				switch hm.notificationType {
+				case ovsjson.Update:
+					err = ch.jrpcServer.Notify(ch.handlerContext, UPDATE, []interface{}{hm.jsonValue, notificationEvent.updates})
+				case ovsjson.Update2:
+					err = ch.jrpcServer.Notify(ch.handlerContext, UPDATE2, []interface{}{hm.jsonValue, notificationEvent.updates})
+				case ovsjson.Update3:
+					err = ch.jrpcServer.Notify(ch.handlerContext, UPDATE3, []interface{}{hm.jsonValue, ovsjson.ZERO_UUID, notificationEvent.updates})
+				}
+				if err != nil {
+					// TODO should we do something else
+					hm.log.Error(err, "monitor notification failed")
+				}
 			}
-			if err != nil {
-				// TODO should we do something else
-				hm.log.Error(err, "monitor notification failed")
-			}
-			if notificationEvent.wg != nil {
-				hm.log.V(7).Info("sent notification and call wg.done")
-				notificationEvent.wg.Done()
-			}
+			ch.monitors[hm.dataBaseName].tQueue.notificationSent(notificationEvent.revision)
 		}
 	}
 }
 
-func (m *dbMonitor) notify(events []*clientv3.Event, revision int64, wg *sync.WaitGroup) {
-	var sentToNotifier bool
-	defer func() {
-		if wg != nil && !sentToNotifier {
-			wg.Done()
-		}
-	}()
+func (m *dbMonitor) notify(events []*clientv3.Event, revision int64) {
+
 	if len(events) == 0 {
 		m.log.V(5).Info("there is no events, return")
-		return
+		// we called here to release transaction queue, if there are elements there
+		m.handler.notifyAll(revision)
 	}
-	m.log.V(5).Info("notify:", "revChecker's  revision", m.revChecker.revision,
-		"notification revision", revision, "transactionNotification", wg != nil)
-	if m.revChecker.isNewRevision(revision) {
-		result, err := m.prepareTableUpdate(events)
-		if err != nil {
-			m.log.Error(err, "prepareTableUpdate failed")
-		} else {
-			if len(result) == 0 {
-				m.log.V(5).Info("there is nothing to notify", "events", fmt.Sprintf("%+v", events))
-				for _, e := range events {
-					m.log.V(5).Info("there is nothing to notify", "event", fmt.Sprintf("%+v", e))
-				}
-				return
-			}
-			for jValue, tableUpdates := range result {
-				sentToNotifier = true
-				m.log.V(7).Info("notify", "revision", revision, "table-update", tableUpdates)
-				m.handler.notify(jValue, tableUpdates, revision, wg)
-			}
-		}
+	m.log.V(5).Info("notify:", "notification revision", revision, "events", NewEventList(events))
+	result, err := m.prepareTableUpdate(events)
+	if err != nil {
+		// TODO what should I do here?
+		m.log.Error(err, "prepareTableUpdate failed")
+		m.handler.notifyAll(revision)
 	} else {
-		m.log.V(5).Info("revisionChecker returned false", "old-revision", m.revChecker.revision, "notification-revision", revision)
+		if len(result) == 0 {
+			m.log.V(5).Info("there is nothing to notify", "events", fmt.Sprintf("%+v", events))
+			m.handler.notifyAll(revision)
+			return
+		}
+		for jValue, tableUpdates := range result {
+			// TODO if there are several monitors (jsonValues) can be a race condition to transaction returns
+			m.log.V(7).Info("notify", "revision", revision, "table-update", tableUpdates)
+			m.handler.notify(jValue, tableUpdates, revision)
+		}
 	}
-
 }
 
 func (m *dbMonitor) cancelDbMonitor() {
@@ -252,6 +280,7 @@ func (m *dbMonitor) cancelDbMonitor() {
 	}
 	m.key2Updaters = Key2Updaters{}
 	m.mu.Unlock()
+	m.tQueue.cleanUp()
 	for jsonValue := range jasonValues {
 		m.handler.monitorCanceledNotification(jsonValue)
 	}

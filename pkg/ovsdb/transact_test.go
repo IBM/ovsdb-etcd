@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -887,10 +885,6 @@ func TestTransactUpdateMap2Txn(t *testing.T) {
 		"key1": "value1b",
 		"key2": "value2",
 	}}, dump["string"])
-	ev := txn.etcd.Events[0]
-	actual := string(ev.PrevKv.Value)
-	expected_substr := `["key1","value1a"]`
-	assert.True(t, strings.Contains(actual, expected_substr), fmt.Sprintf("expected %s contains %s", actual, expected_substr))
 }
 
 func TestTransactUpdateMapError(t *testing.T) {
@@ -1048,19 +1042,6 @@ func TestTransactMutateSetNamedUUID(t *testing.T) {
 	assert.Nil(t, resp.Error)
 	dump := testTransactDump(t, txn, "uuid", "table2")
 	assert.Equal(t, libovsdb.OvsSet{GoSet: []interface{}{libovsdb.UUID{GoUUID: uuid2}}}, dump["set"])
-	ev := txn.etcd.Events[0]
-
-	actual := string(ev.PrevKv.Value)
-	expected_substr := uuid1
-	assert.True(t, strings.Contains(actual, expected_substr), fmt.Sprintf("expected %s contains %s", actual, expected_substr))
-
-	actual = string(ev.Kv.Value)
-	expected_substr = uuid2
-	assert.True(t, strings.Contains(actual, expected_substr), fmt.Sprintf("expected %s contains %s", actual, expected_substr))
-
-	actual = string(ev.Kv.Value)
-	expected_substr = uuid1
-	assert.False(t, strings.Contains(actual, expected_substr), fmt.Sprintf("expected %s not contains %s", actual, expected_substr))
 }
 
 func TestTransactMutateSet(t *testing.T) {
