@@ -391,149 +391,57 @@ func TestMonitorParseCMPMCR(t *testing.T) {
 }
 
 const (
-	DB_NAME  = "dbName"
-	ROW_UUID = "43f24179-432d-435b-a8dc-e7134cf39e32"
-	LAST_TNX = "00000000-0000-0000-0000-000000000000"
+	DB_NAME    = "dbName"
+	Table_Name = "T1"
+	ROW_UUID   = "43f24179-432d-435b-a8dc-e7134cf39e32"
+	LAST_TNX   = "00000000-0000-0000-0000-000000000000"
 )
 
 func TestMonitorNotifications1(t *testing.T) {
-	const (
-		databaseSchemaName = "dbName"
-		T1TableSchemaName  = "T1"
-	)
-	var testSchemaSimple *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
-		Name: databaseSchemaName,
-		Tables: map[string]libovsdb.TableSchema{
-			T1TableSchemaName: {},
-		},
-	}
-	schemas := libovsdb.Schemas{}
-	schemas[databaseSchemaName] = testSchemaSimple
-	jsonValue := `null`
-	msg := `["dbName",` + jsonValue + `,{"T1":[{"columns":[]}]}]`
-	handler := initHandler(t, schemas, msg, ovsjson.Update)
-	row := map[string]interface{}{"c1": "v1", "c2": "v2"}
-	dataJson := prepareData(t, row, true)
-
-	events := []*clientv3.Event{
-		{Type: mvccpb.PUT, Kv: &mvccpb.KeyValue{Key: []byte("ovsdb/nb/dbName/T1/000"),
-			Value: dataJson, CreateRevision: 1, ModRevision: 1}}}
-
-	tableUpdates := ovsjson.TableUpdates{}
-	tableUpdate := ovsjson.TableUpdate{}
-	delete(row, libovsdb.COL_UUID)
-	rowUpdate := ovsjson.RowUpdate{New: &row}
-	tableUpdate[ROW_UUID] = rowUpdate
-	tableUpdates["T1"] = tableUpdate
-	expMsg, err := json.Marshal([]interface{}{nil, tableUpdates})
-	assert.Nil(t, err)
-
+	handler, events := initHandler(t, `null`, ovsjson.Update)
+	var wg sync.WaitGroup
+	wg.Add(1)
 	jrpcServerMock := jrpcServerMock{
-		expMethod:  UPDATE,
-		expMessage: expMsg,
-		t:          t,
+		expMethod: UPDATE,
+		t:         t,
+		wg:        &wg,
 	}
 	handler.SetConnection(&jrpcServerMock, nil)
 	handler.startNotifier(jsonValueToString(nil))
 	monitor := handler.monitors[DB_NAME]
-	var wg sync.WaitGroup
-	wg.Add(1)
-	monitor.notify(events, 1, &wg)
+	monitor.notify(events, 1)
 	wg.Wait()
 }
 
 func TestMonitorNotifications2(t *testing.T) {
-	const (
-		databaseSchemaName = "dbName"
-		T2TableSchemaName  = "T2"
-	)
-	var testSchemaSimple *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
-		Name: databaseSchemaName,
-		Tables: map[string]libovsdb.TableSchema{
-			T2TableSchemaName: {},
-		},
-	}
-	schemas := libovsdb.Schemas{}
-	schemas[databaseSchemaName] = testSchemaSimple
-	msg := `["dbName", ["monid","update2"],{"T2":[{"columns":[]}]}]`
-	handler := initHandler(t, schemas, msg, ovsjson.Update2)
-	jsonValue := []interface{}{"monid", "update2"}
-	row := map[string]interface{}{"c1": "v1", "c2": "v2"}
-	dataJson := prepareData(t, row, true)
-
-	events := []*clientv3.Event{
-		{Type: mvccpb.DELETE,
-			PrevKv: &mvccpb.KeyValue{Key: []byte("ovsdb/nb/dbName/T2/000"), Value: dataJson},
-			Kv:     &mvccpb.KeyValue{Key: []byte("ovsdb/nb/dbName/T2/000")}},
-	}
-	tableUpdates := ovsjson.TableUpdates{}
-	tableUpdate := ovsjson.TableUpdate{}
-	rowUpdate := ovsjson.RowUpdate{Delete: true}
-	tableUpdate[ROW_UUID] = rowUpdate
-	tableUpdates["T2"] = tableUpdate
-	expMsg, err := json.Marshal([]interface{}{jsonValue, tableUpdates})
-	assert.Nil(t, err)
-
-	jrpcServerMock := jrpcServerMock{
-		expMethod:  UPDATE2,
-		expMessage: expMsg,
-		t:          t,
-	}
-	handler.SetConnection(&jrpcServerMock, nil)
-	handler.startNotifier(jsonValueToString(jsonValue))
-	monitor := handler.monitors[DB_NAME]
+	handler, events := initHandler(t, `null`, ovsjson.Update2)
 	var wg sync.WaitGroup
 	wg.Add(1)
-	monitor.notify(events, 2, &wg)
+	jrpcServerMock := jrpcServerMock{
+		expMethod: UPDATE2,
+		t:         t,
+		wg:        &wg,
+	}
+	handler.SetConnection(&jrpcServerMock, nil)
+	handler.startNotifier(jsonValueToString(nil))
+	monitor := handler.monitors[DB_NAME]
+	monitor.notify(events, 1)
 	wg.Wait()
 }
 
 func TestMonitorNotifications3(t *testing.T) {
-	const (
-		databaseSchemaName = "dbName"
-		T3TableSchemaName  = "T3"
-	)
-	var testSchemaSimple *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
-		Name: databaseSchemaName,
-		Tables: map[string]libovsdb.TableSchema{
-			T3TableSchemaName: {},
-		},
-	}
-	schemas := libovsdb.Schemas{}
-	schemas[databaseSchemaName] = testSchemaSimple
-	msg := `["dbName",["monid","update3"], {"T3":[{"columns":[]}]}, "00000000-0000-0000-0000-000000000000"]`
-	jsonValue := []interface{}{"monid", "update3"}
-	handler := initHandler(t, schemas, msg, ovsjson.Update3)
-	row1 := map[string]interface{}{"c1": "v1", "c2": "v2"}
-	data1Json := prepareData(t, row1, true)
-	row2 := map[string]interface{}{"c2": "v3"}
-	data2Json := prepareData(t, row2, true)
-
-	events := []*clientv3.Event{
-		{Type: mvccpb.PUT,
-			PrevKv: &mvccpb.KeyValue{Key: []byte("ovsdb/nb/dbName/T3/000"), Value: data1Json},
-			Kv:     &mvccpb.KeyValue{Key: []byte("ovsdb/nb/dbName/T3/000"), Value: data2Json, CreateRevision: 1, ModRevision: 2}},
-	}
-	tableUpdates := ovsjson.TableUpdates{}
-	tableUpdate := ovsjson.TableUpdate{}
-	delete(row2, libovsdb.COL_UUID)
-	rowUpdate := ovsjson.RowUpdate{Modify: &row2}
-	tableUpdate[ROW_UUID] = rowUpdate
-	tableUpdates["T3"] = tableUpdate
-	expMsg, err := json.Marshal([]interface{}{jsonValue, LAST_TNX, tableUpdates})
-	assert.Nil(t, err)
-
-	jrpcServerMock := jrpcServerMock{
-		expMethod:  UPDATE3,
-		expMessage: expMsg,
-		t:          t,
-	}
-	handler.SetConnection(&jrpcServerMock, nil)
-	handler.startNotifier(jsonValueToString(jsonValue))
-	monitor := handler.monitors[DB_NAME]
+	handler, events := initHandler(t, `null`, ovsjson.Update3)
 	var wg sync.WaitGroup
 	wg.Add(1)
-	monitor.notify(events, 3, &wg)
+	jrpcServerMock := jrpcServerMock{
+		expMethod: UPDATE3,
+		t:         t,
+		wg:        &wg,
+	}
+	handler.SetConnection(&jrpcServerMock, nil)
+	handler.startNotifier(jsonValueToString(nil))
+	monitor := handler.monitors[DB_NAME]
+	monitor.notify(events, 1)
 	wg.Wait()
 }
 
@@ -727,7 +635,25 @@ func TestMonitorMutateSetV1(t *testing.T) {
 	return
 }
 
-func initHandler(t *testing.T, schemas libovsdb.Schemas, msg string, notificationType ovsjson.UpdateNotificationType) *Handler {
+func initHandler(t *testing.T, jsonValue string, notificationType ovsjson.UpdateNotificationType) (*Handler, []*clientv3.Event) {
+
+	columnSchema := libovsdb.ColumnSchema{Type: libovsdb.TypeString}
+	var testSchemaSimple *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
+		Name: DB_NAME,
+		Tables: map[string]libovsdb.TableSchema{
+			Table_Name: {Columns: map[string]*libovsdb.ColumnSchema{"c1": &columnSchema, "c2": &columnSchema}},
+		},
+	}
+	schemas := libovsdb.Schemas{}
+	schemas[DB_NAME] = testSchemaSimple
+	msg := `["dbName",` + jsonValue + `,{"T1":[{"columns":["c1","c2"]}]}]`
+	row := map[string]interface{}{"c1": "v1", "c2": "v2"}
+	dataJson := prepareData(t, row, true)
+
+	events := []*clientv3.Event{
+		{Type: mvccpb.PUT, Kv: &mvccpb.KeyValue{Key: []byte("ovsdb/nb/dbName/T1/000"),
+			Value: dataJson, CreateRevision: 1, ModRevision: 1}}}
+
 	common.SetPrefix("ovsdb/nb")
 	//db, _ := NewDatabaseMock()
 	db := DatabaseMock{Response: schemas}
@@ -742,7 +668,7 @@ func initHandler(t *testing.T, schemas libovsdb.Schemas, msg string, notificatio
 
 	_, ok := handler.monitors[DB_NAME]
 	assert.True(t, ok)
-	return handler
+	return handler, events
 }
 
 func prepareData(t *testing.T, data map[string]interface{}, withUUID bool) []byte {
@@ -770,6 +696,7 @@ type jrpcServerMock struct {
 	expMessage interface{}
 	expMethod  string
 	t          *testing.T
+	wg         *sync.WaitGroup
 }
 
 func (j *jrpcServerMock) Wait() error {
@@ -781,9 +708,10 @@ func (j *jrpcServerMock) Stop() {}
 func (j *jrpcServerMock) Notify(ctx context.Context, method string, params interface{}) error {
 	assert.NotNil(j.t, method)
 	assert.Equal(j.t, j.expMethod, method)
-	buf, err := json.Marshal(params)
-	assert.Nil(j.t, err)
-	assert.Equal(j.t, j.expMessage, buf)
+	if j.wg != nil {
+		j.wg.Done()
+	}
+
 	return nil
 }
 

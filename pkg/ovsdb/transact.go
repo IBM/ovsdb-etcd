@@ -191,8 +191,8 @@ func etcdOpKey(op clientv3.Op) string {
 func (txn *Transaction) etcdRemoveDupThen() {
 	newThen := []*clientv3.Op{}
 	for curr, op := range txn.etcd.Then {
-		key := etcdOpKey(op)
-		txn.log.V(6).Info("[then] adding key", "key", key, "index", curr)
+		etcdOpKey(op)
+		//	txn.log.V(6).Info("[then] adding key", "key", key, "index", curr)
 		newThen = append(newThen, &txn.etcd.Then[curr])
 	}
 
@@ -215,61 +215,8 @@ func (txn *Transaction) etcdRemoveDupThen() {
 	}
 }
 
-func etcdEventKey(ev *clientv3.Event) string {
-	if ev.Kv != nil {
-		return string(ev.Kv.Key)
-	}
-	if ev.PrevKv != nil {
-		return string(ev.PrevKv.Key)
-	}
-	panic(fmt.Sprintf("can't extract key from %v", ev))
-}
-
-func (txn *Transaction) etcdRemoveDupEvents() {
-	prevEvents := []*clientv3.Event{}
-	newEvents := []*clientv3.Event{}
-	for i, curr := range txn.etcd.Events {
-		prevEvents = append(prevEvents, txn.etcd.Events[i])
-		newEvents = append(newEvents, txn.etcd.Events[i])
-		if curr == nil {
-			txn.etcd.EventsNilCount++
-			continue
-		}
-		key := etcdEventKey(curr)
-		txn.log.V(6).Info("[event] adding key", "key", key, "index", i)
-	}
-
-	prevKeyIndex := map[string]int{}
-	for i, curr := range newEvents {
-		if curr == nil {
-			continue
-		}
-		key := etcdEventKey(curr)
-		prevIndex, ok := prevKeyIndex[key]
-		if ok {
-			prev := prevEvents[prevIndex]
-			if etcdEventIsModify(curr) && etcdEventIsCreate(prev) {
-				newEvents[i] = etcdEventCreateFromModify(curr)
-			}
-			txn.log.V(6).Info("[event] removing key", "key", key, "index", prevIndex)
-			newEvents[prevIndex] = nil
-		}
-		prevKeyIndex[key] = i
-	}
-
-	txn.etcd.Events = []*clientv3.Event{}
-	for _, curr := range newEvents {
-		if curr == nil {
-			continue
-		}
-		txn.etcd.Events = append(txn.etcd.Events, curr)
-	}
-}
-
 func (txn *Transaction) etcdRemoveDup() {
 	txn.etcdRemoveDupThen()
-	txn.etcdRemoveDupEvents()
-	txn.etcd.Assert()
 }
 
 func (txn *Transaction) etcdTranaction() (*clientv3.TxnResponse, error) {
@@ -490,20 +437,12 @@ func (mapUUID MapUUID) ResolvRow(txn *Transaction, row *map[string]interface{}) 
 }
 
 type Etcd struct {
-	Cli            *clientv3.Client
-	Ctx            context.Context
-	If             []clientv3.Cmp
-	Then           []clientv3.Op
-	Else           []clientv3.Op
-	Res            *clientv3.TxnResponse
-	EventsNilCount int
-	Events         []*clientv3.Event
-}
-
-func (etcd *Etcd) Assert() {
-	if len(etcd.Then) != (len(etcd.Events) + etcd.EventsNilCount) {
-		panic(fmt.Sprintf("etcd: #then != #events: %s", etcd))
-	}
+	Cli  *clientv3.Client
+	Ctx  context.Context
+	If   []clientv3.Cmp
+	Then []clientv3.Op
+	Else []clientv3.Op
+	Res  *clientv3.TxnResponse
 }
 
 type EventKeyValue struct {
@@ -571,9 +510,6 @@ func (etcd *Etcd) Clear() {
 	etcd.Then = []clientv3.Op{}
 	etcd.Else = []clientv3.Op{}
 	etcd.Res = nil
-	etcd.EventsNilCount = 0
-	etcd.Events = []*clientv3.Event{}
-	etcd.Assert()
 }
 
 func (etcd Etcd) String() string {
@@ -712,7 +648,6 @@ func (txn *Transaction) Commit() (int64, error) {
 	}
 
 	txn.etcdRemoveDup()
-	txn.log.Info("events transaction", "events", NewEventList(txn.etcd.Events))
 	trResponse, err := txn.etcdTranaction()
 	if err != nil {
 		errStr := err.Error()
@@ -1658,11 +1593,6 @@ func etcdCreateRow(txn *Transaction, k *common.Key, row *map[string]interface{})
 
 	etcdOp := clientv3.OpPut(key, val)
 	txn.etcd.Then = append(txn.etcd.Then, etcdOp)
-
-	etcdEvent := etcdEventCreate(key, val)
-	txn.etcd.Events = append(txn.etcd.Events, etcdEvent)
-	txn.etcd.Assert()
-
 	return nil
 }
 
@@ -1675,17 +1605,6 @@ func etcdModifyRow(txn *Transaction, k *common.Key, row *map[string]interface{})
 
 	etcdOp := clientv3.OpPut(key, val)
 	txn.etcd.Then = append(txn.etcd.Then, etcdOp)
-
-	prevRow := txn.cache.Row(*k)
-	prevVal, err := makeValue(prevRow)
-	if err != nil {
-		return err
-	}
-
-	etcdEvent := etcdEventModify(key, val, prevVal)
-	txn.etcd.Events = append(txn.etcd.Events, etcdEvent)
-	txn.etcd.Assert()
-
 	return nil
 }
 
@@ -1693,16 +1612,6 @@ func etcdDeleteRow(txn *Transaction, k *common.Key) error {
 	key := k.String()
 	etcdOp := clientv3.OpDelete(key)
 	txn.etcd.Then = append(txn.etcd.Then, etcdOp)
-
-	prevVal, err := makeValue(txn.cache.Row(*k))
-	if err != nil {
-		return err
-	}
-
-	etcdEvent := etcdEventDelete(key, prevVal)
-	txn.etcd.Events = append(txn.etcd.Events, etcdEvent)
-	txn.etcd.Assert()
-
 	return nil
 }
 
@@ -2091,9 +2000,6 @@ func doComment(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 	comment := *ovsOp.Comment
 	etcdOp := clientv3.OpPut(key.String(), comment)
 	txn.etcd.Then = append(txn.etcd.Then, etcdOp)
-	txn.etcd.Events = append(txn.etcd.Events, nil) /* so that events are aligned with then operations */
-	txn.etcd.Assert()
-
 	return nil
 }
 

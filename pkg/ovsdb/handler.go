@@ -10,13 +10,14 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/go-logr/logr"
-	"github.com/ibm/ovsdb-etcd/pkg/common"
-	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
-	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
 	"github.com/lithammer/shortuuid/v3"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"k8s.io/klog/v2"
+
+	"github.com/ibm/ovsdb-etcd/pkg/common"
+	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
+	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
 )
 
 type JrpcServer interface {
@@ -64,22 +65,25 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	}
 	txn := NewTransaction(ch.etcdClient, log, ovsReq)
 	txn.schemas = ch.db.GetSchemas()
+	monitor, thereIsMonitor := ch.monitors[txn.request.DBName]
 	// temporary solution to provide consistency
 	ch.db.DbLock(ovsReq.DBName)
+	if thereIsMonitor {
+		monitor.tQueue.startTransaction()
+	}
 	rev, err := txn.Commit()
+	if thereIsMonitor {
+		// we have to guarantee that a new monitor call if it runs concurrently with the transaction, returns first
+		var wg sync.WaitGroup
+		wg.Add(1)
+		monitor.tQueue.endTransaction(rev, &wg)
+		wg.Wait()
+	}
+
 	ch.db.DbUnlock(ovsReq.DBName)
 
 	if err != nil {
 		return nil, err
-	}
-	monitor, ok := ch.monitors[txn.request.DBName]
-	if ok {
-		//log.V(5).Info("transact sending to monitor", "events", txn.etcd.EventsDump())
-		// we have to guarantee that a new monitor call if it runs concurrently with the transaction, returns first
-		var wg sync.WaitGroup
-		wg.Add(1)
-		monitor.notify(txn.etcd.Events, rev, &wg)
-		wg.Wait()
 	}
 
 	log.V(5).Info("transact response", "response", txn.response)
@@ -124,7 +128,8 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 	ch.log.V(5).Info("lock request", "param", param)
 	id, err := common.ParamsToString(param)
 	if err != nil {
-		return map[string]bool{"locked": false}, err
+		ch.log.Error(err, "Lock, param parsing", "param", param)
+		return nil, err
 	}
 	ch.mu.Lock()
 	myLock, ok := ch.databaseLocks[id]
@@ -349,18 +354,27 @@ func (ch *Handler) SetConnection(jrpcSerer JrpcServer, clientCon net.Conn) {
 	ch.log = ch.log.WithValues("client", ch.GetClientAddress())
 }
 
-func (ch *Handler) notify(jsonValueString string, updates ovsjson.TableUpdates, revision int64, wg *sync.WaitGroup) {
+func (ch *Handler) notify(jsonValueString string, updates ovsjson.TableUpdates, revision int64) {
 	hmd, ok := ch.handlerMonitorData[jsonValueString]
 	if !ok {
-		ch.log.Info("unknown jsonValue", "jsonValue", jsonValueString)
+		err := fmt.Errorf("there is no handler monitor data for %s", jsonValueString)
+		ch.log.Error(err, "notify")
+		// should we notify all here?
+		// ch.notifyAll(revision)
 		return
 	}
 	if klog.V(7).Enabled() {
-		ch.log.V(7).Info("monitor notification jsonValue", "jsonValue", hmd.jsonValue, "revision", revision, "updates", updates)
+		ch.log.V(7).Info("monitor notification", "jsonValue", hmd.jsonValue, "revision", revision, "updates", updates)
 	} else {
-		ch.log.V(5).Info("monitor notification jsonValue", "jsonValue", hmd.jsonValue, "revision", revision)
+		ch.log.V(5).Info("monitor notification", "jsonValue", hmd.jsonValue, "revision", revision)
 	}
-	hmd.notificationChain <- notificationEvent{updates: updates, wg: wg, revision: revision}
+	hmd.notificationChain <- notificationEvent{updates: updates, revision: revision}
+}
+
+func (ch *Handler) notifyAll(revision int64) {
+	for _, hmd := range ch.handlerMonitorData {
+		hmd.notificationChain <- notificationEvent{revision: revision}
+	}
 }
 
 func (ch *Handler) monitorCanceledNotification(jsonValue interface{}) {
@@ -525,12 +539,6 @@ func (ch *Handler) getMonitoredData(dbName string, updatersMap Key2Updaters) (ov
 			}
 		}
 	}
-	monitor, ok := ch.monitors[dbName]
-	if !ok {
-		err := fmt.Errorf("there is no monitor for %s", dbName)
-		return nil, err
-	}
-	monitor.revChecker.revision = resp.Header.Revision
 	ch.log.V(6).Info("getMonitoredData completed", "revision", resp.Header.Revision, "data", returnData)
 	return returnData, nil
 }
