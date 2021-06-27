@@ -44,6 +44,14 @@ func (schemas *Schemas) AddFromBytes(data []byte) error {
 }
 
 func (schemas *Schemas) Add(databaseSchema *DatabaseSchema) {
+	for _, tableSchema := range databaseSchema.Tables {
+		tableSchema.Columns[COL_VERSION] = &ColumnSchema{
+			Type: TypeUUID,
+		}
+		tableSchema.Columns[COL_UUID] = &ColumnSchema{
+			Type: TypeUUID,
+		}
+	}
 	(*schemas)[databaseSchema.Name] = databaseSchema
 }
 
@@ -702,12 +710,6 @@ func (schemas *Schemas) Unmarshal(dbname, table string, row *map[string]interfac
 
 /* lookup */
 func (tableSchema *TableSchema) LookupColumn(column string) (*ColumnSchema, error) {
-	switch column {
-	case COL_VERSION, COL_UUID:
-		return &ColumnSchema{
-			Type: TypeUUID,
-		}, nil
-	}
 	columnSchema, ok := tableSchema.Columns[column]
 	if !ok {
 		return nil, fmt.Errorf("Missing schema for column %s", column)

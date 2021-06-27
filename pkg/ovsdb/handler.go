@@ -520,22 +520,18 @@ func (ch *Handler) getMonitoredData(dbName string, updatersMap Key2Updaters) (ov
 			tableKey := key.ToTableKey()
 			updaters := updatersMap[tableKey]
 			for _, updater := range updaters {
-				row, uuid, err := updater.prepareCreateRowInitial(&kv.Value)
+				row, uuid, err := updater.prepareInitialRow(&kv.Value)
 				if err != nil {
-					ch.log.Error(err, "prepareCreateRowInitial returned")
+					ch.log.Error(err, "prepareInitialRow returned")
 					return nil, err
 				}
 				// TODO merge
-				if row != nil {
-					tableUpdate, ok := returnData[tableKey.TableName]
-					if !ok {
-						tableUpdate = ovsjson.TableUpdate{}
-						returnData[tableKey.TableName] = tableUpdate
-					}
-					tableUpdate[uuid] = *row
-				} else {
-					ch.log.Info("row is nil")
+				tableUpdate, ok := returnData[tableKey.TableName]
+				if !ok {
+					tableUpdate = ovsjson.TableUpdate{}
+					returnData[tableKey.TableName] = tableUpdate
 				}
+				tableUpdate[uuid] = *row
 			}
 		}
 	}
