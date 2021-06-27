@@ -225,15 +225,15 @@ type BaseType struct {
 	// Enum will be parsed manually and set to a slice
 	// of possible values. They must be type-asserted to the
 	// corret type depending on the Type field
-	Enum       *OvsSet `json:"enum,omitempty"`
-	MinReal    float64 `json:"minReal,omitempty"`
-	MaxReal    float64 `json:"maxReal,omitempty"`
-	MinInteger int     `json:"minInteger,omitempty"`
-	MaxInteger int     `json:"maxInteger,omitempty"`
-	MinLength  int     `json:"minLength,omitempty"` /* string */
-	MaxLength  int     `json:"maxLength,omitempty"` /* string */
-	RefTable   string  `json:"refTable,omitempty"`  /* UUIDs */
-	RefType    RefType `json:"refType,omitempty"`
+	Enum       *OvsSet  `json:"enum,omitempty"`
+	MinReal    float64  `json:"minReal,omitempty"`
+	MaxReal    float64  `json:"maxReal,omitempty"`
+	MinInteger int      `json:"minInteger,omitempty"`
+	MaxInteger int      `json:"maxInteger,omitempty"`
+	MinLength  int      `json:"minLength,omitempty"` /* string */
+	MaxLength  int      `json:"maxLength,omitempty"` /* string */
+	RefTable   *string  `json:"refTable,omitempty"`  /* UUIDs */
+	RefType    *RefType `json:"refType,omitempty"`
 }
 
 // String returns a string representation of the (native) column type
@@ -256,7 +256,7 @@ func (column *ColumnSchema) String() string {
 		typeStr = string(column.Type)
 	case TypeUUID:
 		if column.TypeObj != nil && column.TypeObj.Key != nil {
-			typeStr = fmt.Sprintf("uuid [%s (%s)]", column.TypeObj.Key.RefTable, column.TypeObj.Key.RefType)
+			typeStr = fmt.Sprintf("uuid [%s (%s)]", *column.TypeObj.Key.RefTable, *column.TypeObj.Key.RefType)
 		} else {
 			typeStr = "uuid"
 		}
@@ -268,7 +268,7 @@ func (column *ColumnSchema) String() string {
 	case TypeSet:
 		var keyStr string
 		if column.TypeObj.Key.Type == TypeUUID {
-			keyStr = fmt.Sprintf(" [%s (%s)]", column.TypeObj.Key.RefTable, column.TypeObj.Key.RefType)
+			keyStr = fmt.Sprintf(" [%s (%s)]", *column.TypeObj.Key.RefTable, *column.TypeObj.Key.RefType)
 		} else {
 			keyStr = string(column.TypeObj.Key.Type)
 		}
@@ -992,4 +992,60 @@ func (schemas *Schemas) Validate(dbname, table string, row *map[string]interface
 		return fmt.Errorf("[database %s] %s", dbname, err.Error())
 	}
 	return nil
+}
+
+func (baseType *BaseType) RefTypeUUID() *string {
+	if baseType.Type != TypeUUID {
+		return nil
+	}
+	return baseType.RefType
+}
+
+func (columnSchema *ColumnSchema) RefType() *string {
+	switch columnSchema.Type {
+	case TypeSet:
+		return columnSchema.TypeObj.Key.RefTypeUUID()
+	case TypeMap:
+		return columnSchema.TypeObj.Value.RefTypeUUID()
+	default:
+		return nil
+	}
+}
+
+func (baseType *BaseType) RefTableUUID() *string {
+	if baseType.Type != TypeUUID {
+		return nil
+	}
+	return baseType.RefTable
+}
+
+func (columnSchema *ColumnSchema) RefTable() *string {
+	switch columnSchema.Type {
+	case TypeSet:
+		return columnSchema.TypeObj.Key.RefTableUUID()
+	case TypeMap:
+		return columnSchema.TypeObj.Value.RefTableUUID()
+	default:
+		return nil
+	}
+}
+
+func stringInStringArray(array []string, item string) bool {
+	for _, val := range array {
+		if val == item {
+			return true
+		}
+	}
+	return false
+}
+
+func (tableSchema *TableSchema) RefTables(dbname, table string) []string {
+	refTables := []string{}
+	for _, columnSchema := range tableSchema.Columns {
+		refTable := columnSchema.RefTable()
+		if refTable != nil && !stringInStringArray(refTables, *refTable) {
+			refTables = append(refTables, *refTable)
+		}
+	}
+	return refTables
 }
