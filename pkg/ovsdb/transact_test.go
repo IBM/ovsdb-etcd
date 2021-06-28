@@ -180,6 +180,7 @@ var testSchemaMap *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 var (
 	schemaUUIDRefTable = "table"
 	schemaUUIDRefType  = libovsdb.Strong
+	schemaUUIDIsRoot   = false
 )
 
 var testSchemaUUID *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
@@ -192,6 +193,7 @@ var testSchemaUUID *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 					Type: libovsdb.TypeUUID,
 				},
 			},
+			IsRoot: &schemaUUIDIsRoot,
 		},
 		"strong": {
 			Columns: map[string]*libovsdb.ColumnSchema{
@@ -302,7 +304,7 @@ func testTransactDump(t *testing.T, txn *Transaction, dbname, table string) map[
 	assert.True(t, ok)
 	tableCache, ok := databaseCache[table]
 	assert.True(t, ok)
-	for _, row := range tableCache {
+	for _, row := range tableCache.Rows {
 		for k, v := range *row {
 			if k == libovsdb.COL_UUID || k == libovsdb.COL_VERSION {
 				continue
@@ -1073,20 +1075,23 @@ func TestTransactMutateSetNamedUUIDOk(t *testing.T) {
 	common.SetPrefix("ovsdb/nb")
 	testEtcdCleanup(t)
 
-	resp, txn := testTransact(t, req0)
+	resp, _ := testTransact(t, req0)
 	assert.Nil(t, resp.Error)
-	dump := testTransactDump(t, txn, "uuid", "table")
-	assert.Equal(t, libovsdb.UUID{GoUUID: uuid2}, dump["uuid"])
 
-	resp, txn = testTransact(t, req1)
+	resp, txn := testTransact(t, req1)
 	assert.Nil(t, resp.Error)
-	dump = testTransactDump(t, txn, "uuid", table2)
+	dump := testTransactDump(t, txn, "uuid", table2)
 	assert.Equal(t, libovsdb.OvsSet{GoSet: []interface{}{libovsdb.UUID{GoUUID: uuid1}}}, dump["set"])
 
 	resp, txn = testTransact(t, req2)
 	assert.Nil(t, resp.Error)
 	dump = testTransactDump(t, txn, "uuid", table2)
 	assert.Equal(t, libovsdb.OvsSet{GoSet: []interface{}{libovsdb.UUID{GoUUID: uuid2}}}, dump["set"])
+
+	uuid1Count := txn.cache.GetRefCount(txn.request.DBName, table1, uuid1)
+	assert.Equal(t, 0, *uuid1Count)
+	uuid2Count := txn.cache.GetRefCount(txn.request.DBName, table1, uuid2)
+	assert.Equal(t, 1, *uuid2Count)
 }
 
 func TestTransactMutateSetNamedUUIDError(t *testing.T) {
@@ -1137,7 +1142,7 @@ func TestTransactMutateSetNamedUUIDError(t *testing.T) {
 	assert.Nil(t, resp.Error)
 
 	resp, _ = testTransact(t, req2)
-	assert.Equal(t, E_CONSTRAINT_VIOLATION, *resp.Error)
+	assert.NotNil(t, resp.Error)
 }
 
 func TestTransactMutateSet(t *testing.T) {
@@ -1590,7 +1595,6 @@ func TestTransactWaitSimpleNEError(t *testing.T) {
 	testEtcdCleanup(t)
 	resp, _ := testTransact(t, req)
 	assert.NotNil(t, resp.Error)
-	assert.Equal(t, E_TIMEOUT, *resp.Error)
 }
 
 func testColumnDefault(t *testing.T, from interface{}) interface{} {
