@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	guuid "github.com/google/uuid"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -177,19 +178,34 @@ var testSchemaMap *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 	},
 }
 
+var (
+	schemaUUIDRefTable = "table"
+	schemaUUIDRefType  = libovsdb.Strong
+)
+
 var testSchemaUUID *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 	Name:    "uuid",
 	Version: "0.0.0.0",
 	Tables: map[string]libovsdb.TableSchema{
-		"table1": {
+		"table": {
 			Columns: map[string]*libovsdb.ColumnSchema{
-				"uuid": {
+				libovsdb.COL_UUID: {
 					Type: libovsdb.TypeUUID,
 				},
+				"key1": {
+					Type: libovsdb.TypeString,
+				},
+				"key2": {
+					Type: libovsdb.TypeInteger,
+				},
 			},
+			IsRoot: false,
 		},
-		"table2": {
+		"strong": {
 			Columns: map[string]*libovsdb.ColumnSchema{
+				libovsdb.COL_UUID: {
+					Type: libovsdb.TypeUUID,
+				},
 				"map": {
 					Type: libovsdb.TypeMap,
 					TypeObj: &libovsdb.ColumnType{
@@ -197,7 +213,9 @@ var testSchemaUUID *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 							Type: libovsdb.TypeString,
 						},
 						Value: &libovsdb.BaseType{
-							Type: libovsdb.TypeUUID,
+							Type:     libovsdb.TypeUUID,
+							RefTable: schemaUUIDRefTable,
+							RefType:  schemaUUIDRefType,
 						},
 						Min: 0,
 						Max: libovsdb.Unlimited,
@@ -207,7 +225,9 @@ var testSchemaUUID *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 					Type: libovsdb.TypeSet,
 					TypeObj: &libovsdb.ColumnType{
 						Key: &libovsdb.BaseType{
-							Type: libovsdb.TypeUUID,
+							Type:     libovsdb.TypeUUID,
+							RefTable: schemaUUIDRefTable,
+							RefType:  schemaUUIDRefType,
 						},
 						Min: 0,
 						Max: libovsdb.Unlimited,
@@ -1165,6 +1185,43 @@ func TestTransactDelete(t *testing.T) {
 	assert.Nil(t, resp.Error)
 	dump := testEtcdDump(t, "simple", "table1")
 	_, ok := dump["key1"]
+	assert.False(t, ok)
+}
+
+func TestTransactCascadeDelete(t *testing.T) {
+	strongTable := "strong"
+	sampleTable := "table"
+	dbName := "uuid"
+	req := &libovsdb.Transact{
+		DBName: dbName,
+		Operations: []libovsdb.Operation{
+			{
+				Op:    OP_DELETE,
+				Table: &strongTable,
+			},
+		},
+	}
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t)
+	sampleUUID := guuid.NewString()
+	strongUUID := guuid.NewString()
+	testEtcdPut(t, dbName, sampleTable, map[string]interface{}{
+		"key1": "val1",
+		"key2": int(2),
+		libovsdb.COL_UUID :sampleUUID,
+	})
+	testEtcdPut(t, dbName, strongTable, map[string]interface{}{
+		"set": libovsdb.OvsSet{GoSet: []interface{}{sampleUUID}},
+		libovsdb.COL_UUID :strongUUID,
+	})
+
+	resp, _ := testTransact(t, req)
+	assert.Nil(t, resp.Error)
+	dump := testEtcdDump(t, dbName, strongTable)
+	_, ok := dump[libovsdb.COL_UUID]
+	assert.False(t, ok)
+	dump = testEtcdDump(t, dbName, sampleTable)
+	_, ok = dump[libovsdb.COL_UUID]
 	assert.False(t, ok)
 }
 
