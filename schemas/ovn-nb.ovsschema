@@ -99,7 +99,7 @@
                 "port_security": {"type": {"key": "string",
                                            "min": 0,
                                            "max": "unlimited"}},
-                "up": {"type": {"key": "boolean", "min": 0, "max": 1}},
+                "up": {"type": "boolean"},
                 "enabled": {"type": {"key": "boolean", "min": 0, "max": 1}},
                 "dhcpv4_options": {"type": {"key": {"type": "uuid",
                                             "refTable": "DHCP_Options",

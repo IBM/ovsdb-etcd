@@ -205,7 +205,7 @@ type Logical_Switch_Port struct {
 	Tag               libovsdb.OvsSet `json:"tag,omitempty"`
 	Tag_request       libovsdb.OvsSet `json:"tag_request,omitempty"`
 	Type              string          `json:"type,omitempty"`
-	Up                libovsdb.OvsSet `json:"up,omitempty"`
+	Up                bool            `json:"up,omitempty"`
 	Version           libovsdb.UUID   `json:"_version,omitempty"`
 	Uuid              libovsdb.UUID   `json:"_uuid,omitempty"`
 }
