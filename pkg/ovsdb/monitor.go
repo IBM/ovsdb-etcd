@@ -250,10 +250,10 @@ func (m *dbMonitor) notify(events []*clientv3.Event, revision int64) {
 		m.handler.notifyAll(revision)
 	}
 	m.log.V(5).Info("notify:", "notification revision", revision, "events", NewEventList(events))
-	result, err := m.prepareTableUpdate(events)
+	result, err := m.prepareTableNotification(events)
 	if err != nil {
 		// TODO what should I do here?
-		m.log.Error(err, "prepareTableUpdate failed")
+		m.log.Error(err, "prepareTableNotification failed")
 		m.handler.notifyAll(revision)
 	} else {
 		if len(result) == 0 {
@@ -293,7 +293,7 @@ func mcrToUpdater(mcr ovsjson.MonitorCondRequest, jsonValue string, tableSchema 
 	return &updater{mcr: mcr, jasonValueStr: jsonValue, isV1: isV1, tableSchema: tableSchema}
 }
 
-func (m *dbMonitor) prepareTableUpdate(events []*clientv3.Event) (map[string]ovsjson.TableUpdates, error) {
+func (m *dbMonitor) prepareTableNotification(events []*clientv3.Event) (map[string]ovsjson.TableUpdates, error) {
 	result := map[string]ovsjson.TableUpdates{}
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -313,9 +313,9 @@ func (m *dbMonitor) prepareTableUpdate(events []*clientv3.Event) (map[string]ovs
 			continue
 		}
 		for _, updater := range updaters {
-			rowUpdate, uuid, err := updater.prepareRowUpdate(ev)
+			rowUpdate, uuid, err := updater.prepareRowNotification(ev)
 			if err != nil {
-				m.log.Error(err, "prepareRowUpdate failed", "updater", updater)
+				m.log.Error(err, "prepareRowNotification failed", "updater", updater)
 				continue
 			}
 			if rowUpdate == nil {
@@ -347,7 +347,7 @@ func (m *dbMonitor) prepareTableUpdate(events []*clientv3.Event) (map[string]ovs
 	return result, nil
 }
 
-func (u *updater) prepareRowUpdate(event *clientv3.Event) (*ovsjson.RowUpdate, string, error) {
+func (u *updater) prepareRowNotification(event *clientv3.Event) (*ovsjson.RowUpdate, string, error) {
 	if !event.IsModify() { // the create or delete
 		if event.IsCreate() {
 			// Create event
@@ -381,11 +381,8 @@ func (u *updater) prepareDeleteRowUpdate(event *clientv3.Event) (*ovsjson.RowUpd
 	if err != nil {
 		return nil, "", err
 	}
-	if len(data) > 0 {
-		// the delete for !u.isV1 we have returned before
-		return &ovsjson.RowUpdate{Old: &data}, uuid, nil
-	}
-	return nil, uuid, nil
+	// the delete for !u.isV1 we have returned before
+	return &ovsjson.RowUpdate{Old: &data}, uuid, nil
 }
 
 func (u *updater) prepareCreateRowUpdate(event *clientv3.Event) (*ovsjson.RowUpdate, string, error) {
@@ -398,13 +395,10 @@ func (u *updater) prepareCreateRowUpdate(event *clientv3.Event) (*ovsjson.RowUpd
 	if err != nil {
 		return nil, "", err
 	}
-	if len(data) > 0 {
-		if !u.isV1 {
-			return &ovsjson.RowUpdate{Insert: &data}, uuid, nil
-		}
-		return &ovsjson.RowUpdate{New: &data}, uuid, nil
+	if !u.isV1 {
+		return &ovsjson.RowUpdate{Insert: &data}, uuid, nil
 	}
-	return nil, "", nil
+	return &ovsjson.RowUpdate{New: &data}, uuid, nil
 }
 
 func (u *updater) prepareModifyRowUpdate(event *clientv3.Event) (*ovsjson.RowUpdate, string, error) {
@@ -423,56 +417,66 @@ func (u *updater) prepareModifyRowUpdate(event *clientv3.Event) (*ovsjson.RowUpd
 	if uuid != prevUUID {
 		return nil, "", fmt.Errorf("UUID was changed prev uuid=%q, new uuid=%q", prevUUID, uuid)
 	}
-	deltaRow := map[string]interface{}{}
-	u.compareModifiedRows(modifiedRow, prevRow, deltaRow)
-	klog.V(5).Infof("deltaRow size is %d", len(deltaRow))
-	if len(deltaRow) > 0 {
-		if !u.isV1 {
-			return &ovsjson.RowUpdate{Modify: &deltaRow}, uuid, nil
-		}
-		return &ovsjson.RowUpdate{New: &modifiedRow, Old: &deltaRow}, uuid, nil
+	deltaRow, err := u.compareModifiedRows(modifiedRow, prevRow)
+	if err != nil {
+		return nil, "", err
 	}
-	return nil, "", nil
+	klog.V(5).Infof("deltaRow size is %d", len(deltaRow))
+	if !u.isV1 {
+		return &ovsjson.RowUpdate{Modify: &deltaRow}, uuid, nil
+	}
+	return &ovsjson.RowUpdate{New: &modifiedRow, Old: &deltaRow}, uuid, nil
 }
 
-func (u *updater) compareModifiedRows(modifiedRow, prevRow, deltaRow map[string]interface{}) error {
-	// the deltaRow will be "modified" in V2 or "old: in V1
-	for column, cValue := range modifiedRow {
-		var newValue interface{}
-		if !reflect.DeepEqual(cValue, prevRow[column]) {
-			columnSchema, err := u.tableSchema.LookupColumn(column)
-			if err != nil {
-				return err
+func (u *updater) compareModifiedRows(modifiedRow, prevRow map[string]interface{}) (map[string]interface{}, error) {
+	deltaRow := map[string]interface{}{}
+	for columnName, columnSchema := range u.tableSchema.Columns {
+		prevValue, prevOK := prevRow[columnName]
+		newValue, newOK := modifiedRow[columnName]
+		if reflect.DeepEqual(newValue, prevValue) {
+			continue
+		}
+		var deltaValue interface{}
+		if u.isV1 {
+			if prevOK {
+				deltaValue = prevValue
 			}
+		} else {
+			// V2
 			if columnSchema.Type == libovsdb.TypeMap {
-				deltaMap, err := u.compareMaps(modifiedRow[column], prevRow[column], columnSchema)
+				deltaMap, err := u.compareMaps(newValue, prevValue, columnSchema)
 				if err != nil {
-					return err
+					return deltaRow, err
 				}
 				if len(deltaMap.GoMap) > 0 {
-					newValue = deltaMap
+					deltaValue = deltaMap
 				}
 			} else if columnSchema.Type == libovsdb.TypeSet {
-				deltaSet, err := u.compareSets(modifiedRow[column], prevRow[column], columnSchema)
+				deltaSet, err := u.compareSets(newValue, prevValue, columnSchema)
 				if err != nil {
-					return err
+					return deltaRow, err
 				}
 				if len(deltaSet.GoSet) > 0 {
-					newValue = deltaSet
+					deltaValue = deltaSet
 				}
 			} else {
-				newValue = modifiedRow[column]
+				if newOK {
+					deltaValue = newValue
+				} else if prevOK {
+					deltaValue = prevValue
+				}
 			}
 		}
-		if newValue != nil {
+		if deltaValue != nil {
 			if u.isV1 {
-				deltaRow[column] = prevRow[column]
+				deltaRow[columnName] = prevRow[columnName]
 			} else {
-				deltaRow[column] = newValue
+				deltaRow[columnName] = deltaValue
 			}
 		}
 	}
-	return nil
+
+	return deltaRow, nil
 }
 
 func (u *updater) compareMaps(data, prevData interface{}, columnSchema *libovsdb.ColumnSchema) (*libovsdb.OvsMap, error) {
@@ -522,7 +526,7 @@ func (u *updater) compareSets(data, prevData interface{}, columnSchema *libovsdb
 	return &deltaSet, nil
 }
 
-func (u *updater) prepareCreateRowInitial(value *[]byte) (*ovsjson.RowUpdate, string, error) {
+func (u *updater) prepareInitialRow(value *[]byte) (*ovsjson.RowUpdate, string, error) {
 	if !libovsdb.MSIsTrue(u.mcr.Select.Initial) {
 		return nil, "", nil
 	}
@@ -530,27 +534,24 @@ func (u *updater) prepareCreateRowInitial(value *[]byte) (*ovsjson.RowUpdate, st
 	if err != nil {
 		return nil, "", err
 	}
-	if len(data) > 0 {
-		if !u.isV1 {
-			return &ovsjson.RowUpdate{Initial: &data}, uuid, nil
-		}
-		return &ovsjson.RowUpdate{New: &data}, uuid, nil
+	if !u.isV1 {
+		return &ovsjson.RowUpdate{Initial: &data}, uuid, nil
 	}
-	return nil, uuid, nil
+	return &ovsjson.RowUpdate{New: &data}, uuid, nil
 }
 
 func (u *updater) deleteUnselectedColumns(data map[string]interface{}) map[string]interface{} {
-	if len(u.mcr.Columns) != 0 {
-		newData := map[string]interface{}{}
-		for _, column := range u.mcr.Columns {
-			value, ok := data[column]
-			if ok {
-				newData[column] = value
-			}
-		}
-		return newData
+	if u.mcr.Columns == nil {
+		return data
 	}
-	return data
+	newData := map[string]interface{}{}
+	for _, column := range *u.mcr.Columns {
+		value, ok := data[column]
+		if ok {
+			newData[column] = value
+		}
+	}
+	return newData
 }
 
 func unmarshalData(data []byte) (map[string]interface{}, error) {

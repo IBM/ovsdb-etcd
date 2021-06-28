@@ -122,7 +122,7 @@ const (
 )
 
 type MonitorCondRequest struct {
-	Columns []string                `json:"columns,omitempty"`
+	Columns *[]string               `json:"columns,omitempty"`
 	Where   interface{}             `json:"where,omitempty"` // TODO fix type (should be []string, or [][]string, but sometimes it is boolean
 	Select  *libovsdb.MonitorSelect `json:"select,omitempty"`
 }
