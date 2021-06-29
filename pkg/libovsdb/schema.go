@@ -140,7 +140,7 @@ type TableSchema struct {
 	Columns map[string]*ColumnSchema `json:"columns"`
 	Indexes [][]string               `json:"indexes,omitempty"`
 	MaxRows int                      `json:"maxRows,omitempty"`
-	IsRoot  bool                     `json:"isRoot,omitempty"`
+	IsRoot  *bool                    `json:"isRoot,omitempty"`
 }
 
 /*RFC7047 defines some atomic-types (e.g: integer, string, etc). However, the Column's type
