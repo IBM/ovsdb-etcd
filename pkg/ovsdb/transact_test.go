@@ -334,7 +334,6 @@ func TestTransactInsertSimple(t *testing.T) {
 	assert.Nil(t, resp.Error)
 	dump := testTransactDump(t, txn, "simple", "table1")
 	assert.Equal(t, "val1", dump["key1"])
-	assert.Equal(t, int(0), dump["key2"])
 }
 
 func testTransactInsertSimpleScale(t *testing.T, n int) {
@@ -361,7 +360,6 @@ func testTransactInsertSimpleScale(t *testing.T, n int) {
 	assert.Nil(t, resp.Error)
 	dump := testTransactDump(t, txn, "simple", "table1")
 	assert.Equal(t, "val1", dump["key1"])
-	assert.Equal(t, int(0), dump["key2"])
 }
 
 func TestTransactInsertSimpleScale10(t *testing.T) {
@@ -411,7 +409,6 @@ func TestTransactInsertSimpleWithUUID(t *testing.T) {
 	assert.Nil(t, resp.Error)
 	dump := testTransactDump(t, txn, "simple", "table1")
 	assert.Equal(t, "val1", dump["key1"])
-	assert.Equal(t, int(0), dump["key2"])
 }
 
 func TestTransactInsertSimpleWithUUIDName(t *testing.T) {
@@ -437,7 +434,6 @@ func TestTransactInsertSimpleWithUUIDName(t *testing.T) {
 	assert.Nil(t, resp.Error)
 	dump := testTransactDump(t, txn, "simple", "table1")
 	assert.Equal(t, "val1", dump["key1"])
-	assert.Equal(t, int(0), dump["key2"])
 }
 
 func TestTransactInsertSimpleWithUUIDNameDupError(t *testing.T) {

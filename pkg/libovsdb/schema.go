@@ -471,9 +471,9 @@ func (columnSchema *ColumnSchema) Default() interface{} {
 			panic(fmt.Sprintf("Unsupported enum type %s", columnSchema.TypeObj.Key.Type))
 		}
 	case TypeSet:
-		return OvsSet{}
+		return OvsSet{GoSet: []interface{}{}}
 	case TypeMap:
-		return OvsMap{}
+		return OvsMap{GoMap: map[interface{}]interface{}{}}
 	default:
 		panic(fmt.Sprintf("Unsupported type %s", columnSchema.Type))
 	}

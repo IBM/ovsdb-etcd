@@ -1496,8 +1496,20 @@ func (m *Mutation) MutateMap(row *map[string]interface{}) error {
 	return nil
 }
 
-func (m *Mutation) Mutate(row *map[string]interface{}) error {
+func DefaultColumn(tableSchema *libovsdb.TableSchema, row *map[string]interface{}, column string) error {
+	columnSchema, err := tableSchema.LookupColumn(column)
+	if err != nil {
+		return err
+	}
+	if (*row)[column] == nil {
+		(*row)[column] = columnSchema.Default()
+	}
+	return nil
+}
+
+func (m *Mutation) Mutate(tableSchema *libovsdb.TableSchema, row *map[string]interface{}) error {
 	var err error
+
 	switch m.Column {
 	case libovsdb.COL_UUID, libovsdb.COL_VERSION:
 		err = errors.New(E_CONSTRAINT_VIOLATION)
@@ -1509,6 +1521,13 @@ func (m *Mutation) Mutate(row *map[string]interface{}) error {
 		m.txn.log.Error(err, "can't mutate unmutable column", "column", m.Column)
 		return err
 	}
+	err = DefaultColumn(tableSchema, row, m.Column)
+	if err != nil {
+		xErr := errors.New(E_CONSTRAINT_VIOLATION)
+		m.txn.log.Error(err, "failed update of non initialized column", "column", m.Column)
+		return xErr
+	}
+
 	switch m.ColumnSchema.Type {
 	case libovsdb.TypeInteger:
 		return m.MutateInteger(row)
@@ -1537,7 +1556,8 @@ func (txn *Transaction) RowMutate(tableSchema *libovsdb.TableSchema, mapUUID Map
 		if err != nil {
 			return nil, err
 		}
-		err = m.Mutate(newRow)
+
+		err = m.Mutate(tableSchema, newRow)
 		if err != nil {
 			return nil, err
 		}
@@ -1607,7 +1627,12 @@ func (txn *Transaction) RowUpdate(tableSchema *libovsdb.TableSchema, mapUUID Map
 			txn.log.Error(err, "failed update of unmutable column", "column", column)
 			return nil, err
 		}
-
+		err = DefaultColumn(tableSchema, newRow, column)
+		if err != nil {
+			xErr := errors.New(E_CONSTRAINT_VIOLATION)
+			txn.log.Error(err, "failed update of non initialized column", "column", column)
+			return nil, xErr
+		}
 		(*newRow)[column] = columnUpdate(columnSchema, (*newRow)[column], value)
 	}
 	return newRow, nil
@@ -1829,7 +1854,6 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 	row := &map[string]interface{}{}
 
 	*row = *ovsOp.Row
-	txn.schemas.Default(txn.request.DBName, *ovsOp.Table, row)
 
 	err = txn.RowPrepare(tableSchema, txn.mapUUID, ovsOp.Row)
 	if err != nil {
