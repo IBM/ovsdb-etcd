@@ -451,7 +451,7 @@ func (u *updater) compareModifiedRows(modifiedRow, prevRow map[string]interface{
 				if len(deltaMap.GoMap) > 0 {
 					deltaValue = deltaMap
 				}
-			} else if columnSchema.Type == libovsdb.TypeSet {
+			} else if columnSchema.Type == libovsdb.TypeSet && columnSchema.TypeObj.Max != 1 {
 				deltaSet, err := u.compareSets(newValue, prevValue, columnSchema)
 				if err != nil {
 					return deltaRow, err
