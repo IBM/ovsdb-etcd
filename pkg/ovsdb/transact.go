@@ -276,17 +276,7 @@ func (kv *KeyValue) Dump() {
 
 type Cache map[string]DatabaseCache
 type DatabaseCache map[string]TableCache
-type TableCache struct {
-	Rows     map[string]*map[string]interface{}
-	RefCount map[string]*int
-}
-
-func NewTableCache() TableCache {
-	return TableCache{
-		Rows:     map[string]*map[string]interface{}{},
-		RefCount: map[string]*int{},
-	}
-}
+type TableCache map[string]*map[string]interface{}
 
 func (c *Cache) Database(dbname string) DatabaseCache {
 	db, ok := (*c)[dbname]
@@ -301,7 +291,7 @@ func (c *Cache) Table(dbname, table string) TableCache {
 	db := c.Database(dbname)
 	tb, ok := db[table]
 	if !ok {
-		tb = NewTableCache()
+		tb = TableCache{}
 		db[table] = tb
 	}
 	return tb
@@ -309,47 +299,11 @@ func (c *Cache) Table(dbname, table string) TableCache {
 
 func (c *Cache) Row(key common.Key) *map[string]interface{} {
 	tb := c.Table(key.DBName, key.TableName)
-	if tb.Rows == nil {
-		panic("Rows is nil")
-	}
-	_, ok := tb.Rows[key.UUID]
+	_, ok := tb[key.UUID]
 	if !ok {
-		tb.Rows[key.UUID] = new(map[string]interface{})
+		tb[key.UUID] = new(map[string]interface{})
 	}
-	return tb.Rows[key.UUID]
-}
-
-func (c *Cache) GetRefCount(dbname, refTable, uuid string) *int {
-	tb := c.Table(dbname, refTable)
-	if tb.RefCount == nil {
-		panic("RefCount is nil")
-	}
-	_, ok := tb.RefCount[uuid]
-	if !ok {
-		tb.RefCount[uuid] = new(int)
-	}
-	return tb.RefCount[uuid]
-}
-
-func (c *Cache) RefCountInc(dbname, refTable, uuid string) {
-	x := c.GetRefCount(dbname, refTable, uuid)
-	if (*x) < 0 {
-		panic("refcount below zero")
-	}
-	(*x)++
-}
-
-func (c *Cache) RefCountDec(dbname, refTable, uuid string) {
-	x := c.GetRefCount(dbname, refTable, uuid)
-	(*x)--
-	if (*x) < 0 {
-		panic("refcount below zero")
-	}
-}
-
-func (c *Cache) RefCountIsZero(dbname, refTable, uuid string) bool {
-	x := c.GetRefCount(dbname, refTable, uuid)
-	return *x == 0
+	return tb[key.UUID]
 }
 
 func (c *Cache) GetFromEtcdKV(kvs []*mvccpb.KeyValue) error {
@@ -376,7 +330,7 @@ func (cache *Cache) GetFromEtcd(res *clientv3.TxnResponse) {
 func (cache *Cache) Unmarshal(txn *Transaction, schemas libovsdb.Schemas) error {
 	for database, databaseCache := range *cache {
 		for table, tableCache := range databaseCache {
-			for _, row := range tableCache.Rows {
+			for _, row := range tableCache {
 				err := schemas.Unmarshal(database, table, row)
 				if err != nil {
 					txn.log.Error(err, "failed schema unmarshal")
@@ -391,7 +345,7 @@ func (cache *Cache) Unmarshal(txn *Transaction, schemas libovsdb.Schemas) error 
 func (cache *Cache) Validate(txn *Transaction, schemas libovsdb.Schemas) error {
 	for database, databaseCache := range *cache {
 		for table, tableCache := range databaseCache {
-			for _, row := range tableCache.Rows {
+			for _, row := range tableCache {
 				err := schemas.Validate(database, table, row)
 				if err != nil {
 					txn.log.Error(err, "failed schema validate")
@@ -415,7 +369,7 @@ func (cache *Cache) RefColumnSet(txn *Transaction, columnSchema *libovsdb.Column
 	if refType != nil && *refType == libovsdb.Strong {
 		for _, val := range valueSet.GoSet {
 			uuid := val.(libovsdb.UUID)
-			_, ok := refTableCache.Rows[uuid.GoUUID]
+			_, ok := refTableCache[uuid.GoUUID]
 			if !ok {
 				err := errors.New(E_CONSTRAINT_VIOLATION)
 				txn.log.Error(err, "did not find uuid in table", "uuid", uuid, "table", *refTable)
@@ -439,7 +393,7 @@ func (cache *Cache) RefColumnMap(txn *Transaction, columnSchema *libovsdb.Column
 	if refType != nil && *refType == libovsdb.Strong {
 		for _, val := range valueMap.GoMap {
 			uuid := val.(libovsdb.UUID)
-			_, ok := refTableCache.Rows[uuid.GoUUID]
+			_, ok := refTableCache[uuid.GoUUID]
 			if !ok {
 				err := errors.New(E_CONSTRAINT_VIOLATION)
 				txn.log.Error(err, "did not find uuid in table", "uuid", uuid, "table", *refTable)
@@ -473,7 +427,7 @@ func (cache *Cache) RefColumn(txn *Transaction, columnSchema *libovsdb.ColumnSch
 }
 
 func (cache *Cache) RefTable(txn *Transaction, tableSchema *libovsdb.TableSchema, tableCache *TableCache) error {
-	for _, row := range tableCache.Rows {
+	for _, row := range *tableCache {
 		for column, value := range *row {
 			columnSchema, err := tableSchema.LookupColumn(column)
 			if err != nil {
@@ -501,91 +455,6 @@ func (cache *Cache) Ref(txn *Transaction) error {
 			err = cache.RefTable(txn, tableSchema, &tableCache)
 			if err != nil {
 				txn.log.Error(err, "failed schema reftype")
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (cache *Cache) RefCountColumnSet(txn *Transaction, columnSchema *libovsdb.ColumnSchema, value interface{}) error {
-	valueSet, ok := value.(libovsdb.OvsSet)
-	if !ok {
-		panic(fmt.Sprintf("failed to convert value to set: %+v", value))
-	}
-	refTable := columnSchema.RefTable()
-
-	for _, val := range valueSet.GoSet {
-		uuid := val.(libovsdb.UUID).GoUUID
-		cache.RefCountInc(txn.request.DBName, *refTable, uuid)
-	}
-
-	return nil
-}
-
-func (cache *Cache) RefCountColumnMap(txn *Transaction, columnSchema *libovsdb.ColumnSchema, value interface{}) error {
-	valueMap, ok := value.(libovsdb.OvsMap)
-	if !ok {
-		panic(fmt.Sprintf("failed to convert value to set: %+v", value))
-	}
-	refTable := columnSchema.RefTable()
-
-	for _, val := range valueMap.GoMap {
-		uuid := val.(libovsdb.UUID).GoUUID
-		cache.RefCountInc(txn.request.DBName, *refTable, uuid)
-	}
-	return nil
-}
-
-func (cache *Cache) RefCountColumn(txn *Transaction, columnSchema *libovsdb.ColumnSchema, value interface{}) error {
-	var err error
-	refTable := columnSchema.RefTable()
-	if refTable == nil {
-		return nil
-	}
-
-	switch columnSchema.Type {
-	case libovsdb.TypeSet:
-		err = cache.RefCountColumnSet(txn, columnSchema, value)
-	case libovsdb.TypeMap:
-		err = cache.RefCountColumnMap(txn, columnSchema, value)
-	}
-	if err != nil {
-		txn.log.Error(err, "failed cache refcount")
-		return err
-	}
-	return nil
-}
-
-func (cache *Cache) RefCountTable(txn *Transaction, tableSchema *libovsdb.TableSchema, tableCache *TableCache) error {
-	for _, row := range tableCache.Rows {
-		for column, value := range *row {
-			columnSchema, err := tableSchema.LookupColumn(column)
-			if err != nil {
-				txn.log.Error(err, "failed cache refcount")
-				return err
-			}
-			err = cache.RefCountColumn(txn, columnSchema, value)
-			if err != nil {
-				txn.log.Error(err, "failed cache refcount")
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (cache *Cache) RefCount(txn *Transaction) error {
-	for database, databaseCache := range *cache {
-		for table, tableCache := range databaseCache {
-			tableSchema, err := txn.schemas.LookupTable(database, table)
-			if err != nil {
-				txn.log.Error(err, "failed cache refcount")
-				return err
-			}
-			err = cache.RefCountTable(txn, tableSchema, &tableCache)
-			if err != nil {
-				txn.log.Error(err, "failed cache refcount")
 				return err
 			}
 		}
@@ -884,13 +753,6 @@ func (txn *Transaction) Commit() (int64, error) {
 	}
 
 	err = txn.cache.Ref(txn)
-	if err != nil {
-		errStr := err.Error()
-		txn.response.Error = &errStr
-		return -1, err
-	}
-
-	err = txn.cache.RefCount(txn)
 	if err != nil {
 		errStr := err.Error()
 		txn.response.Error = &errStr
@@ -1953,7 +1815,7 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		}
 	}
 
-	for uuid := range txn.cache.Table(txn.request.DBName, *ovsOp.Table).Rows {
+	for uuid := range txn.cache.Table(txn.request.DBName, *ovsOp.Table) {
 		if ovsOp.UUID != nil && uuid == ovsOp.UUID.GoUUID {
 			err = errors.New(E_DUP_UUID)
 			txn.log.Error(err, "duplicate uuid", "uuid", *ovsOp.UUID)
@@ -1996,7 +1858,7 @@ func doSelect(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 		return errors.New(E_INTERNAL_ERROR)
 	}
 
-	for _, row := range txn.cache.Table(txn.request.DBName, *ovsOp.Table).Rows {
+	for _, row := range txn.cache.Table(txn.request.DBName, *ovsOp.Table) {
 		ok, err := txn.isRowSelectedByWhere(tableSchema, txn.mapUUID, row, ovsOp.Where)
 		if err != nil {
 			txn.log.Error(err, "failed to select row by where", "row", row, "where", ovsOp.Where)
@@ -2030,7 +1892,7 @@ func doUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 	if err != nil {
 		return errors.New(E_INTERNAL_ERROR)
 	}
-	for uuid, row := range txn.cache.Table(txn.request.DBName, *ovsOp.Table).Rows {
+	for uuid, row := range txn.cache.Table(txn.request.DBName, *ovsOp.Table) {
 		ok, err := txn.isRowSelectedByWhere(tableSchema, txn.mapUUID, row, ovsOp.Where)
 		if err != nil {
 			txn.log.Error(err, "failed to select row by where", "row", row, "where", ovsOp.Where)
@@ -2076,7 +1938,7 @@ func doMutate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 	if err != nil {
 		return errors.New(E_INTERNAL_ERROR)
 	}
-	for uuid, row := range txn.cache.Table(txn.request.DBName, *ovsOp.Table).Rows {
+	for uuid, row := range txn.cache.Table(txn.request.DBName, *ovsOp.Table) {
 		ok, err := txn.isRowSelectedByWhere(tableSchema, txn.mapUUID, row, ovsOp.Where)
 		if err != nil {
 			txn.log.Error(err, "failed to select row by where", "row", row, "where", ovsOp.Where)
@@ -2115,7 +1977,7 @@ func doDelete(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 	if err != nil {
 		return errors.New(E_INTERNAL_ERROR)
 	}
-	for uuid, row := range txn.cache.Table(txn.request.DBName, *ovsOp.Table).Rows {
+	for uuid, row := range txn.cache.Table(txn.request.DBName, *ovsOp.Table) {
 		ok, err := txn.isRowSelectedByWhere(tableSchema, txn.mapUUID, row, ovsOp.Where)
 		if err != nil {
 			txn.log.Error(err, "failed to select row by where", "row", row, "where", ovsOp.Where)
@@ -2189,7 +2051,7 @@ func doWait(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.Ope
 		return err
 	}
 
-	for _, actual := range txn.cache.Table(txn.request.DBName, *ovsOp.Table).Rows {
+	for _, actual := range txn.cache.Table(txn.request.DBName, *ovsOp.Table) {
 		log := txn.log.WithValues("row", actual)
 		ok, err := txn.isRowSelectedByWhere(tableSchema, txn.mapUUID, actual, ovsOp.Where)
 		if err != nil {
