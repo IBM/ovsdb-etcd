@@ -357,111 +357,6 @@ func (cache *Cache) Validate(txn *Transaction, schemas libovsdb.Schemas) error {
 	return nil
 }
 
-func (cache *Cache) RefColumnSet(txn *Transaction, columnSchema *libovsdb.ColumnSchema, value interface{}) error {
-	valueSet, ok := value.(libovsdb.OvsSet)
-	if !ok {
-		panic(fmt.Sprintf("failed to convert value to set: %+v", value))
-	}
-	refTable := columnSchema.RefTable()
-	refTableCache := cache.Table(txn.request.DBName, *refTable)
-
-	refType := columnSchema.RefType()
-	if refType != nil && *refType == libovsdb.Strong {
-		for _, val := range valueSet.GoSet {
-			uuid := val.(libovsdb.UUID)
-			_, ok := refTableCache[uuid.GoUUID]
-			if !ok {
-				err := errors.New(E_CONSTRAINT_VIOLATION)
-				txn.log.Error(err, "did not find uuid in table", "uuid", uuid, "table", *refTable)
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func (cache *Cache) RefColumnMap(txn *Transaction, columnSchema *libovsdb.ColumnSchema, value interface{}) error {
-	valueMap, ok := value.(libovsdb.OvsMap)
-	if !ok {
-		panic(fmt.Sprintf("failed to convert value to set: %+v", value))
-	}
-	refTable := columnSchema.RefTable()
-	refTableCache := cache.Table(txn.request.DBName, *refTable)
-
-	refType := columnSchema.RefType()
-	if refType != nil && *refType == libovsdb.Strong {
-		for _, val := range valueMap.GoMap {
-			uuid := val.(libovsdb.UUID)
-			_, ok := refTableCache[uuid.GoUUID]
-			if !ok {
-				err := errors.New(E_CONSTRAINT_VIOLATION)
-				txn.log.Error(err, "did not find uuid in table", "uuid", uuid, "table", *refTable)
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func (cache *Cache) RefColumn(txn *Transaction, columnSchema *libovsdb.ColumnSchema, value interface{}) error {
-	var err error
-	refTable := columnSchema.RefTable()
-	if refTable == nil {
-		return nil
-	}
-
-	switch columnSchema.Type {
-	case libovsdb.TypeSet:
-		err = cache.RefColumnSet(txn, columnSchema, value)
-	case libovsdb.TypeMap:
-		err = cache.RefColumnMap(txn, columnSchema, value)
-	}
-	if err != nil {
-		txn.log.Error(err, "failed schema reftype")
-		return err
-	}
-
-	return nil
-}
-
-func (cache *Cache) RefTable(txn *Transaction, tableSchema *libovsdb.TableSchema, tableCache *TableCache) error {
-	for _, row := range *tableCache {
-		for column, value := range *row {
-			columnSchema, err := tableSchema.LookupColumn(column)
-			if err != nil {
-				txn.log.Error(err, "failed schema reftype")
-				return err
-			}
-			err = cache.RefColumn(txn, columnSchema, value)
-			if err != nil {
-				txn.log.Error(err, "failed schema reftype")
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (cache *Cache) Ref(txn *Transaction) error {
-	for database, databaseCache := range *cache {
-		for table, tableCache := range databaseCache {
-			tableSchema, err := txn.schemas.LookupTable(database, table)
-			if err != nil {
-				txn.log.Error(err, "failed schema reftype")
-				return err
-			}
-			err = cache.RefTable(txn, tableSchema, &tableCache)
-			if err != nil {
-				txn.log.Error(err, "failed schema reftype")
-				return err
-			}
-		}
-	}
-	return nil
-}
-
 type MapUUID map[string]string
 
 func (mapUUID MapUUID) Set(txn *Transaction, uuidName, uuid string) {
@@ -750,13 +645,6 @@ func (txn *Transaction) Commit() (int64, error) {
 		if err = txn.cache.Validate(txn, txn.schemas); err != nil {
 			panic(fmt.Sprintf("validation of %s failed: %s", ovsOp, err.Error()))
 		}
-	}
-
-	err = txn.cache.Ref(txn)
-	if err != nil {
-		errStr := err.Error()
-		txn.response.Error = &errStr
-		return -1, err
 	}
 
 	txn.etcdRemoveDup()
@@ -1619,20 +1507,6 @@ func etcdGetData(txn *Transaction, key *common.Key) {
 	txn.etcd.Then = append(txn.etcd.Then, etcdOp)
 }
 
-func etcdGetByRef(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
-	tableSchema, err := txn.schemas.LookupTable(txn.request.DBName, *ovsOp.Table)
-	if err != nil {
-		txn.log.Error(err, "failed etcd get by ref")
-		return errors.New(E_INTERNAL_ERROR)
-	}
-	tables := tableSchema.RefTables(txn.request.DBName, *ovsOp.Table)
-	for _, table := range tables {
-		key := common.NewTableKey(txn.request.DBName, table)
-		etcdGetData(txn, &key)
-	}
-	return nil
-}
-
 func etcdGetByWhere(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
 	tableSchema, err := txn.schemas.LookupTable(txn.request.DBName, *ovsOp.Table)
 	if err != nil {
@@ -1768,11 +1642,7 @@ func (txn *Transaction) RowPrepare(tableSchema *libovsdb.TableSchema, mapUUID Ma
 
 /* insert */
 func preInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
-	err := etcdGetByRef(txn, ovsOp, ovsResult)
-	if err != nil {
-		return err
-	}
-
+	var err error
 	if ovsOp.UUIDName == nil {
 		return nil
 	}
@@ -1879,10 +1749,6 @@ func doSelect(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 
 /* update */
 func preUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
-	err := etcdGetByRef(txn, ovsOp, ovsResult)
-	if err != nil {
-		return err
-	}
 	return etcdGetByWhere(txn, ovsOp, ovsResult)
 }
 
@@ -1925,10 +1791,6 @@ func doUpdate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 
 /* mutate */
 func preMutate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
-	err := etcdGetByRef(txn, ovsOp, ovsResult)
-	if err != nil {
-		return err
-	}
 	return etcdGetByWhere(txn, ovsOp, ovsResult)
 }
 
@@ -1964,10 +1826,6 @@ func doMutate(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 
 /* delete */
 func preDelete(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
-	err := etcdGetByRef(txn, ovsOp, ovsResult)
-	if err != nil {
-		return err
-	}
 	return etcdGetByWhere(txn, ovsOp, ovsResult)
 }
 
