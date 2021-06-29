@@ -38,7 +38,7 @@ type Chassis struct {
 }
 
 type Chassis_Private struct {
-	Chassis          libovsdb.UUID   `json:"chassis,omitempty"`
+	Chassis          libovsdb.OvsSet `json:"chassis,omitempty"`
 	External_ids     libovsdb.OvsMap `json:"external_ids,omitempty"`
 	Name             string          `json:"name,omitempty"`
 	Nb_cfg           int64           `json:"nb_cfg,omitempty"`
@@ -49,9 +49,9 @@ type Chassis_Private struct {
 
 type Connection struct {
 	External_ids     libovsdb.OvsMap `json:"external_ids,omitempty"`
-	Inactivity_probe int64           `json:"inactivity_probe,omitempty"`
+	Inactivity_probe libovsdb.OvsSet `json:"inactivity_probe,omitempty"`
 	Is_connected     bool            `json:"is_connected,omitempty"`
-	Max_backoff      int64           `json:"max_backoff,omitempty"`
+	Max_backoff      libovsdb.OvsSet `json:"max_backoff,omitempty"`
 	Other_config     libovsdb.OvsMap `json:"other_config,omitempty"`
 	Read_only        bool            `json:"read_only,omitempty"`
 	Role             string          `json:"role,omitempty"`
@@ -62,7 +62,7 @@ type Connection struct {
 }
 
 type Controller_Event struct {
-	Chassis    libovsdb.UUID   `json:"chassis,omitempty"`
+	Chassis    libovsdb.OvsSet `json:"chassis,omitempty"`
 	Event_info libovsdb.OvsMap `json:"event_info,omitempty"`
 	Event_type string          `json:"event_type,omitempty"`
 	Seq_num    int64           `json:"seq_num,omitempty"`
@@ -120,7 +120,7 @@ type FDB struct {
 }
 
 type Gateway_Chassis struct {
-	Chassis      libovsdb.UUID   `json:"chassis,omitempty"`
+	Chassis      libovsdb.OvsSet `json:"chassis,omitempty"`
 	External_ids libovsdb.OvsMap `json:"external_ids,omitempty"`
 	Name         string          `json:"name,omitempty"`
 	Options      libovsdb.OvsMap `json:"options,omitempty"`
@@ -130,7 +130,7 @@ type Gateway_Chassis struct {
 }
 
 type HA_Chassis struct {
-	Chassis      libovsdb.UUID   `json:"chassis,omitempty"`
+	Chassis      libovsdb.OvsSet `json:"chassis,omitempty"`
 	External_ids libovsdb.OvsMap `json:"external_ids,omitempty"`
 	Priority     int64           `json:"priority,omitempty"`
 	Version      libovsdb.UUID   `json:"_version,omitempty"`
@@ -148,27 +148,27 @@ type HA_Chassis_Group struct {
 
 type IGMP_Group struct {
 	Address  string          `json:"address,omitempty"`
-	Chassis  libovsdb.UUID   `json:"chassis,omitempty"`
-	Datapath libovsdb.UUID   `json:"datapath,omitempty"`
+	Chassis  libovsdb.OvsSet `json:"chassis,omitempty"`
+	Datapath libovsdb.OvsSet `json:"datapath,omitempty"`
 	Ports    libovsdb.OvsSet `json:"ports,omitempty"`
 	Version  libovsdb.UUID   `json:"_version,omitempty"`
 	Uuid     libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type IP_Multicast struct {
-	Datapath       libovsdb.UUID `json:"datapath,omitempty"`
-	Enabled        bool          `json:"enabled,omitempty"`
-	Eth_src        string        `json:"eth_src,omitempty"`
-	Idle_timeout   int64         `json:"idle_timeout,omitempty"`
-	Ip4_src        string        `json:"ip4_src,omitempty"`
-	Ip6_src        string        `json:"ip6_src,omitempty"`
-	Querier        bool          `json:"querier,omitempty"`
-	Query_interval int64         `json:"query_interval,omitempty"`
-	Query_max_resp int64         `json:"query_max_resp,omitempty"`
-	Seq_no         int64         `json:"seq_no,omitempty"`
-	Table_size     int64         `json:"table_size,omitempty"`
-	Version        libovsdb.UUID `json:"_version,omitempty"`
-	Uuid           libovsdb.UUID `json:"_uuid,omitempty"`
+	Datapath       libovsdb.UUID   `json:"datapath,omitempty"`
+	Enabled        libovsdb.OvsSet `json:"enabled,omitempty"`
+	Eth_src        string          `json:"eth_src,omitempty"`
+	Idle_timeout   libovsdb.OvsSet `json:"idle_timeout,omitempty"`
+	Ip4_src        string          `json:"ip4_src,omitempty"`
+	Ip6_src        string          `json:"ip6_src,omitempty"`
+	Querier        libovsdb.OvsSet `json:"querier,omitempty"`
+	Query_interval libovsdb.OvsSet `json:"query_interval,omitempty"`
+	Query_max_resp libovsdb.OvsSet `json:"query_max_resp,omitempty"`
+	Seq_no         int64           `json:"seq_no,omitempty"`
+	Table_size     libovsdb.OvsSet `json:"table_size,omitempty"`
+	Version        libovsdb.UUID   `json:"_version,omitempty"`
+	Uuid           libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type Load_Balancer struct {
@@ -176,7 +176,7 @@ type Load_Balancer struct {
 	External_ids libovsdb.OvsMap `json:"external_ids,omitempty"`
 	Name         string          `json:"name,omitempty"`
 	Options      libovsdb.OvsMap `json:"options,omitempty"`
-	Protocol     string          `json:"protocol,omitempty"`
+	Protocol     libovsdb.OvsSet `json:"protocol,omitempty"`
 	Vips         libovsdb.OvsMap `json:"vips,omitempty"`
 	Version      libovsdb.UUID   `json:"_version,omitempty"`
 	Uuid         libovsdb.UUID   `json:"_uuid,omitempty"`
@@ -191,8 +191,8 @@ type Logical_DP_Group struct {
 type Logical_Flow struct {
 	Actions          string          `json:"actions,omitempty"`
 	External_ids     libovsdb.OvsMap `json:"external_ids,omitempty"`
-	Logical_datapath libovsdb.UUID   `json:"logical_datapath,omitempty"`
-	Logical_dp_group libovsdb.UUID   `json:"logical_dp_group,omitempty"`
+	Logical_datapath libovsdb.OvsSet `json:"logical_datapath,omitempty"`
+	Logical_dp_group libovsdb.OvsSet `json:"logical_dp_group,omitempty"`
 	Match            string          `json:"match,omitempty"`
 	Pipeline         string          `json:"pipeline,omitempty"`
 	Priority         int64           `json:"priority,omitempty"`
@@ -211,11 +211,11 @@ type MAC_Binding struct {
 }
 
 type Meter struct {
-	Bands   libovsdb.UUID `json:"bands,omitempty"`
-	Name    string        `json:"name,omitempty"`
-	Unit    string        `json:"unit,omitempty"`
-	Version libovsdb.UUID `json:"_version,omitempty"`
-	Uuid    libovsdb.UUID `json:"_uuid,omitempty"`
+	Bands   libovsdb.OvsSet `json:"bands,omitempty"`
+	Name    string          `json:"name,omitempty"`
+	Unit    string          `json:"unit,omitempty"`
+	Version libovsdb.UUID   `json:"_version,omitempty"`
+	Uuid    libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type Meter_Band struct {
@@ -236,12 +236,12 @@ type Multicast_Group struct {
 }
 
 type Port_Binding struct {
-	Chassis          libovsdb.UUID   `json:"chassis,omitempty"`
+	Chassis          libovsdb.OvsSet `json:"chassis,omitempty"`
 	Datapath         libovsdb.UUID   `json:"datapath,omitempty"`
-	Encap            libovsdb.UUID   `json:"encap,omitempty"`
+	Encap            libovsdb.OvsSet `json:"encap,omitempty"`
 	External_ids     libovsdb.OvsMap `json:"external_ids,omitempty"`
 	Gateway_chassis  libovsdb.OvsSet `json:"gateway_chassis,omitempty"`
-	Ha_chassis_group libovsdb.UUID   `json:"ha_chassis_group,omitempty"`
+	Ha_chassis_group libovsdb.OvsSet `json:"ha_chassis_group,omitempty"`
 	Logical_port     string          `json:"logical_port,omitempty"`
 	Mac              libovsdb.OvsSet `json:"mac,omitempty"`
 	Nat_addresses    libovsdb.OvsSet `json:"nat_addresses,omitempty"`
@@ -250,8 +250,8 @@ type Port_Binding struct {
 	Tag              libovsdb.OvsSet `json:"tag,omitempty"`
 	Tunnel_key       int64           `json:"tunnel_key,omitempty"`
 	Type             string          `json:"type,omitempty"`
-	Up               bool            `json:"up,omitempty"`
-	Virtual_parent   string          `json:"virtual_parent,omitempty"`
+	Up               libovsdb.OvsSet `json:"up,omitempty"`
+	Virtual_parent   libovsdb.OvsSet `json:"virtual_parent,omitempty"`
 	Version          libovsdb.UUID   `json:"_version,omitempty"`
 	Uuid             libovsdb.UUID   `json:"_uuid,omitempty"`
 }
@@ -285,7 +285,7 @@ type SB_Global struct {
 	Ipsec        bool            `json:"ipsec,omitempty"`
 	Nb_cfg       int64           `json:"nb_cfg,omitempty"`
 	Options      libovsdb.OvsMap `json:"options,omitempty"`
-	Ssl          libovsdb.UUID   `json:"ssl,omitempty"`
+	Ssl          libovsdb.OvsSet `json:"ssl,omitempty"`
 	Version      libovsdb.UUID   `json:"_version,omitempty"`
 	Uuid         libovsdb.UUID   `json:"_uuid,omitempty"`
 }
@@ -308,10 +308,10 @@ type Service_Monitor struct {
 	Logical_port string          `json:"logical_port,omitempty"`
 	Options      libovsdb.OvsMap `json:"options,omitempty"`
 	Port         int64           `json:"port,omitempty"`
-	Protocol     string          `json:"protocol,omitempty"`
+	Protocol     libovsdb.OvsSet `json:"protocol,omitempty"`
 	Src_ip       string          `json:"src_ip,omitempty"`
 	Src_mac      string          `json:"src_mac,omitempty"`
-	Status       string          `json:"status,omitempty"`
+	Status       libovsdb.OvsSet `json:"status,omitempty"`
 	Version      libovsdb.UUID   `json:"_version,omitempty"`
 	Uuid         libovsdb.UUID   `json:"_uuid,omitempty"`
 }
