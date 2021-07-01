@@ -149,7 +149,7 @@ KIND_FLAGS := \
 	--ovn-loglevel-nbctld '-vconsole:dbg -vfile:dbg' \
 	--ovn-loglevel-controller '-vconsole:dbg -vfile:dbg'
 
-OVNDB_ETCD_TCPDUMP ?= true
+OVNDB_ETCD_TCPDUMP ?= false
 
 .PHONY: ovnkube-deploy
 ovnkube-deploy: check-env
