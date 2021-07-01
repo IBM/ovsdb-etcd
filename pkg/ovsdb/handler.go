@@ -72,21 +72,21 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 		monitor.tQueue.startTransaction()
 	}
 	rev, err := txn.Commit()
+	ch.db.DbUnlock(ovsReq.DBName)
+	if err != nil {
+		return nil, err
+	}
+
 	if thereIsMonitor {
 		// we have to guarantee that a new monitor call if it runs concurrently with the transaction, returns first
 		var wg sync.WaitGroup
 		wg.Add(1)
 		monitor.tQueue.endTransaction(rev, &wg)
+		log.V(5).Info("transact added", "etcd revision", rev)
 		wg.Wait()
 	}
 
-	ch.db.DbUnlock(ovsReq.DBName)
-
-	if err != nil {
-		return nil, err
-	}
-
-	log.V(5).Info("transact response", "response", txn.response)
+	log.V(5).Info("transact response", "response", txn.response, "etcd revision", rev)
 	return txn.response.Result, nil
 }
 
