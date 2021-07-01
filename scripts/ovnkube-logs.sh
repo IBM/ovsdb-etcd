@@ -10,8 +10,8 @@ fi
 mkdir -p ovn-control-plane
 mkdir -p ovn-worker
 mkdir -p ovn-worker2
-docker cp ovn-control-plane:/var/log/openvswitch/tcpdump.pcap .
-docker cp ovn-control-plane:/var/log/openvswitch/tcpdump_logs.log .
+docker cp ovn-control-plane:/var/log/openvswitch/tcpdump.pcap . 2> /dev/null
+docker cp ovn-control-plane:/var/log/openvswitch/tcpdump_logs.log . 2> /dev/null
 kubectl --kubeconfig=${HOME}/admin.conf get pods --all-namespaces -o wide > kube-topology
 for d in ovn-control-plane ovn-worker ovn-worker2
 do
