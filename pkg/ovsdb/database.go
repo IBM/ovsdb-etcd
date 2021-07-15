@@ -3,12 +3,15 @@ package ovsdb
 import (
 	"context"
 	"encoding/json"
-	"github.com/google/uuid"
-	"github.com/ibm/ovsdb-etcd/pkg/types/_Server"
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/ibm/ovsdb-etcd/pkg/types/_Server"
+
 	"github.com/go-logr/logr"
+	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"k8s.io/klog/v2"
@@ -207,6 +210,89 @@ func (con *DatabaseEtcd) CreateMonitor(dbName string, handler *Handler, log logr
 		clientv3.WithPrevKV())
 	m.watchChannel = wch
 	return m
+}
+
+type EventKeyValue struct {
+	Key            string `json:"key"`
+	CreateRevision int64  `json:"create_revision"`
+	ModRevision    int64  `json:"mod_revision"`
+	Version        int64  `json:"version"`
+	Value          string `json:"value"`
+	Lease          int64  `json:"lease"`
+}
+
+func NewEventKeyValue(kv *mvccpb.KeyValue) *EventKeyValue {
+	if kv == nil {
+		return nil
+	}
+	return &EventKeyValue{
+		Key:            string(kv.Key),
+		CreateRevision: kv.CreateRevision,
+		ModRevision:    kv.ModRevision,
+		Version:        kv.Version,
+		Value:          string(kv.Value),
+		Lease:          kv.Lease,
+	}
+}
+
+type Event struct {
+	Type   string         `json:"type"`
+	Kv     *EventKeyValue `json:"kv"`
+	PrevKv *EventKeyValue `json:"prev_kv"`
+}
+
+func NewEvent(ev *clientv3.Event) Event {
+	return Event{
+		Type:   string(ev.Type),
+		Kv:     NewEventKeyValue(ev.Kv),
+		PrevKv: NewEventKeyValue(ev.PrevKv),
+	}
+}
+
+type EventList []Event
+
+func NewEventList(events []*clientv3.Event) EventList {
+	printable := EventList{}
+	for _, ev := range events {
+		if ev != nil {
+			printable = append(printable, NewEvent(ev))
+		}
+	}
+	return printable
+}
+
+func (evList EventList) String() string {
+	b, _ := json.Marshal(evList)
+	return string(b)
+}
+
+type KeyValue struct {
+	Key   common.Key
+	Value map[string]interface{}
+}
+
+func NewKeyValue(etcdKV *mvccpb.KeyValue) (*KeyValue, error) {
+	if etcdKV == nil {
+		return nil, fmt.Errorf("nil etcdKV")
+	}
+	kv := new(KeyValue)
+
+	/* key */
+	if etcdKV.Key == nil {
+		return nil, fmt.Errorf("nil key")
+	}
+	key, err := common.ParseKey(string(etcdKV.Key))
+	if err != nil {
+		return nil, err
+	}
+	kv.Key = *key
+	/* value */
+	err = json.Unmarshal(etcdKV.Value, &kv.Value)
+	if err != nil {
+		return nil, err
+	}
+
+	return kv, nil
 }
 
 type DatabaseMock struct {

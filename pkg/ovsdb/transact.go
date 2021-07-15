@@ -181,46 +181,35 @@ const (
 	OP_ASSERT  = "assert"
 )
 
-func etcdOpKey(op clientv3.Op) string {
-	v := reflect.ValueOf(op)
-	f := v.FieldByName("key")
-	k := f.Bytes()
-	return string(k)
-}
-
+// etcd doesn't allow modification of the same ke in the same transaction.
+// we have to validate correctness of this operation removing.
 func (txn *Transaction) etcdRemoveDupThen() {
-	newThen := []*clientv3.Op{}
-	for curr, op := range txn.etcd.Then {
-		// TODO what do we do here ?
-		etcdOpKey(op)
-		//	txn.log.V(6).Info("[then] adding key", "key", key, "index", curr)
-		newThen = append(newThen, &txn.etcd.Then[curr])
-	}
-
+	duplicatedKeys := map[int]int{}
 	prevKeyIndex := map[string]int{}
-	for curr, op := range newThen {
-		key := etcdOpKey(*op)
+	for curr, op := range txn.etcd.Then {
+		key := string(op.KeyBytes())
 		prev, ok := prevKeyIndex[key]
 		if ok {
 			txn.log.V(6).Info("[then] removing key", "key", key, "index", prev)
-			newThen[prev] = nil
+			duplicatedKeys[prev] = prev
 		}
 		prevKeyIndex[key] = curr
 	}
 
-	txn.etcd.Then = []clientv3.Op{}
-	for _, op := range newThen {
-		if op != nil {
-			txn.etcd.Then = append(txn.etcd.Then, *op)
+	newThen := []clientv3.Op{}
+	for inx, op := range txn.etcd.Then {
+		if _, ok := duplicatedKeys[inx]; !ok {
+			newThen = append(newThen, op)
 		}
 	}
+	txn.etcd.Then = newThen
 }
 
 func (txn *Transaction) etcdRemoveDup() {
 	txn.etcdRemoveDupThen()
 }
 
-func (txn *Transaction) etcdTranaction() (*clientv3.TxnResponse, error) {
+func (txn *Transaction) etcdTransaction() (*clientv3.TxnResponse, error) {
 	txn.log.V(6).Info("etcd transaction", "etcd", txn.etcd.String())
 	errInternal := txn.etcd.Commit()
 	if errInternal != nil {
@@ -246,37 +235,10 @@ func (txn *Transaction) etcdTranaction() (*clientv3.TxnResponse, error) {
 	return txn.etcd.Res, nil
 }
 
-// XXX: move to db
-type KeyValue struct {
-	Key   common.Key
-	Value map[string]interface{}
-}
-
-// XXX: move to db
-func NewKeyValue(etcdKV *mvccpb.KeyValue) (*KeyValue, error) {
-	kv := new(KeyValue)
-
-	/* key */
-	key, err := common.ParseKey(string(etcdKV.Key))
-	if err != nil {
-		return nil, err
-	}
-	kv.Key = *key
-	/* value */
-	err = json.Unmarshal(etcdKV.Value, &kv.Value)
-	if err != nil {
-		return nil, err
-	}
-
-	return kv, nil
-}
-
-func (kv *KeyValue) Dump() {
-	fmt.Printf("%s --> %v\n", kv.Key, kv.Value)
-}
-
 type Cache map[string]DatabaseCache
+
 type DatabaseCache map[string]TableCache
+
 type TableCache map[string]*map[string]interface{}
 
 func (c *Cache) Database(dbname string) DatabaseCache {
@@ -446,66 +408,6 @@ type Etcd struct {
 	Res  *clientv3.TxnResponse
 }
 
-type EventKeyValue struct {
-	Key            string `json:"key"`
-	CreateRevision int64  `json:"create_revision"`
-	ModRevision    int64  `json:"mod_revision"`
-	Version        int64  `json:"version"`
-	Value          string `json:"value"`
-	Lease          int64  `json:"lease"`
-}
-
-func NewEventKeyValue(kv *mvccpb.KeyValue) *EventKeyValue {
-	if kv == nil {
-		return nil
-	}
-	return &EventKeyValue{
-		Key:            string(kv.Key),
-		CreateRevision: kv.CreateRevision,
-		ModRevision:    kv.ModRevision,
-		Version:        kv.Version,
-		Value:          string(kv.Value),
-		Lease:          kv.Lease,
-	}
-}
-
-type Event struct {
-	Type   string         `json:"type"`
-	Kv     *EventKeyValue `json:"kv"`
-	PrevKv *EventKeyValue `json:"prev_kv"`
-}
-
-func NewEvent(ev *clientv3.Event) Event {
-	return Event{
-		Type:   string(ev.Type),
-		Kv:     NewEventKeyValue(ev.Kv),
-		PrevKv: NewEventKeyValue(ev.PrevKv),
-	}
-}
-
-type EventList []Event
-
-func NewEventList(events []*clientv3.Event) EventList {
-	printable := EventList{}
-	for _, ev := range events {
-		if ev != nil {
-			printable = append(printable, NewEvent(ev))
-		}
-	}
-	return printable
-}
-
-func (evList EventList) String() string {
-	b, _ := json.Marshal(evList)
-	return string(b)
-}
-
-func NewEtcd(parent *Etcd) *Etcd {
-	return &Etcd{
-		Ctx: parent.Ctx,
-		Cli: parent.Cli,
-	}
-}
 func (etcd *Etcd) Clear() {
 	etcd.If = []clientv3.Cmp{}
 	etcd.Then = []clientv3.Op{}
@@ -592,17 +494,28 @@ func (txn *Transaction) AddSchema(databaseSchema *libovsdb.DatabaseSchema) {
 func (txn *Transaction) Commit() (int64, error) {
 	var err error
 
-	/* verify that select is not intermixed with other operations */
+	/* verify that "select" is not intermixed with write operations */
 	hasSelect := false
-	hasOther := false
+	hasWrite := false
+Loop:
 	for _, ovsOp := range txn.request.Operations {
-		if ovsOp.Op == OP_SELECT {
+		switch ovsOp.Op {
+		case OP_SELECT:
 			hasSelect = true
-		} else {
-			hasOther = true
+			if hasWrite {
+				break Loop
+			}
+		case OP_DELETE, OP_MUTATE, OP_UPDATE, OP_INSERT:
+			hasWrite = true
+			if hasSelect {
+				break Loop
+			}
+		default:
+			// do nothing, operations like OP_WAIT, OP_COMMIT, OP_ABORT, OP_COMMENT, and OP_ASSERT are compatible
+			// with OP_SELECT, despite that there is no sense to combine them together (e.g. OP_COMMIT)
 		}
 	}
-	if hasSelect && hasOther {
+	if hasSelect && hasWrite {
 		err := errors.New(E_CONSTRAINT_VIOLATION)
 		txn.log.Error(err, "Can't mix select with other operations")
 		errStr := err.Error()
@@ -626,8 +539,7 @@ func (txn *Transaction) Commit() (int64, error) {
 			panic(fmt.Sprintf("validation of %s failed: %s", ovsOp, err.Error()))
 		}
 	}
-	// TODO: What is this transaction?
-	_, err = txn.etcdTranaction()
+	_, err = txn.etcdTransaction()
 	if err != nil {
 		errStr := err.Error()
 		txn.response.Error = &errStr
@@ -651,7 +563,7 @@ func (txn *Transaction) Commit() (int64, error) {
 	}
 
 	txn.etcdRemoveDup()
-	trResponse, err := txn.etcdTranaction()
+	trResponse, err := txn.etcdTransaction()
 	if err != nil {
 		errStr := err.Error()
 		txn.response.Error = &errStr
@@ -1523,7 +1435,6 @@ func etcdGetByWhere(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libo
 	etcdGetData(txn, &key)
 	return nil
 }
-
 
 func etcdCreateRow(txn *Transaction, k *common.Key, row *map[string]interface{}) error {
 	key := k.String()
