@@ -191,6 +191,7 @@ func etcdOpKey(op clientv3.Op) string {
 func (txn *Transaction) etcdRemoveDupThen() {
 	newThen := []*clientv3.Op{}
 	for curr, op := range txn.etcd.Then {
+		// TODO what do we do here ?
 		etcdOpKey(op)
 		//	txn.log.V(6).Info("[then] adding key", "key", key, "index", curr)
 		newThen = append(newThen, &txn.etcd.Then[curr])
@@ -620,10 +621,12 @@ func (txn *Transaction) Commit() (int64, error) {
 			return -1, err
 		}
 
+		// TODO do we need this validation
 		if err = txn.cache.Validate(txn, txn.schemas); err != nil {
 			panic(fmt.Sprintf("validation of %s failed: %s", ovsOp, err.Error()))
 		}
 	}
+	// TODO: What is this transaction?
 	_, err = txn.etcdTranaction()
 	if err != nil {
 		errStr := err.Error()
@@ -1521,68 +1524,6 @@ func etcdGetByWhere(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libo
 	return nil
 }
 
-func etcdEventIsCreate(ev *clientv3.Event) bool {
-	if ev.Type != mvccpb.PUT {
-		return false
-	}
-	return ev.Kv.CreateRevision == ev.Kv.ModRevision
-}
-
-func etcdEventIsModify(ev *clientv3.Event) bool {
-	if ev.Type != mvccpb.PUT {
-		return false
-	}
-	return ev.Kv.CreateRevision < ev.Kv.ModRevision
-}
-
-func etcdEventCreateFromModify(ev *clientv3.Event) *clientv3.Event {
-	key := string(ev.Kv.Key)
-	val := string(ev.Kv.Value)
-	return etcdEventCreate(key, val)
-}
-
-func etcdEventCreate(key, val string) *clientv3.Event {
-	return &clientv3.Event{
-		Type: mvccpb.PUT,
-		Kv: &mvccpb.KeyValue{
-			Key:            []byte(key),
-			Value:          []byte(val),
-			CreateRevision: 1,
-			ModRevision:    1,
-		},
-	}
-
-}
-
-func etcdEventModify(key, val, prevVal string) *clientv3.Event {
-	return &clientv3.Event{
-		Type: mvccpb.PUT,
-		Kv: &mvccpb.KeyValue{
-			Key:            []byte(key),
-			Value:          []byte(val),
-			CreateRevision: 1,
-			ModRevision:    2,
-		},
-		PrevKv: &mvccpb.KeyValue{
-			Key:            []byte(key),
-			Value:          []byte(prevVal),
-			CreateRevision: 1,
-			ModRevision:    1,
-		},
-	}
-}
-
-func etcdEventDelete(key, prevVal string) *clientv3.Event {
-	return &clientv3.Event{
-		Type: mvccpb.DELETE,
-		PrevKv: &mvccpb.KeyValue{
-			Key:            []byte(key),
-			Value:          []byte(prevVal),
-			CreateRevision: 1,
-			ModRevision:    1,
-		},
-	}
-}
 
 func etcdCreateRow(txn *Transaction, k *common.Key, row *map[string]interface{}) error {
 	key := k.String()
