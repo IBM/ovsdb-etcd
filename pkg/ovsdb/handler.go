@@ -66,13 +66,20 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	txn := NewTransaction(ch.etcdClient, log, ovsReq)
 	txn.schemas = ch.db.GetSchemas()
 	monitor, thereIsMonitor := ch.monitors[txn.request.DBName]
+
 	// temporary solution to provide consistency
-	ch.db.DbLock(ovsReq.DBName)
+	err = txn.lockTables()
+	if err != nil {
+		return nil, err
+	}
 	if thereIsMonitor {
 		monitor.tQueue.startTransaction()
 	}
 	rev, err := txn.Commit()
-	ch.db.DbUnlock(ovsReq.DBName)
+	if err != nil {
+		return nil, err
+	}
+	err = txn.unLockTables()
 	if err != nil {
 		return nil, err
 	}

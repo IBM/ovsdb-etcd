@@ -7,10 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/ibm/ovsdb-etcd/pkg/types/_Server"
-
 	"github.com/go-logr/logr"
+	"github.com/google/uuid"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
@@ -18,6 +16,7 @@ import (
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
+	"github.com/ibm/ovsdb-etcd/pkg/types/_Server"
 )
 
 type Databaser interface {
@@ -29,15 +28,12 @@ type Databaser interface {
 	GetData(keys []common.Key) (*clientv3.TxnResponse, error)
 	PutData(ctx context.Context, key common.Key, obj interface{}) error
 	GetSchema(name string) map[string]interface{}
-	DbLock(dbName string)
-	DbUnlock(dbName string)
 }
 
 type DatabaseEtcd struct {
 	cli        *clientv3.Client
 	Schemas    libovsdb.Schemas // dataBaseName -> schema
 	strSchemas map[string]map[string]interface{}
-	locks      map[string]*sync.Mutex
 	mu         sync.Mutex
 }
 
@@ -87,15 +83,7 @@ func NewEtcdClient(endpoints []string) (*clientv3.Client, error) {
 
 func NewDatabaseEtcd(cli *clientv3.Client) (Databaser, error) {
 	return &DatabaseEtcd{cli: cli,
-		Schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}, locks: map[string]*sync.Mutex{}}, nil
-}
-
-func (con *DatabaseEtcd) DbLock(dbName string) {
-	con.locks[dbName].Lock()
-}
-
-func (con *DatabaseEtcd) DbUnlock(dbName string) {
-	con.locks[dbName].Unlock()
+		Schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}}, nil
 }
 
 func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error) {
@@ -127,7 +115,7 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 	schemaName := schemaMap["name"].(string)
 	con.mu.Lock()
 	con.strSchemas[schemaName] = schemaMap
-	con.locks[schemaName] = &sync.Mutex{}
+	//con.locks[schemaName] = &sync.Mutex{}
 	con.mu.Unlock()
 	schemaSet, err := libovsdb.NewOvsSet(string(data))
 	srv := _Server.Database{Model: "standalone", Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
@@ -368,6 +356,3 @@ func (con *DatabaseMock) CreateMonitor(dbName string, handler *Handler, log logr
 	m.cancel = cancel
 	return m
 }
-
-func (con *DatabaseMock) DbLock(dbName string)   {}
-func (con *DatabaseMock) DbUnlock(dbName string) {}
