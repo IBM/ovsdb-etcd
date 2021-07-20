@@ -6,7 +6,7 @@ SERVER_FILES := \
 	$(ROOT_DIR)/pkg/cmd/server/testdata.go
 
 CACHE := /tmp/.cache
-ETCD_VERSION ?= v3.4.16
+ETCD_VERSION ?= v3.5.0
 ETCD_PACKAGE := etcd-${ETCD_VERSION}-linux-amd64
 ETCD_TAR := ${ETCD_PACKAGE}.tar.gz
 ETCD_URL := https://github.com/coreos/etcd/releases/download/${ETCD_VERSION}/${ETCD_TAR}
