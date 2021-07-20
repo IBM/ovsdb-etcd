@@ -6,10 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go.etcd.io/etcd/client/v3/concurrency"
 	"reflect"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -428,17 +428,9 @@ func (etcd *Etcd) Commit() error {
 	return nil
 }
 
-type TxnLock struct {
-	root      sync.Mutex
-	databases map[string]*sync.Mutex
-}
-
 type Transaction struct {
 	/* logger */
 	log logr.Logger
-
-	/* lock */
-	lock *TxnLock
 
 	/* ovs */
 	schemas  libovsdb.Schemas
@@ -451,6 +443,9 @@ type Transaction struct {
 
 	/* etcd */
 	etcd *Etcd
+
+	/* session for tables locks */
+	session *concurrency.Session
 }
 
 func NewTransaction(cli *clientv3.Client, log logr.Logger, request *libovsdb.Transact) *Transaction {
@@ -572,6 +567,44 @@ Loop:
 
 	txn.log.V(5).Info("commit transaction", "response", txn.response)
 	return trResponse.Header.Revision, nil
+}
+
+func (txn *Transaction) lockTables() error {
+	var tables []string
+	tMap := make(map[string]bool)
+	for _, op := range txn.request.Operations {
+		switch op.Op {
+		case OP_INSERT, OP_UPDATE, OP_MUTATE, OP_DELETE, OP_SELECT:
+			if _, value := tMap[*op.Table]; !value {
+				tMap[*op.Table] = true
+				tables = append(tables, *op.Table)
+			}
+		default:
+			// do nothing
+		}
+	}
+	if len(tables) > 0 {
+		// we have to sort to prevent deadlocks
+		sort.Strings(tables)
+		session, err := concurrency.NewSession(txn.etcd.Cli, concurrency.WithContext(txn.etcd.Ctx))
+		if err != nil {
+			return err
+		}
+		txn.session = session
+		for _, table := range tables {
+			key := common.NewLockKey("__" + table)
+			mutex := concurrency.NewMutex(session, key.String())
+			mutex.Lock(txn.etcd.Ctx)
+		}
+	}
+	return nil
+}
+
+func (txn *Transaction) unLockTables() error {
+	if txn.session != nil {
+		return txn.session.Close()
+	}
+	return nil
 }
 
 // XXX: move to db
@@ -1848,7 +1881,7 @@ func preComment(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb
 
 func doComment(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) error {
 	timestamp := time.Now().Format(time.RFC3339)
-	key := common.NewCommentKey(timestamp)
+	key := common.NewCommentKey(txn.request.DBName, timestamp)
 	comment := *ovsOp.Comment
 	etcdOp := clientv3.OpPut(key.String(), comment)
 	txn.etcd.Then = append(txn.etcd.Then, etcdOp)
