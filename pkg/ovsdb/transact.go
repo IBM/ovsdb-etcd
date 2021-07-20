@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go.etcd.io/etcd/client/v3/concurrency"
 	"reflect"
 	"sort"
 	"strings"
@@ -17,6 +16,7 @@ import (
 	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.etcd.io/etcd/client/v3/concurrency"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
@@ -217,13 +217,13 @@ func (txn *Transaction) etcdTransaction() (*clientv3.TxnResponse, error) {
 	}
 	txn.cache.GetFromEtcd(txn.etcd.Res)
 
-	err := txn.cache.Unmarshal(txn, txn.schemas)
+	err := txn.cache.Unmarshal(txn.log, txn.schemas)
 	if err != nil {
 		txn.log.Error(err, "cache unmarshal")
 		return nil, err
 	}
 
-	err = txn.cache.Validate(txn, txn.schemas)
+	err = txn.cache.Validate(txn.log, txn.schemas)
 	if err != nil {
 		xErr := errors.New(E_CONSTRAINT_VIOLATION)
 		txn.log.Error(err, "cache validate")
@@ -288,13 +288,13 @@ func (cache *Cache) GetFromEtcd(res *clientv3.TxnResponse) {
 	}
 }
 
-func (cache *Cache) Unmarshal(txn *Transaction, schemas libovsdb.Schemas) error {
+func (cache *Cache) Unmarshal(log logr.Logger, schemas libovsdb.Schemas) error {
 	for database, databaseCache := range *cache {
 		for table, tableCache := range databaseCache {
 			for _, row := range tableCache {
 				err := schemas.Unmarshal(database, table, row)
 				if err != nil {
-					txn.log.Error(err, "failed schema unmarshal")
+					log.Error(err, "failed schema unmarshal")
 					return err
 				}
 			}
@@ -303,13 +303,13 @@ func (cache *Cache) Unmarshal(txn *Transaction, schemas libovsdb.Schemas) error 
 	return nil
 }
 
-func (cache *Cache) Validate(txn *Transaction, schemas libovsdb.Schemas) error {
+func (cache *Cache) Validate(log logr.Logger, schemas libovsdb.Schemas) error {
 	for database, databaseCache := range *cache {
 		for table, tableCache := range databaseCache {
 			for _, row := range tableCache {
 				err := schemas.Validate(database, table, row)
 				if err != nil {
-					txn.log.Error(err, "failed schema validate")
+					log.Error(err, "failed schema validate")
 					return err
 				}
 			}
@@ -320,12 +320,12 @@ func (cache *Cache) Validate(txn *Transaction, schemas libovsdb.Schemas) error {
 
 type MapUUID map[string]string
 
-func (mapUUID MapUUID) Set(txn *Transaction, uuidName, uuid string) {
-	txn.log.V(6).Info("set named-uuid", "uuid-name", uuidName, "uuid", uuid)
+func (mapUUID MapUUID) Set(uuidName, uuid string, log logr.Logger) {
+	log.V(6).Info("set named-uuid", "uuid-name", uuidName, "uuid", uuid)
 	mapUUID[uuidName] = uuid
 }
 
-func (mapUUID MapUUID) Get(log logr.Logger, uuidName string) (string, error) {
+func (mapUUID MapUUID) Get(uuidName string, log logr.Logger) (string, error) {
 	uuid, ok := mapUUID[uuidName]
 	if !ok {
 		err := errors.New(E_CONSTRAINT_VIOLATION)
@@ -335,10 +335,10 @@ func (mapUUID MapUUID) Get(log logr.Logger, uuidName string) (string, error) {
 	return uuid, nil
 }
 
-func (mapUUID MapUUID) ResolvUUID(log logr.Logger, value interface{}) (interface{}, error) {
+func (mapUUID MapUUID) ResolvUUID(value interface{}, log logr.Logger) (interface{}, error) {
 	namedUuid, _ := value.(libovsdb.UUID)
 	if namedUuid.GoUUID != "" && namedUuid.ValidateUUID() != nil {
-		uuid, err := mapUUID.Get(log, namedUuid.GoUUID)
+		uuid, err := mapUUID.Get(namedUuid.GoUUID, log)
 		if err != nil {
 			return nil, err
 		}
@@ -347,11 +347,11 @@ func (mapUUID MapUUID) ResolvUUID(log logr.Logger, value interface{}) (interface
 	return value, nil
 }
 
-func (mapUUID MapUUID) ResolvSet(log logr.Logger, value interface{}) (interface{}, error) {
+func (mapUUID MapUUID) ResolvSet(value interface{}, log logr.Logger) (interface{}, error) {
 	oldset, _ := value.(libovsdb.OvsSet)
 	newset := libovsdb.OvsSet{}
 	for _, oldval := range oldset.GoSet {
-		newval, err := mapUUID.ResolvUUID(log, oldval)
+		newval, err := mapUUID.ResolvUUID(oldval, log)
 		if err != nil {
 			return nil, err
 		}
@@ -360,11 +360,11 @@ func (mapUUID MapUUID) ResolvSet(log logr.Logger, value interface{}) (interface{
 	return newset, nil
 }
 
-func (mapUUID MapUUID) ResolvMap(log logr.Logger, value interface{}) (interface{}, error) {
+func (mapUUID MapUUID) ResolvMap(value interface{}, log logr.Logger) (interface{}, error) {
 	oldmap, _ := value.(libovsdb.OvsMap)
 	newmap := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}
 	for key, oldval := range oldmap.GoMap {
-		newval, err := mapUUID.ResolvUUID(log, oldval)
+		newval, err := mapUUID.ResolvUUID(oldval, log)
 		if err != nil {
 			return nil, err
 		}
@@ -373,22 +373,22 @@ func (mapUUID MapUUID) ResolvMap(log logr.Logger, value interface{}) (interface{
 	return newmap, nil
 }
 
-func (mapUUID MapUUID) Resolv(log logr.Logger, value interface{}) (interface{}, error) {
+func (mapUUID MapUUID) Resolv(value interface{}, log logr.Logger) (interface{}, error) {
 	switch value.(type) {
 	case libovsdb.UUID:
-		return mapUUID.ResolvUUID(log, value)
+		return mapUUID.ResolvUUID(value, log)
 	case libovsdb.OvsSet:
-		return mapUUID.ResolvSet(log, value)
+		return mapUUID.ResolvSet(value, log)
 	case libovsdb.OvsMap:
-		return mapUUID.ResolvMap(log, value)
+		return mapUUID.ResolvMap(value, log)
 	default:
 		return value, nil
 	}
 }
 
-func (mapUUID MapUUID) ResolvRow(log logr.Logger, row *map[string]interface{}) error {
+func (mapUUID MapUUID) ResolvRow(row *map[string]interface{}, log logr.Logger) error {
 	for column, value := range *row {
-		value, err := mapUUID.Resolv(log, value)
+		value, err := mapUUID.Resolv(value, log)
 		if err != nil {
 			return err
 		}
@@ -528,7 +528,7 @@ Loop:
 		}
 
 		// TODO do we need this validation
-		if err = txn.cache.Validate(txn, txn.schemas); err != nil {
+		if err = txn.cache.Validate(txn.log, txn.schemas); err != nil {
 			panic(fmt.Sprintf("validation of %s failed: %s", ovsOp, err.Error()))
 		}
 	}
@@ -550,7 +550,7 @@ Loop:
 			return -1, err
 		}
 
-		if err = txn.cache.Validate(txn, txn.schemas); err != nil {
+		if err = txn.cache.Validate(txn.log, txn.schemas); err != nil {
 			panic(fmt.Sprintf("validation of %s failed: %s", ovsOp, err.Error()))
 		}
 	}
@@ -631,7 +631,7 @@ func (txn *Transaction) getUUIDIfExists(tableSchema *libovsdb.TableSchema, mapUU
 		txn.log.Error(err, "failed to convert condition", "condition", cond1)
 		return "", err
 	}
-	condition, err := NewCondition(txn.log, tableSchema, mapUUID, cond2)
+	condition, err := NewCondition(tableSchema, mapUUID, cond2, txn.log)
 	if err != nil {
 		txn.log.Error(err, "failed to create condition", "condition", cond2)
 		return "", err
@@ -704,7 +704,7 @@ func (txn *Transaction) isRowSelectedByWhere(tableSchema *libovsdb.TableSchema, 
 }
 
 func (txn *Transaction) isRowSelectedByCond(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, row *map[string]interface{}, cond []interface{}) (bool, error) {
-	condition, err := NewCondition(txn.log, tableSchema, mapUUID, cond)
+	condition, err := NewCondition(tableSchema, mapUUID, cond, txn.log)
 	if err != nil {
 		return false, err
 	}
@@ -730,7 +730,7 @@ func (txn *Transaction) RowMutate(tableSchema *libovsdb.TableSchema, mapUUID Map
 		return nil, err
 	}
 	for _, mt := range *mutations {
-		m, err := NewMutation(txn.log, tableSchema, mapUUID, mt.([]interface{}))
+		m, err := NewMutation(tableSchema, mapUUID, mt.([]interface{}), txn.log)
 		if err != nil {
 			return nil, err
 		}
@@ -870,7 +870,7 @@ func (txn *Transaction) RowPrepare(tableSchema *libovsdb.TableSchema, mapUUID Ma
 		return err
 	}
 
-	err = mapUUID.ResolvRow(txn.log, row)
+	err = mapUUID.ResolvRow(row, txn.log)
 	if err != nil {
 		err = errors.New(E_CONSTRAINT_VIOLATION)
 		log.Error(err, "failed to resolve uuid of row")
@@ -903,7 +903,7 @@ func preInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 			txn.log.Error(err, "duplicate uuid-name", "uuid-name", *ovsOp.UUIDName)
 			return err
 		}
-		txn.mapUUID.Set(txn, *ovsOp.UUIDName, uuid)
+		txn.mapUUID.Set(*ovsOp.UUIDName, uuid, txn.log)
 	}
 
 	key := common.NewTableKey(txn.request.DBName, *ovsOp.Table)
@@ -924,7 +924,7 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 	}
 
 	if ovsOp.UUIDName != nil {
-		uuid, err = txn.mapUUID.Get(txn.log, *ovsOp.UUIDName)
+		uuid, err = txn.mapUUID.Get(*ovsOp.UUIDName, txn.log)
 		if err != nil {
 			txn.log.Error(err, "can't find uuid-name", "uuid-name", *ovsOp.UUIDName)
 			return err

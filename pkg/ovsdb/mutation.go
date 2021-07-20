@@ -27,7 +27,7 @@ type Mutation struct {
 	Log          logr.Logger
 }
 
-func NewMutation(log logr.Logger, tableSchema *libovsdb.TableSchema, mapUUID MapUUID, mutation []interface{}) (*Mutation, error) {
+func NewMutation(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, mutation []interface{}, log logr.Logger) (*Mutation, error) {
 	var err error
 	if len(mutation) != 3 {
 		err = errors.New(E_CONSTRAINT_VIOLATION)
@@ -65,7 +65,7 @@ func NewMutation(log logr.Logger, tableSchema *libovsdb.TableSchema, mapUUID Map
 		return nil, err
 	}
 
-	value, err = mapUUID.Resolv(log, value)
+	value, err = mapUUID.Resolv(value, log)
 	if err != nil {
 		err = errors.New(E_CONSTRAINT_VIOLATION)
 		log.Error(err, "failed resolv-namedUUID of column", "column", column)
