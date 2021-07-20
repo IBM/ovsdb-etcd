@@ -27,7 +27,7 @@ type Condition struct {
 	Log          logr.Logger
 }
 
-func NewCondition(log logr.Logger, tableSchema *libovsdb.TableSchema, mapUUID MapUUID, condition []interface{}) (*Condition, error) {
+func NewCondition(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, condition []interface{}, log logr.Logger) (*Condition, error) {
 	var err error
 	if len(condition) != 3 {
 		err = errors.New(E_INTERNAL_ERROR)
@@ -75,7 +75,7 @@ func NewCondition(log logr.Logger, tableSchema *libovsdb.TableSchema, mapUUID Ma
 		value = tmp
 	}
 
-	tmp, err := mapUUID.Resolv(log, value)
+	tmp, err := mapUUID.Resolv(value, log)
 	if err != nil {
 		err := errors.New(E_INTERNAL_ERROR)
 		log.Error(err, "failed to resolve named-uuid condition", "column", column, "value", value)
