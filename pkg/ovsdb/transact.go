@@ -22,8 +22,6 @@ import (
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 )
 
-const ETCD_MAX_TXN_OPS = 128
-
 const (
 	/* ovsdb operations */
 	E_DUP_UUIDNAME         = "duplicate uuid-name"
@@ -181,7 +179,7 @@ const (
 	OP_ASSERT  = "assert"
 )
 
-// etcd doesn't allow modification of the same ke in the same transaction.
+// etcd doesn't allow modification of the same key in a single transaction.
 // we have to validate correctness of this operation removing.
 func (txn *Transaction) etcdRemoveDupThen() {
 	duplicatedKeys := map[int]int{}
@@ -327,20 +325,20 @@ func (mapUUID MapUUID) Set(txn *Transaction, uuidName, uuid string) {
 	mapUUID[uuidName] = uuid
 }
 
-func (mapUUID MapUUID) Get(txn *Transaction, uuidName string) (string, error) {
+func (mapUUID MapUUID) Get(log logr.Logger, uuidName string) (string, error) {
 	uuid, ok := mapUUID[uuidName]
 	if !ok {
 		err := errors.New(E_CONSTRAINT_VIOLATION)
-		txn.log.Error(err, "can't get named-uuid", "uuid-name", uuidName)
+		log.Error(err, "can't get named-uuid", "uuid-name", uuidName)
 		return "", err
 	}
 	return uuid, nil
 }
 
-func (mapUUID MapUUID) ResolvUUID(txn *Transaction, value interface{}) (interface{}, error) {
+func (mapUUID MapUUID) ResolvUUID(log logr.Logger, value interface{}) (interface{}, error) {
 	namedUuid, _ := value.(libovsdb.UUID)
 	if namedUuid.GoUUID != "" && namedUuid.ValidateUUID() != nil {
-		uuid, err := mapUUID.Get(txn, namedUuid.GoUUID)
+		uuid, err := mapUUID.Get(log, namedUuid.GoUUID)
 		if err != nil {
 			return nil, err
 		}
@@ -349,11 +347,11 @@ func (mapUUID MapUUID) ResolvUUID(txn *Transaction, value interface{}) (interfac
 	return value, nil
 }
 
-func (mapUUID MapUUID) ResolvSet(txn *Transaction, value interface{}) (interface{}, error) {
+func (mapUUID MapUUID) ResolvSet(log logr.Logger, value interface{}) (interface{}, error) {
 	oldset, _ := value.(libovsdb.OvsSet)
 	newset := libovsdb.OvsSet{}
 	for _, oldval := range oldset.GoSet {
-		newval, err := mapUUID.ResolvUUID(txn, oldval)
+		newval, err := mapUUID.ResolvUUID(log, oldval)
 		if err != nil {
 			return nil, err
 		}
@@ -362,11 +360,11 @@ func (mapUUID MapUUID) ResolvSet(txn *Transaction, value interface{}) (interface
 	return newset, nil
 }
 
-func (mapUUID MapUUID) ResolvMap(txn *Transaction, value interface{}) (interface{}, error) {
+func (mapUUID MapUUID) ResolvMap(log logr.Logger, value interface{}) (interface{}, error) {
 	oldmap, _ := value.(libovsdb.OvsMap)
 	newmap := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}
 	for key, oldval := range oldmap.GoMap {
-		newval, err := mapUUID.ResolvUUID(txn, oldval)
+		newval, err := mapUUID.ResolvUUID(log, oldval)
 		if err != nil {
 			return nil, err
 		}
@@ -375,22 +373,22 @@ func (mapUUID MapUUID) ResolvMap(txn *Transaction, value interface{}) (interface
 	return newmap, nil
 }
 
-func (mapUUID MapUUID) Resolv(txn *Transaction, value interface{}) (interface{}, error) {
+func (mapUUID MapUUID) Resolv(log logr.Logger, value interface{}) (interface{}, error) {
 	switch value.(type) {
 	case libovsdb.UUID:
-		return mapUUID.ResolvUUID(txn, value)
+		return mapUUID.ResolvUUID(log, value)
 	case libovsdb.OvsSet:
-		return mapUUID.ResolvSet(txn, value)
+		return mapUUID.ResolvSet(log, value)
 	case libovsdb.OvsMap:
-		return mapUUID.ResolvMap(txn, value)
+		return mapUUID.ResolvMap(log, value)
 	default:
 		return value, nil
 	}
 }
 
-func (mapUUID MapUUID) ResolvRow(txn *Transaction, row *map[string]interface{}) error {
+func (mapUUID MapUUID) ResolvRow(log logr.Logger, row *map[string]interface{}) error {
 	for column, value := range *row {
-		value, err := mapUUID.Resolv(txn, value)
+		value, err := mapUUID.Resolv(log, value)
 		if err != nil {
 			return err
 		}
@@ -625,331 +623,6 @@ func setRowVersion(row *map[string]interface{}) {
 	(*row)[libovsdb.COL_VERSION] = libovsdb.UUID{GoUUID: version}
 }
 
-const (
-	FN_LT = "<"
-	FN_LE = "<="
-	FN_EQ = "=="
-	FN_NE = "!="
-	FN_GE = ">="
-	FN_GT = ">"
-	FN_IN = "includes"
-	FN_EX = "excludes"
-)
-
-type Condition struct {
-	Column       string
-	Function     string
-	Value        interface{}
-	ColumnSchema *libovsdb.ColumnSchema
-	txn          *Transaction
-}
-
-func NewCondition(txn *Transaction, tableSchema *libovsdb.TableSchema, mapUUID MapUUID, condition []interface{}) (*Condition, error) {
-	var err error
-	if len(condition) != 3 {
-		err = errors.New(E_INTERNAL_ERROR)
-		txn.log.Error(err, "expected 3 elements in condition", "condition", condition)
-		return nil, err
-	}
-
-	column, ok := condition[0].(string)
-	if !ok {
-		err = errors.New(E_INTERNAL_ERROR)
-		txn.log.Error(err, "failed to convert column to string", "condition", condition)
-		return nil, err
-	}
-
-	columnSchema, err := tableSchema.LookupColumn(column)
-	if err != nil {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		txn.log.Error(err, "failed schema lookup", "column", column)
-		return nil, err
-	}
-
-	fn, ok := condition[1].(string)
-	if !ok {
-		err = errors.New(E_INTERNAL_ERROR)
-		txn.log.Error(err, "failed to convert function to string", "condition", condition)
-		return nil, err
-	}
-
-	value := condition[2]
-	if columnSchema != nil {
-		tmp, err := columnSchema.Unmarshal(value)
-		if err != nil {
-			err = errors.New(E_INTERNAL_ERROR)
-			txn.log.Error(err, "failed to unmarsahl condition", "column", column, "type", columnSchema.Type, "value", value)
-			return nil, err
-		}
-		value = tmp
-	} else if column == libovsdb.COL_UUID {
-		tmp, err := libovsdb.UnmarshalUUID(value)
-		if err != nil {
-			err = errors.New(E_INTERNAL_ERROR)
-			txn.log.Error(err, "failed to unamrshal condition", "column", column, "type", libovsdb.TypeUUID, "value", value)
-			return nil, err
-		}
-		value = tmp
-	}
-
-	tmp, err := mapUUID.Resolv(txn, value)
-	if err != nil {
-		err := errors.New(E_INTERNAL_ERROR)
-		txn.log.Error(err, "failed to resolve named-uuid condition", "column", column, "value", value)
-		return nil, err
-	}
-	value = tmp
-
-	return &Condition{
-		Column:       column,
-		Function:     fn,
-		Value:        value,
-		ColumnSchema: columnSchema,
-		txn:          txn,
-	}, nil
-}
-
-func (c *Condition) CompareInteger(row *map[string]interface{}) (bool, error) {
-	var err error
-	actual, ok := (*row)[c.Column].(int)
-	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		c.txn.log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
-		return false, err
-	}
-	fn := c.Function
-	expected, ok := c.Value.(int)
-	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		c.txn.log.Error(err, "failed to convert condition value", "value", c.Value)
-		return false, err
-	}
-	if (fn == FN_EQ || fn == FN_IN) && actual == expected {
-		return true, nil
-	}
-	if (fn == FN_NE || fn == FN_EX) && actual != expected {
-		return true, nil
-	}
-	if fn == FN_GT && actual > expected {
-		return true, nil
-	}
-	if fn == FN_GE && actual >= expected {
-		return true, nil
-	}
-	if fn == FN_LT && actual < expected {
-		return true, nil
-	}
-	if fn == FN_LE && actual <= expected {
-		return true, nil
-	}
-	return false, nil
-}
-
-func (c *Condition) CompareReal(row *map[string]interface{}) (bool, error) {
-	var err error
-	actual, ok := (*row)[c.Column].(float64)
-	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		c.txn.log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
-		return false, err
-	}
-	fn := c.Function
-	expected, ok := c.Value.(float64)
-	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		c.txn.log.Error(err, "failed to convert condition value", "value", c.Value)
-		return false, err
-	}
-
-	if (fn == FN_EQ || fn == FN_IN) && actual == expected {
-		return true, nil
-	}
-	if (fn == FN_NE || fn == FN_EX) && actual != expected {
-		return true, nil
-	}
-	if fn == FN_GT && actual > expected {
-		return true, nil
-	}
-	if fn == FN_GE && actual >= expected {
-		return true, nil
-	}
-	if fn == FN_LT && actual < expected {
-		return true, nil
-	}
-	if fn == FN_LE && actual <= expected {
-		return true, nil
-	}
-	return false, nil
-}
-
-func (c *Condition) CompareBoolean(row *map[string]interface{}) (bool, error) {
-	var err error
-	actual, ok := (*row)[c.Column].(bool)
-	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		c.txn.log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
-		return false, err
-	}
-	fn := c.Function
-	expected, ok := c.Value.(bool)
-	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		c.txn.log.Error(err, "failed to convert condition value", "value", c.Value)
-		return false, err
-	}
-
-	if (fn == FN_EQ || fn == FN_IN) && actual == expected {
-		return true, nil
-	}
-	if (fn == FN_NE || fn == FN_EX) && actual != expected {
-		return true, nil
-	}
-	return false, nil
-}
-
-func (c *Condition) CompareString(row *map[string]interface{}) (bool, error) {
-	var err error
-	actual, ok := (*row)[c.Column].(string)
-	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		c.txn.log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
-		return false, err
-	}
-	fn := c.Function
-	expected, ok := c.Value.(string)
-	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		c.txn.log.Error(err, "failed to convert condition value", "value", c.Value)
-		return false, err
-	}
-
-	if (fn == FN_EQ || fn == FN_IN) && actual == expected {
-		return true, nil
-	}
-	if (fn == FN_NE || fn == FN_EX) && actual != expected {
-		return true, nil
-	}
-	return false, nil
-}
-
-func (c *Condition) CompareUUID(row *map[string]interface{}) (bool, error) {
-	var err error
-	var actual libovsdb.UUID
-	ar, ok := (*row)[c.Column].([]interface{})
-	if ok {
-		actual = libovsdb.UUID{GoUUID: ar[1].(string)}
-	} else {
-		actual, ok = (*row)[c.Column].(libovsdb.UUID)
-		if !ok {
-			err = errors.New(E_CONSTRAINT_VIOLATION)
-			c.txn.log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
-			return false, err
-		}
-	}
-	fn := c.Function
-	expected, ok := c.Value.(libovsdb.UUID)
-	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		c.txn.log.Error(err, "failed to convert condition value", "value", c.Value)
-		return false, err
-	}
-
-	if (fn == FN_EQ || fn == FN_IN) && actual.GoUUID == expected.GoUUID {
-		return true, nil
-	}
-	if (fn == FN_NE || fn == FN_EX) && actual.GoUUID != expected.GoUUID {
-		return true, nil
-	}
-	return false, nil
-}
-
-func (c *Condition) CompareEnum(row *map[string]interface{}) (bool, error) {
-	var err error
-	switch c.ColumnSchema.TypeObj.Key.Type {
-	case libovsdb.TypeString:
-		return c.CompareString(row)
-	default:
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		c.txn.log.Error(err, "does not support type as enum key", "type", c.ColumnSchema.TypeObj.Key.Type)
-		return false, err
-	}
-}
-
-func (c *Condition) CompareSet(row *map[string]interface{}) (bool, error) {
-	var err error
-	actual, ok := (*row)[c.Column].(libovsdb.OvsSet)
-	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		c.txn.log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
-		return false, err
-	}
-	fn := c.Function
-	expected, ok := c.Value.(libovsdb.OvsSet)
-	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		c.txn.log.Error(err, "failed to convert condition value", "value", c.Value)
-		return false, err
-	}
-
-	if (fn == FN_EQ || fn == FN_IN) && isEqualSet(actual, expected) {
-		return true, nil
-	}
-	if (fn == FN_NE || fn == FN_EX) && !isEqualSet(actual, expected) {
-		return true, nil
-	}
-	return false, nil
-}
-
-func (c *Condition) CompareMap(row *map[string]interface{}) (bool, error) {
-	var err error
-	actual, ok := (*row)[c.Column].(libovsdb.OvsMap)
-	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		c.txn.log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
-		return false, err
-	}
-	fn := c.Function
-	expected, ok := c.Value.(libovsdb.OvsMap)
-	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		c.txn.log.Error(err, "failed to convert condition value", "value", c.Value)
-		return false, err
-	}
-
-	if (fn == FN_EQ || fn == FN_IN) && isEqualMap(actual, expected) {
-		return true, nil
-	}
-	if (fn == FN_NE || fn == FN_EX) && !isEqualMap(actual, expected) {
-		return true, nil
-	}
-	return false, nil
-}
-
-func (c *Condition) Compare(row *map[string]interface{}) (bool, error) {
-	switch c.ColumnSchema.Type {
-	case libovsdb.TypeInteger:
-		return c.CompareInteger(row)
-	case libovsdb.TypeReal:
-		return c.CompareReal(row)
-	case libovsdb.TypeBoolean:
-		return c.CompareBoolean(row)
-	case libovsdb.TypeString:
-		return c.CompareString(row)
-	case libovsdb.TypeUUID:
-		return c.CompareUUID(row)
-	case libovsdb.TypeEnum:
-		return c.CompareEnum(row)
-	case libovsdb.TypeSet:
-		return c.CompareSet(row)
-	case libovsdb.TypeMap:
-		return c.CompareMap(row)
-	default:
-		err := errors.New(E_CONSTRAINT_VIOLATION)
-		c.txn.log.Error(err, "usupported type comparison", "type", c.ColumnSchema.Type)
-		return false, err
-	}
-}
-
 func (txn *Transaction) getUUIDIfExists(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, cond1 interface{}) (string, error) {
 	var err error
 	cond2, ok := cond1.([]interface{})
@@ -958,7 +631,7 @@ func (txn *Transaction) getUUIDIfExists(tableSchema *libovsdb.TableSchema, mapUU
 		txn.log.Error(err, "failed to convert condition", "condition", cond1)
 		return "", err
 	}
-	condition, err := NewCondition(txn, tableSchema, mapUUID, cond2)
+	condition, err := NewCondition(txn.log, tableSchema, mapUUID, cond2)
 	if err != nil {
 		txn.log.Error(err, "failed to create condition", "condition", cond2)
 		return "", err
@@ -1031,7 +704,7 @@ func (txn *Transaction) isRowSelectedByWhere(tableSchema *libovsdb.TableSchema, 
 }
 
 func (txn *Transaction) isRowSelectedByCond(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, row *map[string]interface{}, cond []interface{}) (bool, error) {
-	condition, err := NewCondition(txn, tableSchema, mapUUID, cond)
+	condition, err := NewCondition(txn.log, tableSchema, mapUUID, cond)
 	if err != nil {
 		return false, err
 	}
@@ -1049,318 +722,6 @@ func reduceRowByColumns(row *map[string]interface{}, columns *[]string) (*map[st
 	return &newRow, nil
 }
 
-const (
-	MT_SUM        = "+="
-	MT_DIFFERENCE = "-="
-	MT_PRODUCT    = "*="
-	MT_QUOTIENT   = "/="
-	MT_REMAINDER  = "%="
-	MT_INSERT     = "insert"
-	MT_DELETE     = "delete"
-)
-
-type Mutation struct {
-	Column       string
-	Mutator      string
-	Value        interface{}
-	ColumnSchema *libovsdb.ColumnSchema
-	txn          *Transaction
-}
-
-func NewMutation(txn *Transaction, tableSchema *libovsdb.TableSchema, mapUUID MapUUID, mutation []interface{}) (*Mutation, error) {
-	var err error
-	if len(mutation) != 3 {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		txn.log.Error(err, "expected 3 items in mutation object", "mutation", mutation)
-		return nil, err
-	}
-
-	column, ok := mutation[0].(string)
-	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		txn.log.Error(err, "can't convert mutation column", mutation[0])
-		return nil, err
-	}
-
-	columnSchema, err := tableSchema.LookupColumn(column)
-	if err != nil {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		txn.log.Error(err, "can't find column schema", "column", column)
-		return nil, err
-	}
-
-	mt, ok := mutation[1].(string)
-	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		txn.log.Error(err, "can't convert mutation mutator", "mutator", mutation[1])
-		return nil, err
-	}
-
-	value := mutation[2]
-
-	value, err = columnSchema.Unmarshal(value)
-	if err != nil {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		txn.log.Error(err, "failed unmarshal of column", "column", column)
-		return nil, err
-	}
-
-	value, err = mapUUID.Resolv(txn, value)
-	if err != nil {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		txn.log.Error(err, "failed resolv-namedUUID of column", "column", column)
-		return nil, err
-	}
-
-	err = columnSchema.Validate(value)
-	if err != nil {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		txn.log.Error(err, "failed validate of column", "column", column)
-		return nil, err
-	}
-
-	return &Mutation{
-		Column:       column,
-		Mutator:      mt,
-		Value:        value,
-		ColumnSchema: columnSchema,
-		txn:          txn,
-	}, nil
-}
-
-func (m *Mutation) MutateInteger(row *map[string]interface{}) error {
-	var err error
-	original := (*row)[m.Column].(int)
-	value, ok := m.Value.(int)
-	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		m.txn.log.Error(err, "can't convert mutation value", "value", m.Value)
-		return err
-	}
-	mutated := original
-	switch m.Mutator {
-	case MT_SUM:
-		mutated += value
-	case MT_DIFFERENCE:
-		mutated -= value
-	case MT_PRODUCT:
-		mutated *= value
-	case MT_QUOTIENT:
-		if value != 0 {
-			mutated /= value
-		} else {
-			err = errors.New(E_DOMAIN_ERROR)
-			m.txn.log.Error(err, "can't devide by 0")
-			return err
-		}
-	case MT_REMAINDER:
-		if value != 0 {
-			mutated %= value
-		} else {
-			err = errors.New(E_DOMAIN_ERROR)
-			m.txn.log.Error(err, "can't modulo by 0")
-			return err
-		}
-	default:
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		m.txn.log.Error(err, "unsupported mutator", "mutator", m.Mutator)
-		return err
-	}
-	(*row)[m.Column] = mutated
-	return nil
-}
-
-func (m *Mutation) MutateReal(row *map[string]interface{}) error {
-	var err error
-	original := (*row)[m.Column].(float64)
-	value, ok := m.Value.(float64)
-	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		m.txn.log.Error(err, "failed to convert mutation value", "value", m.Value)
-		return err
-	}
-	mutated := original
-	switch m.Mutator {
-	case MT_SUM:
-		mutated += value
-	case MT_DIFFERENCE:
-		mutated -= value
-	case MT_PRODUCT:
-		mutated *= value
-	case MT_QUOTIENT:
-		if value != 0 {
-			mutated /= value
-		} else {
-			err = errors.New(E_DOMAIN_ERROR)
-			m.txn.log.Error(err, "can't devide by 0")
-			return err
-		}
-	default:
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		m.txn.log.Error(err, "unsupported mutator", "mutator", m.Mutator)
-		return err
-	}
-	(*row)[m.Column] = mutated
-	return nil
-}
-
-func inSet(set *libovsdb.OvsSet, a interface{}) bool {
-	for _, b := range set.GoSet {
-		if isEqualValue(a, b) {
-			return true
-		}
-	}
-	return false
-}
-
-func (m *Mutation) insertToSet(original *libovsdb.OvsSet, toInsert interface{}) (*libovsdb.OvsSet, error) {
-	var err error
-	toInsertSet, ok := toInsert.(libovsdb.OvsSet)
-	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		m.txn.log.Error(err, "failed to convert mutation value", "value", toInsert)
-		return nil, err
-	}
-	mutated := new(libovsdb.OvsSet)
-	copier.Copy(mutated, original)
-	for _, v := range toInsertSet.GoSet {
-		if !inSet(original, v) {
-			mutated.GoSet = append(mutated.GoSet, v)
-		}
-	}
-	return mutated, nil
-}
-
-func (m *Mutation) deleteFromSet(original *libovsdb.OvsSet, toDelete interface{}) (*libovsdb.OvsSet, error) {
-	var err error
-	toDeleteSet, ok := toDelete.(libovsdb.OvsSet)
-	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		m.txn.log.Error(err, "failed to convert mutation value", "value", toDelete)
-		return nil, err
-	}
-	mutated := new(libovsdb.OvsSet)
-	for _, current := range original.GoSet {
-		found := false
-		for _, v := range toDeleteSet.GoSet {
-			if isEqualValue(current, v) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			mutated.GoSet = append(mutated.GoSet, current)
-		}
-	}
-	return mutated, nil
-}
-
-func (m *Mutation) MutateSet(row *map[string]interface{}) error {
-	original := (*row)[m.Column].(libovsdb.OvsSet)
-	var mutated *libovsdb.OvsSet
-	var err error
-	switch m.Mutator {
-	case MT_INSERT:
-		mutated, err = m.insertToSet(&original, m.Value)
-	case MT_DELETE:
-		mutated, err = m.deleteFromSet(&original, m.Value)
-	default:
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		m.txn.log.Error(err, "unsupported mutation mutator:", "mutator", m.Mutator)
-	}
-	if err != nil {
-		return err
-	}
-	(*row)[m.Column] = *mutated
-	return nil
-}
-
-func (m *Mutation) insertToMap(original *libovsdb.OvsMap, toInsert interface{}) (*libovsdb.OvsMap, error) {
-	mutated := new(libovsdb.OvsMap)
-	copier.Copy(&mutated, &original)
-	switch toInsert := toInsert.(type) {
-	case libovsdb.OvsMap:
-		for k, v := range toInsert.GoMap {
-			if _, ok := mutated.GoMap[k]; !ok {
-				mutated.GoMap[k] = v
-			}
-		}
-	default:
-		err := errors.New(E_CONSTRAINT_VIOLATION)
-		m.txn.log.Error(err, "unsupported mutator value type", "value", toInsert)
-		return nil, err
-	}
-	return mutated, nil
-}
-
-func (m *Mutation) deleteFromMap(original *libovsdb.OvsMap, toDelete interface{}) (*libovsdb.OvsMap, error) {
-	mutated := new(libovsdb.OvsMap)
-	copier.Copy(&mutated, &original)
-	switch toDelete := toDelete.(type) {
-	case libovsdb.OvsMap:
-		for k, v := range toDelete.GoMap {
-			if mutated.GoMap[k] == v {
-				delete(mutated.GoMap, k)
-			}
-		}
-	case libovsdb.OvsSet:
-		for _, k := range toDelete.GoSet {
-			delete(mutated.GoMap, k)
-		}
-	}
-	return mutated, nil
-}
-
-func (m *Mutation) MutateMap(row *map[string]interface{}) error {
-	original := (*row)[m.Column].(libovsdb.OvsMap)
-	mutated := new(libovsdb.OvsMap)
-	var err error
-	switch m.Mutator {
-	case MT_INSERT:
-		mutated, err = m.insertToMap(&original, m.Value)
-	case MT_DELETE:
-		mutated, err = m.deleteFromMap(&original, m.Value)
-	default:
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		m.txn.log.Error(err, "unsupported mutation mutator", "mutator", m.Mutator)
-		return err
-	}
-	if err != nil {
-		return err
-	}
-	(*row)[m.Column] = *mutated
-	return nil
-}
-
-func (m *Mutation) Mutate(row *map[string]interface{}) error {
-	var err error
-	switch m.Column {
-	case libovsdb.COL_UUID, libovsdb.COL_VERSION:
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		m.txn.log.Error(err, "can't mutate column", "column", m.Column)
-		return err
-	}
-	if m.ColumnSchema.Mutable != nil && !*m.ColumnSchema.Mutable {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		m.txn.log.Error(err, "can't mutate unmutable column", "column", m.Column)
-		return err
-	}
-	switch m.ColumnSchema.Type {
-	case libovsdb.TypeInteger:
-		return m.MutateInteger(row)
-	case libovsdb.TypeReal:
-		return m.MutateReal(row)
-	case libovsdb.TypeSet:
-		return m.MutateSet(row)
-	case libovsdb.TypeMap:
-		return m.MutateMap(row)
-	default:
-		err = errors.New(E_CONSTRAINT_VIOLATION)
-		m.txn.log.Error(err, "unsupported column schema type", "type", m.ColumnSchema.Type)
-		return err
-	}
-}
-
 func (txn *Transaction) RowMutate(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, oldRow *map[string]interface{}, mutations *[]interface{}) (*map[string]interface{}, error) {
 	newRow := &map[string]interface{}{}
 	copier.Copy(newRow, oldRow)
@@ -1369,7 +730,7 @@ func (txn *Transaction) RowMutate(tableSchema *libovsdb.TableSchema, mapUUID Map
 		return nil, err
 	}
 	for _, mt := range *mutations {
-		m, err := NewMutation(txn, tableSchema, mapUUID, mt.([]interface{}))
+		m, err := NewMutation(txn.log, tableSchema, mapUUID, mt.([]interface{}))
 		if err != nil {
 			return nil, err
 		}
@@ -1509,7 +870,7 @@ func (txn *Transaction) RowPrepare(tableSchema *libovsdb.TableSchema, mapUUID Ma
 		return err
 	}
 
-	err = mapUUID.ResolvRow(txn, row)
+	err = mapUUID.ResolvRow(txn.log, row)
 	if err != nil {
 		err = errors.New(E_CONSTRAINT_VIOLATION)
 		log.Error(err, "failed to resolve uuid of row")
@@ -1563,7 +924,7 @@ func doInsert(txn *Transaction, ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 	}
 
 	if ovsOp.UUIDName != nil {
-		uuid, err = txn.mapUUID.Get(txn, *ovsOp.UUIDName)
+		uuid, err = txn.mapUUID.Get(txn.log, *ovsOp.UUIDName)
 		if err != nil {
 			txn.log.Error(err, "can't find uuid-name", "uuid-name", *ovsOp.UUIDName)
 			return err
