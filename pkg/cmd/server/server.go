@@ -144,7 +144,7 @@ func main() {
 	loop := func(lst net.Listener) error {
 		for {
 			conn, err := lst.Accept()
-			conn = ConnWrapper{intConn: conn}
+			conn = ConnWrapper{IntConn: conn}
 			if err != nil {
 				log.V(5).Info("connection", "from", conn.RemoteAddr(), "error", err, "is-closing", channel.IsErrClosing(err))
 				if channel.IsErrClosing(err) {
@@ -270,42 +270,58 @@ func setupPIDFile(pidfile string) error {
 
 // temporary for development purpose wrapper
 type ConnWrapper struct {
-	intConn net.Conn
+	IntConn net.Conn
 }
 
 func (cw ConnWrapper) Read(b []byte) (n int, err error) {
-	n, err = cw.intConn.Read(b)
-	log.V(7).Info("read", "from", cw.intConn.RemoteAddr(), "bytes", n, "error", err)
+	n, err = cw.IntConn.Read(b)
+	log.V(7).Info("read", "from", cw.RemoteAddr(), "bytes", n, "error", err)
 	return
 }
 
 func (cw ConnWrapper) Write(b []byte) (n int, err error) {
-	n, err = cw.intConn.Write(b)
-	log.V(7).Info("write", "from", cw.intConn.RemoteAddr(), "bytes", n, "error", err)
+	n, err = cw.IntConn.Write(b)
+	log.V(7).Info("write", "from", cw.RemoteAddr(), "bytes", n, "error", err)
 	return
 }
 
 func (cw ConnWrapper) Close() error {
-	log.V(5).Info("close", "from", cw.intConn.RemoteAddr())
-	return cw.intConn.Close()
+	log.V(5).Info("close", "from", cw.RemoteAddr())
+	return cw.IntConn.Close()
 }
 
 func (cw ConnWrapper) LocalAddr() net.Addr {
-	return cw.intConn.LocalAddr()
+	return cw.IntConn.LocalAddr()
+}
+
+type customUnixAddr struct {
+	ClientName string
+}
+
+func (c customUnixAddr) String() string {
+	return c.ClientName
+}
+func (c customUnixAddr) Network() string {
+	return "unix"
 }
 
 func (cw ConnWrapper) RemoteAddr() net.Addr {
-	return cw.intConn.RemoteAddr()
+	switch cw.IntConn.(type) {
+	case *net.UnixConn:
+		return customUnixAddr{ClientName: "unix-client"}
+	default:
+		return cw.IntConn.RemoteAddr()
+	}
 }
 
 func (cw ConnWrapper) SetDeadline(t time.Time) error {
-	return cw.intConn.SetDeadline(t)
+	return cw.IntConn.SetDeadline(t)
 }
 
 func (cw ConnWrapper) SetReadDeadline(t time.Time) error {
-	return cw.intConn.SetReadDeadline(t)
+	return cw.IntConn.SetReadDeadline(t)
 }
 
 func (cw ConnWrapper) SetWriteDeadline(t time.Time) error {
-	return cw.intConn.SetWriteDeadline(t)
+	return cw.IntConn.SetWriteDeadline(t)
 }
