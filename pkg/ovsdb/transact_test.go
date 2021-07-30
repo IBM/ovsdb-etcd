@@ -177,18 +177,23 @@ var testSchemaMap *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 	},
 }
 
+var (
+	schemaUUIDRefTable = "table"
+	schemaUUIDRefType  = libovsdb.Strong
+)
+
 var testSchemaUUID *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 	Name:    "uuid",
 	Version: "0.0.0.0",
 	Tables: map[string]libovsdb.TableSchema{
-		"table1": {
+		"table": {
 			Columns: map[string]*libovsdb.ColumnSchema{
 				"uuid": {
 					Type: libovsdb.TypeUUID,
 				},
 			},
 		},
-		"table2": {
+		"strong": {
 			Columns: map[string]*libovsdb.ColumnSchema{
 				"map": {
 					Type: libovsdb.TypeMap,
@@ -197,7 +202,9 @@ var testSchemaUUID *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 							Type: libovsdb.TypeString,
 						},
 						Value: &libovsdb.BaseType{
-							Type: libovsdb.TypeUUID,
+							Type:     libovsdb.TypeUUID,
+							RefTable: &schemaUUIDRefTable,
+							RefType:  &schemaUUIDRefType,
 						},
 						Min: 0,
 						Max: libovsdb.Unlimited,
@@ -207,7 +214,9 @@ var testSchemaUUID *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 					Type: libovsdb.TypeSet,
 					TypeObj: &libovsdb.ColumnType{
 						Key: &libovsdb.BaseType{
-							Type: libovsdb.TypeUUID,
+							Type:     libovsdb.TypeUUID,
+							RefTable: &schemaUUIDRefTable,
+							RefType:  &schemaUUIDRefType,
 						},
 						Min: 0,
 						Max: libovsdb.Unlimited,
@@ -973,11 +982,19 @@ func TestTransactMutateSimple(t *testing.T) {
 	assert.Equal(t, float64(2), dump["key2"])
 }
 
-func TestTransactMutateSetNamedUUID(t *testing.T) {
+func TestTransactMutateSetNamedUUIDOk(t *testing.T) {
 	uuid1 := "00000000-0000-0000-0000-000000000001"
 	uuid2 := "00000000-0000-0000-0000-000000000002"
 
-	table2 := "table2"
+	table1 := "table"
+	table1row1 := map[string]interface{}{
+		"uuid": libovsdb.UUID{GoUUID: uuid1},
+	}
+	table1row2 := map[string]interface{}{
+		"uuid": libovsdb.UUID{GoUUID: uuid2},
+	}
+
+	table2 := "strong"
 	table2row1 := map[string]interface{}{
 		"set": libovsdb.OvsSet{GoSet: []interface{}{
 			libovsdb.UUID{GoUUID: uuid1},
@@ -1001,6 +1018,26 @@ func TestTransactMutateSetNamedUUID(t *testing.T) {
 		},
 	}
 
+	/* base table: add uuid1 and uuid2 */
+	req0 := &libovsdb.Transact{
+		DBName: "uuid",
+		Operations: []libovsdb.Operation{
+			{
+				Op:    OP_INSERT,
+				Table: &table1,
+				Row:   &table1row1,
+				UUID:  &libovsdb.UUID{GoUUID: uuid1},
+			},
+			{
+				Op:    OP_INSERT,
+				Table: &table1,
+				Row:   &table1row2,
+				UUID:  &libovsdb.UUID{GoUUID: uuid2},
+			},
+		},
+	}
+
+	/* strong table: add entry which references uuid1 */
 	req1 := &libovsdb.Transact{
 		DBName: "uuid",
 		Operations: []libovsdb.Operation{
@@ -1012,6 +1049,7 @@ func TestTransactMutateSetNamedUUID(t *testing.T) {
 		},
 	}
 
+	/* strong table: delete reference to uuid1 and add reference to uuid2 */
 	req2 := &libovsdb.Transact{
 		DBName: "uuid",
 		Operations: []libovsdb.Operation{
@@ -1026,16 +1064,135 @@ func TestTransactMutateSetNamedUUID(t *testing.T) {
 	common.SetPrefix("ovsdb/nb")
 	testEtcdCleanup(t)
 
-	resp, _ := testTransact(t, req1)
+	resp, txn := testTransact(t, req0)
 	assert.Nil(t, resp.Error)
+	dump := testTransactDump(t, txn, "uuid", "table")
+	assert.Equal(t, libovsdb.UUID{GoUUID: uuid2}, dump["uuid"])
 
-	resp, txn := testTransact(t, req2)
+	resp, txn = testTransact(t, req1)
 	assert.Nil(t, resp.Error)
-	dump := testTransactDump(t, txn, "uuid", "table2")
+	dump = testTransactDump(t, txn, "uuid", table2)
+	assert.Equal(t, libovsdb.OvsSet{GoSet: []interface{}{libovsdb.UUID{GoUUID: uuid1}}}, dump["set"])
+
+	resp, txn = testTransact(t, req2)
+	assert.Nil(t, resp.Error)
+	dump = testTransactDump(t, txn, "uuid", table2)
 	assert.Equal(t, libovsdb.OvsSet{GoSet: []interface{}{libovsdb.UUID{GoUUID: uuid2}}}, dump["set"])
 }
 
+func TestTransactMutateSetNamedUUIDError(t *testing.T) {
+	uuid1 := "00000000-0000-0000-0000-000000000001"
+	uuid2 := "00000000-0000-0000-0000-000000000003"
+
+	table1 := "table"
+	table1row1 := map[string]interface{}{
+		"uuid": libovsdb.UUID{GoUUID: uuid1},
+	}
+
+	table2 := "strong"
+	table2row1 := map[string]interface{}{
+		"set": libovsdb.OvsSet{GoSet: []interface{}{
+			libovsdb.UUID{GoUUID: uuid2},
+		}},
+	}
+
+	/* base table: add uuid1 */
+	req1 := &libovsdb.Transact{
+		DBName: "uuid",
+		Operations: []libovsdb.Operation{
+			{
+				Op:    OP_INSERT,
+				Table: &table1,
+				Row:   &table1row1,
+				UUID:  &libovsdb.UUID{GoUUID: uuid1},
+			},
+		},
+	}
+
+	/* strong table: fail adding reference to uuid2 */
+	req2 := &libovsdb.Transact{
+		DBName: "uuid",
+		Operations: []libovsdb.Operation{
+			{
+				Op:    OP_INSERT,
+				Table: &table2,
+				Row:   &table2row1,
+			},
+		},
+	}
+
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t)
+
+	resp, _ := testTransact(t, req1)
+	assert.Nil(t, resp.Error)
+
+	resp, _ = testTransact(t, req2)
+	assert.Equal(t, E_CONSTRAINT_VIOLATION, *resp.Error)
+}
+
 func TestTransactMutateSet(t *testing.T) {
+	table := "table1"
+	row1 := map[string]interface{}{
+		"uuid": libovsdb.OvsSet{GoSet: []interface{}{}},
+	}
+	uuid1 := libovsdb.UUID{GoUUID: "00000000-0000-0000-0000-000000000001"}
+	mutations1 := []interface{}{
+		[]interface{}{
+			"uuid",
+			MT_INSERT,
+			libovsdb.OvsSet{GoSet: []interface{}{uuid1}},
+		},
+	}
+	uuid2 := libovsdb.UUID{GoUUID: "00000000-0000-0000-0000-000000000002"}
+	mutations2 := []interface{}{
+		[]interface{}{
+			"uuid",
+			MT_INSERT,
+			libovsdb.OvsSet{GoSet: []interface{}{uuid2}},
+		},
+	}
+	req := &libovsdb.Transact{
+		DBName: "set",
+		Operations: []libovsdb.Operation{
+			{
+				Op:    OP_INSERT,
+				Table: &table,
+				Row:   &row1,
+			},
+			{
+				Op:        OP_MUTATE,
+				Table:     &table,
+				Mutations: &mutations1,
+			},
+			{
+				Op:        OP_MUTATE,
+				Table:     &table,
+				Mutations: &mutations2,
+			},
+			{
+				Op:        OP_MUTATE,
+				Table:     &table,
+				Mutations: &mutations1,
+			},
+		},
+	}
+	common.SetPrefix("ovsdb/nb")
+	testEtcdCleanup(t)
+	resp, _ := testTransact(t, req)
+	assert.Nil(t, resp.Error)
+	dump := testEtcdDump(t, "set", "table1")
+	expected := []interface{}{
+		"set",
+		[]interface{}{
+			[]interface{}{"uuid", "00000000-0000-0000-0000-000000000001"},
+			[]interface{}{"uuid", "00000000-0000-0000-0000-000000000002"},
+		},
+	}
+	assert.Equal(t, expected, dump["uuid"])
+}
+
+func TestTransactMutateSetRefTypeStrongError(t *testing.T) {
 	table := "table1"
 	row1 := map[string]interface{}{
 		"uuid": libovsdb.OvsSet{GoSet: []interface{}{}},
