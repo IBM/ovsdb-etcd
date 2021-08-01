@@ -388,8 +388,8 @@ func (ch *Handler) monitorCanceledNotification(jsonValue interface{}) {
 	ch.log.V(5).Info("monitorCanceledNotification", "jsonValue", jsonValue)
 	err := ch.jrpcServer.Notify(ch.handlerContext, MONITOR_CANCELED, jsonValue)
 	if err != nil {
-		// TODO should we do something else
-		ch.log.Error(err, "monitorCanceledNotification failed")
+		// Usually we get this error because a client closed his connection, so we don't need to inform it as an error
+		ch.log.V(6).Info("monitorCanceledNotification failed", "error", err.Error())
 	}
 }
 
