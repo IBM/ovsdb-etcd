@@ -63,7 +63,7 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	if err != nil {
 		return nil, err
 	}
-	txn := NewTransaction(ch.etcdClient, log, ovsReq)
+	txn := NewTransaction(ctx, ch.etcdClient, log, ovsReq)
 	txn.schemas = ch.db.GetSchemas()
 	monitor, thereIsMonitor := ch.monitors[txn.request.DBName]
 
