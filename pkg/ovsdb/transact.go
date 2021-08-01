@@ -397,7 +397,7 @@ func (mapUUID MapUUID) ResolvRow(row *map[string]interface{}, log logr.Logger) e
 	return nil
 }
 
-type Etcd struct {
+type etcdTransaction struct {
 	Cli  *clientv3.Client
 	Ctx  context.Context
 	If   []clientv3.Cmp
@@ -406,18 +406,18 @@ type Etcd struct {
 	Res  *clientv3.TxnResponse
 }
 
-func (etcd *Etcd) Clear() {
+func (etcd *etcdTransaction) Clear() {
 	etcd.If = []clientv3.Cmp{}
 	etcd.Then = []clientv3.Op{}
 	etcd.Else = []clientv3.Op{}
 	etcd.Res = nil
 }
 
-func (etcd Etcd) String() string {
+func (etcd etcdTransaction) String() string {
 	return fmt.Sprintf("{txn-num-op=%d}", len(etcd.Then))
 }
 
-func (etcd *Etcd) Commit() error {
+func (etcd *etcdTransaction) Commit() error {
 	res, err := etcd.Cli.Txn(etcd.Ctx).If(etcd.If...).Then(etcd.Then...).Else(etcd.Else...).Commit()
 	if err != nil {
 		return err
@@ -440,13 +440,13 @@ type Transaction struct {
 	mapUUID MapUUID
 
 	/* etcd */
-	etcd *Etcd
+	etcd *etcdTransaction
 
 	/* session for tables locks */
 	session *concurrency.Session
 }
 
-func NewTransaction(cli *clientv3.Client, log logr.Logger, request *libovsdb.Transact) *Transaction {
+func NewTransaction(ctx context.Context, cli *clientv3.Client, log logr.Logger, request *libovsdb.Transact) *Transaction {
 	txn := new(Transaction)
 	txn.log = log.WithValues()
 	txn.log.V(5).Info("new transaction", "size", len(request.Operations), "request", request)
@@ -455,8 +455,8 @@ func NewTransaction(cli *clientv3.Client, log logr.Logger, request *libovsdb.Tra
 	txn.schemas = libovsdb.Schemas{}
 	txn.request = *request
 	txn.response.Result = make([]libovsdb.OperationResult, len(request.Operations))
-	txn.etcd = new(Etcd)
-	txn.etcd.Ctx = context.TODO()
+	txn.etcd = new(etcdTransaction)
+	txn.etcd.Ctx = ctx
 	txn.etcd.Cli = cli
 	return txn
 }
