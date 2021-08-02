@@ -12,6 +12,7 @@ import (
 	"github.com/go-logr/logr"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"k8s.io/klog/v2"
+	"k8s.io/klog/v2/klogr"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
@@ -563,6 +564,45 @@ func unmarshalData(data []byte) (map[string]interface{}, error) {
 	return obj, nil
 }
 
+func (u *updater) isRowAppearOnWhere(data map[string]interface{}) (bool, error) {
+	checkCondition := func(condition []interface{}) (bool, error) {
+		log := klogr.New() // TODO: propogate real loger insted of this generic one
+		res, err := NewCondition(u.tableSchema, namedUUIDResolver{}, condition, log)
+		if err != nil {
+			return false, err
+		}
+		cond, err := res.Compare(&data)
+		if err != nil {
+			return false, err
+		}
+		return cond, nil
+	}
+	if u.mcr.Where == nil {
+		return true, nil
+	}
+	var cond bool
+	var err error
+	for i := 0; i < len(*u.mcr.Where); i++ {
+		switch condition := ((*u.mcr.Where)[i]).(type) {
+		case []interface{}:
+			cond, err = checkCondition(condition)
+		case [3]interface{}:
+			cond, err = checkCondition(condition[:])
+		case bool:
+			cond = condition
+		default:
+			return false, fmt.Errorf("wrong type %T %v should be a [3]interface{} or []interface{} or bool", condition, condition)
+		}
+		if err != nil {
+			return false, err
+		}
+		if cond == false {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
 func getAndDeleteUUID(data map[string]interface{}) (string, error) {
 	uuidInt, ok := data[libovsdb.COL_UUID]
 	if !ok {
@@ -589,12 +629,19 @@ func (u *updater) prepareRow(value []byte) (map[string]interface{}, string, erro
 	if err != nil {
 		return nil, "", err
 	}
+	res, err := u.isRowAppearOnWhere(data)
+	if err != nil {
+		return nil, "", err
+	}
+	// If the row do not appear on `Where` field of MonitorCondRequest, return an empty row.
+	if res == false {
+		return map[string]interface{}{}, "", nil
+	}
 	uuid, err := getAndDeleteUUID(data)
 	if err != nil {
 		return nil, "", err
 	}
 	data = u.deleteUnselectedColumns(data)
-	// TODO handle where
 	return data, uuid, nil
 }
 

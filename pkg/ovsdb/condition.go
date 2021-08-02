@@ -94,12 +94,20 @@ func NewCondition(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, 
 
 func (c *Condition) CompareInteger(row *map[string]interface{}) (bool, error) {
 	var err error
-	actual, ok := (*row)[c.Column].(int)
+	// According to Decode docs, Unmarshal stores float64, for JSON numbers.
+	// We will convert it to int before the comparison.
+	val, ok := (*row)[c.Column].(float64)
 	if !ok {
 		err = errors.New(E_CONSTRAINT_VIOLATION)
 		c.Log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
 		return false, err
 	}
+	if !(val == float64(int(val))) {
+		c.Log.Error(err, "failed to convert row value", "value", (*row)[c.Column], "is not an integer")
+		return false, err
+	}
+
+	actual := int(val)
 	fn := c.Function
 	expected, ok := c.Value.(int)
 	if !ok {

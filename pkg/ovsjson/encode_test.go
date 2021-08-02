@@ -117,13 +117,13 @@ func TestCondMonitorParameters(t *testing.T) {
 	// ["_Server",null,{"Database":[{"where":[["model","==","standalone"],true],"select":{"modify":false,"initial":true,"insert":true,"delete":true},"columns":["model","connected"]}]}]
 	// ["_Server",null,{"Database":[{"where":[["model","==","standalone"],true],"columns":["cid","connected","index","leader","model","name","schema","sid","_version"]}]},"00000000-0000-0000-0000-000000000000"]
 	// ["_Server",null,{"Database":[{"where":[true],"columns":["cid","connected","index","leader","model","name","schema","sid","_version"]}]},"00000000-0000-0000-0000-000000000000"]
-	var s = []byte(`["_Server",["monid","OVN_Northbound"],{"Database":[{"select":{"modify":true,"initial":true,"insert":false,"delete":true},"columns":["model"]}]}]`)
+	var s = []byte(`["_Server",["monid","OVN_Northbound"],{"Database":[{"select":{"modify":true,"initial":true,"insert":false,"delete":true},"columns":["model"],"where":[["model","==","standalone"],true]}]}]`)
 	actualCMP := CondMonitorParameters{}
 	err := json.Unmarshal(s, &actualCMP)
 	assert.Nil(t, err)
 	expectedSelect := &libovsdb.MonitorSelect{Modify: libovsdb.Bool(true), Initial: libovsdb.Bool(true), Insert: libovsdb.Bool(false), Delete: libovsdb.Bool(true)}
 	mcr := MonitorCondRequest{Columns: &[]string{"model"},
-		Select: expectedSelect}
+		Select: expectedSelect, Where: &[]interface{}{[]interface{}{"model", "==", "standalone"}, true}}
 
 	jsonValue := json.RawMessage{}
 	err = json.Unmarshal([]byte("[\"monid\",\"OVN_Northbound\"]"), &jsonValue)

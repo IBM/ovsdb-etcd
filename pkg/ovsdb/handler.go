@@ -283,20 +283,20 @@ func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) 
 			key := common.NewTableKey(dbName, tableName)
 			_, ok := monitor.key2Updaters[key]
 			if !ok {
-				ch.log.V(6).Info("MonitorCondChange", "table", tableName, "mcr", mcrArray)
-				var updaters []updater
-				tableSchema, err := databaseSchema.LookupTable(tableName)
-				if err != nil {
-					return nil, err
-				}
-				for _, mcr := range mcrArray {
-					updater := mcrToUpdater(mcr, jsonValueString, tableSchema, monitorData.notificationType == ovsjson.Update, ch.log)
-					updaters = append(updaters, *updater)
-				}
+				ch.log.V(6).Info("MonitorCondChange adding new updater for a new table")
 				monitorData.updatersKeys = append(monitorData.updatersKeys, key)
-			} else {
-				// TODO update "existing" updaters, change "where"
 			}
+			ch.log.V(6).Info("MonitorCondChange", "table", tableName, "mcr", mcrArray)
+			var updaters []updater
+			tableSchema, err := databaseSchema.LookupTable(tableName)
+			if err != nil {
+				return nil, err
+			}
+			for _, mcr := range mcrArray {
+				updater := mcrToUpdater(mcr, jsonValueString, tableSchema, monitorData.notificationType == ovsjson.Update, ch.log)
+				updaters = append(updaters, *updater)
+			}
+			ch.monitors[dbName].key2Updaters[key] = updaters
 		}
 	}
 	return ovsjson.EmptyStruct{}, nil
