@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/go-logr/logr"
 	"sync"
 	"testing"
+
+	"github.com/go-logr/logr"
 
 	guuid "github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -40,7 +41,7 @@ const (
 	MAP_COLUMN = "map"
 )
 
-func TestMonitorPrepareRow(t *testing.T) {
+func TestMonitorPrepareRowCheckColumns(t *testing.T) {
 	tableSchema := createTestTableSchema()
 	data := map[string]interface{}{"c1": "v1", "c2": "v2"}
 	expectedUUID := guuid.NewString()
@@ -50,43 +51,142 @@ func TestMonitorPrepareRow(t *testing.T) {
 
 	// Columns are nil or all columns
 	expRow := map[string]interface{}{"c1": "v1", "c2": "v2"}
-	updater := *mcrToUpdater(ovsjson.MonitorCondRequest{}, "", tableSchema, false, log)
-	row, uuid, err := updater.prepareRow(dataJson)
-	assert.Nil(t, err)
-	assert.Equal(t, expRow, row)
-	assert.Equal(t, expectedUUID, uuid)
-	updater = *mcrToUpdater(ovsjson.MonitorCondRequest{Columns: &[]string{"c1", "c2"}}, "", tableSchema, true, log)
-	row, uuid, err = updater.prepareRow(dataJson)
-	assert.Nil(t, err)
-	assert.Equal(t, expRow, row)
+	checkPrepareRow(t, tableSchema, dataJson, false, ovsjson.MonitorCondRequest{}, expRow)
+	checkPrepareRow(t, tableSchema, dataJson, true, ovsjson.MonitorCondRequest{Columns: &[]string{"c1", "c2"}}, expRow)
+	checkPrepareRow(t, tableSchema, dataJson, true, ovsjson.MonitorCondRequest{Columns: &[]string{"c1", "c2"}}, expRow)
 
 	// Columns are empty array or a different column
 	expRow = map[string]interface{}{}
-	updater = *mcrToUpdater(ovsjson.MonitorCondRequest{Columns: &[]string{}}, "", tableSchema, false, log)
-	row, uuid, err = updater.prepareRow(dataJson)
-	assert.Nil(t, err)
-	assert.Equal(t, expRow, row)
-	updater = *mcrToUpdater(ovsjson.MonitorCondRequest{Columns: &[]string{"c3"}}, "", tableSchema, true, log)
-	row, uuid, err = updater.prepareRow(dataJson)
-	assert.Nil(t, err)
-	assert.Equal(t, expRow, row)
+	checkPrepareRow(t, tableSchema, dataJson, false, ovsjson.MonitorCondRequest{Columns: &[]string{""}}, expRow)
+	checkPrepareRow(t, tableSchema, dataJson, true, ovsjson.MonitorCondRequest{Columns: &[]string{"c3"}}, expRow)
 
 	// Single Column
 	expRow = map[string]interface{}{"c2": "v2"}
-	updater = *mcrToUpdater(ovsjson.MonitorCondRequest{Columns: &[]string{"c2"}}, "", tableSchema, false, log)
-	row, uuid, err = updater.prepareRow(dataJson)
+	checkPrepareRow(t, tableSchema, dataJson, false, ovsjson.MonitorCondRequest{Columns: &[]string{"c2"}}, expRow)
+}
+
+func TestMonitorPrepareRowCheckWhere(t *testing.T) {
+	tableSchema := createTestTableSchema()
+	dataRow := map[string]interface{}{"c1": "v1", "c2": "v2", "r1": 1.5, "i1": 3, "b1": true}
+	data := map[string]interface{}{"c1": "v1", "c2": "v2", "r1": 1.5, "i1": 3, "b1": true}
+	expectedUUID := ROW_UUID
+	data[libovsdb.COL_UUID] = libovsdb.UUID{GoUUID: expectedUUID}
+	dataJson, err := json.Marshal(data)
+	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
+	emptyRow := map[string]interface{}{}
+	checkWhere := func(Where *[]interface{}, expRow map[string]interface{}) {
+		checkPrepareRow(t, tableSchema, dataJson, false, ovsjson.MonitorCondRequest{Where: Where}, expRow)
+	}
+
+	// booleans
+	checkWhere(&[]interface{}{true}, dataRow)
+	checkWhere(&[]interface{}{false}, emptyRow)
+	checkWhere(&[]interface{}{true, true}, dataRow)
+	checkWhere(&[]interface{}{true, false}, emptyRow)
+
+	// Type strings - one statement
+	checkWhere(&[]interface{}{[3]interface{}{"c1", "==", "v1"}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"c1", "==", "v1"}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"c1", "includes", "v1"}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"c1", "!=", "v2"}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"c1", "excludes", "v2"}}, dataRow)
+
+	checkWhere(&[]interface{}{[]interface{}{"c1", "==", "v2"}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{"c1", "includes", "v2"}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{"c1", "!=", "v1"}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{"c1", "excludes", "v1"}}, emptyRow)
+
+	// Type strings - multiple statements
+	checkWhere(&[]interface{}{[]interface{}{"c1", "==", "v1"}, []interface{}{"c2", "==", "v2"}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"c1", "==", "v1"}, true}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"c1", "==", "v1"}, []interface{}{"c2", "!=", "v3"}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"c1", "==", "v1"}, []interface{}{"c2", "!=", "v3"}, true}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"c1", "==", "v1"}, []interface{}{"c2", "!=", "v3"}, false}, emptyRow)
+
+	// Type real
+	checkWhere(&[]interface{}{[]interface{}{"r1", "==", 1.5}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"r1", "includes", 1.5}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"r1", "<=", 1.5}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"r1", ">=", 1.5}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"r1", "!=", 0.5}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"r1", "excludes", 0.5}}, dataRow)
+
+	checkWhere(&[]interface{}{[]interface{}{"r1", "==", 0.5}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{"r1", "includes", 0.5}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{"r1", "!=", 1.5}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{"r1", "excludes", 1.5}}, emptyRow)
+
+	checkWhere(&[]interface{}{[]interface{}{"r1", ">", 1.5}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{"r1", "<", 1.5}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{"r1", ">", 0.5}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"r1", "<", 2.5}}, dataRow)
+
+	// Type int
+	checkWhere(&[]interface{}{[]interface{}{"i1", "==", 3}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"i1", "includes", 3}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"i1", "<=", 3}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"i1", ">=", 3}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"i1", "!=", 1}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"i1", "excludes", 1}}, dataRow)
+
+	checkWhere(&[]interface{}{[]interface{}{"i1", "==", 1}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{"i1", "includes", 1}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{"i1", "!=", 3}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{"i1", "excludes", 3}}, emptyRow)
+
+	checkWhere(&[]interface{}{[]interface{}{"i1", ">", 3}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{"i1", "<", 3}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{"i1", ">", 1}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"i1", "<", 5}}, dataRow)
+
+	// Type bool
+	checkWhere(&[]interface{}{[]interface{}{"b1", "==", true}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"b1", "includes", true}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"b1", "!=", false}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{"b1", "excludes", false}}, dataRow)
+
+	checkWhere(&[]interface{}{[]interface{}{"b1", "==", false}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{"b1", "includes", false}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{"b1", "!=", true}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{"b1", "excludes", true}}, emptyRow)
+
+	// Type UUID
+	checkWhere(&[]interface{}{[]interface{}{libovsdb.COL_UUID, "==", libovsdb.UUID{GoUUID: expectedUUID}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{libovsdb.COL_UUID, "includes", libovsdb.UUID{GoUUID: expectedUUID}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{libovsdb.COL_UUID, "!=", libovsdb.UUID{GoUUID: LAST_TNX}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{libovsdb.COL_UUID, "excludes", libovsdb.UUID{GoUUID: LAST_TNX}}}, dataRow)
+
+	checkWhere(&[]interface{}{[]interface{}{libovsdb.COL_UUID, "==", libovsdb.UUID{GoUUID: LAST_TNX}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{libovsdb.COL_UUID, "includes", libovsdb.UUID{GoUUID: LAST_TNX}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{libovsdb.COL_UUID, "!=", libovsdb.UUID{GoUUID: expectedUUID}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{libovsdb.COL_UUID, "excludes", libovsdb.UUID{GoUUID: expectedUUID}}}, emptyRow)
+
+}
+
+func checkPrepareRow(t *testing.T, tableSchema *libovsdb.TableSchema, dataJson []byte, isV1 bool, mcr ovsjson.MonitorCondRequest, expRow map[string]interface{}) {
+	updater := *mcrToUpdater(mcr, "", tableSchema, isV1, log)
+	row, _, err := updater.prepareRow(dataJson)
 	assert.Nil(t, err)
-	assert.Equal(t, expRow, row)
+	isEqualMaps(t, &expRow, &row, tableSchema)
 }
 
 func createTestTableSchema() *libovsdb.TableSchema {
 	var tableSchema libovsdb.TableSchema
-	tableSchema.Columns = map[string]*libovsdb.ColumnSchema{}
-	columnSchema := libovsdb.ColumnSchema{Type: libovsdb.TypeString}
-	tableSchema.Columns["c1"] = &columnSchema
-	tableSchema.Columns["c2"] = &columnSchema
-	tableSchema.Columns["c3"] = &columnSchema
-	tableSchema.Columns["c4"] = &columnSchema
+	columnSchemaUUID := libovsdb.ColumnSchema{Type: libovsdb.TypeUUID}
+	columnSchemaString := libovsdb.ColumnSchema{Type: libovsdb.TypeString}
+	columnSchemaReal := libovsdb.ColumnSchema{Type: libovsdb.TypeReal}
+	columnSchemaInt := libovsdb.ColumnSchema{Type: libovsdb.TypeInteger}
+	columnSchemaBool := libovsdb.ColumnSchema{Type: libovsdb.TypeBoolean}
+	tableSchema.Columns = map[string]*libovsdb.ColumnSchema{
+		"c1": &columnSchemaString,
+		"c2": &columnSchemaString,
+		"c3": &columnSchemaString,
+		"c4": &columnSchemaString,
+		"r1": &columnSchemaReal,
+		"i1": &columnSchemaInt,
+		"b1": &columnSchemaBool,
+	}
+	tableSchema.Columns[libovsdb.COL_UUID] = &columnSchemaUUID
 
 	mapColumnType := libovsdb.ColumnType{Key: &libovsdb.BaseType{Type: "string"}, Value: &libovsdb.BaseType{Type: "string"}}
 	mColumnSchema := libovsdb.ColumnSchema{Type: libovsdb.TypeMap, TypeObj: &mapColumnType}
@@ -612,42 +712,42 @@ func TestMonitorNotifications3(t *testing.T) {
 	wg.Wait()
 }
 
-func rowsAreEqual(t *testing.T, expRow *ovsjson.RowUpdate, row *ovsjson.RowUpdate, tableSchema *libovsdb.TableSchema) {
-	isEqualMaps := func(m1 *map[string]interface{}, m2 *map[string]interface{}) {
-		if m1 == nil {
-			assert.Nil(t, m2)
-			return
-		}
-		if m2 == nil {
-			assert.Nil(t, m1)
-			return
-		}
-		err := tableSchema.Unmarshal(m1)
-		assert.Nil(t, err)
-		err = tableSchema.Unmarshal(m2)
-		assert.Nil(t, err)
-		for columnName, columnSchema := range tableSchema.Columns {
-			if columnSchema.Type == libovsdb.TypeSet {
-				set1, ok := (*m1)[columnName]
-				set2, ok2 := (*m1)[columnName]
-				if !ok || !ok2 {
-					assert.True(t, ok == ok2)
-					continue
-				}
-				ovsdbSet1 := set1.(libovsdb.OvsSet)
-				ovsdbSet2 := set2.(libovsdb.OvsSet)
-				assert.ElementsMatch(t, ovsdbSet1.GoSet, ovsdbSet2.GoSet)
-			} else {
-				assert.EqualValues(t, (*m1)[columnName], (*m2)[columnName])
+func isEqualMaps(t *testing.T, m1 *map[string]interface{}, m2 *map[string]interface{}, tableSchema *libovsdb.TableSchema) {
+	if m1 == nil {
+		assert.Nil(t, m2)
+		return
+	}
+	if m2 == nil {
+		assert.Nil(t, m1)
+		return
+	}
+	err := tableSchema.Unmarshal(m1)
+	assert.Nil(t, err)
+	err = tableSchema.Unmarshal(m2)
+	assert.Nil(t, err)
+	for columnName, columnSchema := range tableSchema.Columns {
+		if columnSchema.Type == libovsdb.TypeSet {
+			set1, ok := (*m1)[columnName]
+			set2, ok2 := (*m1)[columnName]
+			if !ok || !ok2 {
+				assert.True(t, ok == ok2)
+				continue
 			}
+			ovsdbSet1 := set1.(libovsdb.OvsSet)
+			ovsdbSet2 := set2.(libovsdb.OvsSet)
+			assert.ElementsMatch(t, ovsdbSet1.GoSet, ovsdbSet2.GoSet)
+		} else {
+			assert.EqualValues(t, (*m1)[columnName], (*m2)[columnName])
 		}
 	}
+}
 
-	isEqualMaps(expRow.New, row.New)
-	isEqualMaps(expRow.Old, row.Old)
-	isEqualMaps(expRow.Initial, row.Initial)
-	isEqualMaps(expRow.Insert, row.Insert)
-	isEqualMaps(expRow.Modify, row.Modify)
+func rowsAreEqual(t *testing.T, expRow *ovsjson.RowUpdate, row *ovsjson.RowUpdate, tableSchema *libovsdb.TableSchema) {
+	isEqualMaps(t, expRow.New, row.New, tableSchema)
+	isEqualMaps(t, expRow.Old, row.Old, tableSchema)
+	isEqualMaps(t, expRow.Initial, row.Initial, tableSchema)
+	isEqualMaps(t, expRow.Insert, row.Insert, tableSchema)
+	isEqualMaps(t, expRow.Modify, row.Modify, tableSchema)
 	assert.Equal(t, expRow.Delete, row.Delete)
 }
 
@@ -765,4 +865,43 @@ func TestSetsDifferenceDifferentSets(t *testing.T) {
 
 	diff := setsDifference(set1, set2)
 	assert.ElementsMatch(t, expectDiff.GoSet, diff.GoSet)
+}
+
+func TestMonitorCondChange(t *testing.T) {
+	const (
+		dbName    = "dbName"
+		tableName = "T1"
+	)
+	dataRow := map[string]interface{}{"c1": "v1", "c2": "v2"}
+	var row, emptyRow map[string]interface{}
+	columnSchema := libovsdb.ColumnSchema{Type: libovsdb.TypeString}
+	tableSchema := libovsdb.TableSchema{Columns: map[string]*libovsdb.ColumnSchema{"c1": &columnSchema, "c2": &columnSchema}}
+	handler, _ := initHandler(t, `null`, ovsjson.Update)
+	monitorCondChange := func(mcrs map[string][]ovsjson.MonitorCondRequest) {
+		ctx := context.Background()
+		params := []interface{}{"<nil>", "<nil>", mcrs}
+		_, err := handler.MonitorCondChange(ctx, params)
+		assert.Nil(t, err)
+	}
+	addUuidToRow := func(rowIn map[string]interface{}) (rowOut map[string]interface{}) {
+		expectedUUID := ROW_UUID
+		rowIn[libovsdb.COL_UUID] = libovsdb.UUID{GoUUID: expectedUUID}
+		return rowIn
+	}
+	handlerCallToPrepareRow := func(rowInWithoutUUID map[string]interface{}) map[string]interface{} {
+		rowInWithUUID := addUuidToRow(rowInWithoutUUID)
+		dataJson, err := json.Marshal(rowInWithUUID)
+		assert.Nilf(t, err, "marshalling %v, threw %v", rowInWithUUID, err)
+		key := common.NewTableKey(dbName, tableName)
+		updater := handler.monitors[dbName].key2Updaters[key][0]
+		rowOut, _, err := updater.prepareRow(dataJson)
+		assert.Nilf(t, err, " prepareRow threw %v", err)
+		return rowOut
+	}
+	monitorCondChange(map[string][]ovsjson.MonitorCondRequest{"T1": {{Where: &[]interface{}{false}}}})
+	row = handlerCallToPrepareRow(dataRow)
+	isEqualMaps(t, &emptyRow, &row, &tableSchema)
+	monitorCondChange(map[string][]ovsjson.MonitorCondRequest{"T1": {{Where: &[]interface{}{true}}}})
+	row = handlerCallToPrepareRow(dataRow)
+	isEqualMaps(t, &dataRow, &row, &tableSchema)
 }
