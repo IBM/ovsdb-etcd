@@ -44,14 +44,7 @@ func (schemas *Schemas) AddFromBytes(data []byte) error {
 }
 
 func (schemas *Schemas) Add(databaseSchema *DatabaseSchema) {
-	for _, tableSchema := range databaseSchema.Tables {
-		tableSchema.Columns[COL_VERSION] = &ColumnSchema{
-			Type: TypeUUID,
-		}
-		tableSchema.Columns[COL_UUID] = &ColumnSchema{
-			Type: TypeUUID,
-		}
-	}
+	databaseSchema.AddInternalsColumns()
 	(*schemas)[databaseSchema.Name] = databaseSchema
 }
 
@@ -61,6 +54,12 @@ type DatabaseSchema struct {
 	Version string                 `json:"version"`
 	Tables  map[string]TableSchema `json:"tables"`
 	Checksm string                 `json:"checksm,omitempty"`
+}
+
+func (schema DatabaseSchema) AddInternalsColumns() {
+	for _, tableSchema := range schema.Tables {
+		tableSchema.AddInternalColumns()
+	}
 }
 
 // GetColumn returns a Column Schema for a given table and column name
@@ -141,6 +140,15 @@ type TableSchema struct {
 	Indexes [][]string               `json:"indexes,omitempty"`
 	MaxRows int                      `json:"maxRows,omitempty"`
 	IsRoot  bool                     `json:"isRoot,omitempty"`
+}
+
+func (tableSchema *TableSchema) AddInternalColumns() {
+	tableSchema.Columns[COL_VERSION] = &ColumnSchema{
+		Type: TypeUUID,
+	}
+	tableSchema.Columns[COL_UUID] = &ColumnSchema{
+		Type: TypeUUID,
+	}
 }
 
 /*RFC7047 defines some atomic-types (e.g: integer, string, etc). However, the Column's type
@@ -487,8 +495,8 @@ func (tableSchema *TableSchema) Default(row *map[string]interface{}) {
 	}
 }
 
-func (databaseSchema *DatabaseSchema) Default(table string, row *map[string]interface{}) {
-	tableSchema, ok := databaseSchema.Tables[table]
+func (schema *DatabaseSchema) Default(table string, row *map[string]interface{}) {
+	tableSchema, ok := schema.Tables[table]
 	if !ok {
 		panic(fmt.Sprintf("Missing schema for table %s", table))
 	}
@@ -684,8 +692,8 @@ func (tableSchema *TableSchema) Unmarshal(row *map[string]interface{}) error {
 	return nil
 }
 
-func (databaseSchema *DatabaseSchema) Unmarshal(table string, row *map[string]interface{}) error {
-	tableSchema, ok := databaseSchema.Tables[table]
+func (schema *DatabaseSchema) Unmarshal(table string, row *map[string]interface{}) error {
+	tableSchema, ok := schema.Tables[table]
 	if !ok {
 		return fmt.Errorf("missing schema for table %s", table)
 	}
@@ -717,8 +725,8 @@ func (tableSchema *TableSchema) LookupColumn(column string) (*ColumnSchema, erro
 	return columnSchema, nil
 }
 
-func (databaseSchema *DatabaseSchema) LookupColumn(table, column string) (*ColumnSchema, error) {
-	tableSchema, ok := databaseSchema.Tables[table]
+func (schema *DatabaseSchema) LookupColumn(table, column string) (*ColumnSchema, error) {
+	tableSchema, ok := schema.Tables[table]
 	if !ok {
 		return nil, fmt.Errorf("Missing schema for table %s", table)
 	}
@@ -733,8 +741,8 @@ func (schemas *Schemas) LookupColumn(dbname, table, column string) (*ColumnSchem
 	return databaseSchema.LookupColumn(table, column)
 }
 
-func (databaseSchema *DatabaseSchema) LookupTable(table string) (*TableSchema, error) {
-	tableSchema, ok := databaseSchema.Tables[table]
+func (schema *DatabaseSchema) LookupTable(table string) (*TableSchema, error) {
+	tableSchema, ok := schema.Tables[table]
 	if !ok {
 		return nil, fmt.Errorf("Missing schema for table %s", table)
 	}
@@ -970,8 +978,8 @@ func (tableSchema *TableSchema) Validate(row *map[string]interface{}) error {
 	return nil
 }
 
-func (databaseSchema *DatabaseSchema) Validate(table string, row *map[string]interface{}) error {
-	tableSchema, ok := databaseSchema.Tables[table]
+func (schema *DatabaseSchema) Validate(table string, row *map[string]interface{}) error {
+	tableSchema, ok := schema.Tables[table]
 	if !ok {
 		return fmt.Errorf("did not find schema for table %s", table)
 	}
