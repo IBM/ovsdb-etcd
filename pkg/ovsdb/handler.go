@@ -3,6 +3,7 @@ package ovsdb
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"reflect"
@@ -63,8 +64,15 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	if err != nil {
 		return nil, err
 	}
-	txn := NewTransaction(ctx, ch.etcdClient, log, ovsReq)
-	txn.schemas = ch.db.GetSchemas()
+	schemas := ch.db.GetSchemas()
+	schema, ok := schemas[ovsReq.DBName]
+	if !ok {
+		err := errors.New(E_INTERNAL_ERROR)
+		log.V(1).Info("Unknown schema", "dbName", ovsReq.DBName)
+		return nil, err
+	}
+	txn := NewTransaction(ctx, ch.etcdClient, ovsReq, schema, log)
+
 	monitor, thereIsMonitor := ch.monitors[txn.request.DBName]
 
 	// temporary solution to provide consistency
@@ -89,11 +97,11 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 		var wg sync.WaitGroup
 		wg.Add(1)
 		monitor.tQueue.endTransaction(rev, &wg)
-		log.V(5).Info("transact added", "etcd revision", rev)
+		log.V(5).Info("transact added", "etcdTrx revision", rev)
 		wg.Wait()
 	}
 
-	log.V(5).Info("transact response", "response", txn.response, "etcd revision", rev)
+	log.V(5).Info("transact response", "response", txn.response, "etcdTrx revision", rev)
 	return txn.response.Result, nil
 }
 

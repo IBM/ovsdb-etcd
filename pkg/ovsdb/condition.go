@@ -27,7 +27,7 @@ type Condition struct {
 	Log          logr.Logger
 }
 
-func NewCondition(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, condition []interface{}, log logr.Logger) (*Condition, error) {
+func NewCondition(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, condition []interface{}, log logr.Logger) (*Condition, error) {
 	var err error
 	if len(condition) != 3 {
 		err = errors.New(E_INTERNAL_ERROR)

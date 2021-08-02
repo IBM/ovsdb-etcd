@@ -27,7 +27,7 @@ type Mutation struct {
 	Log          logr.Logger
 }
 
-func NewMutation(tableSchema *libovsdb.TableSchema, mapUUID MapUUID, mutation []interface{}, log logr.Logger) (*Mutation, error) {
+func NewMutation(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, mutation []interface{}, log logr.Logger) (*Mutation, error) {
 	var err error
 	if len(mutation) != 3 {
 		err = errors.New(E_CONSTRAINT_VIOLATION)

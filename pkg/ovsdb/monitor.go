@@ -75,17 +75,17 @@ func (k *Key2Updaters) removeUpdaters(key common.Key, jsonValue string) {
 type dbMonitor struct {
 	log logr.Logger
 
-	// etcd watcher channel
+	// etcdTrx watcher channel
 	watchChannel clientv3.WatchChan
-	// cancel function to close the etcd watcher
+	// cancel function to close the etcdTrx watcher
 	cancel context.CancelFunc
 
 	mu sync.Mutex
 	// database name that the dbMonitor is watching
 	dataBaseName string
 
-	// Map from etcd paths (prefix/dbname/table) to arrays of updaters
-	// We use it to link keys from etcd events to updaters. We use array of updaters, because OVSDB allows to specify
+	// Map from etcdTrx paths (prefix/dbname/table) to arrays of updaters
+	// We use it to link keys from etcdTrx events to updaters. We use array of updaters, because OVSDB allows to specify
 	// an array of <dbMonitor-request> objects for a monitored table
 	key2Updaters Key2Updaters
 
@@ -299,7 +299,7 @@ func (m *dbMonitor) prepareTableNotification(events []*clientv3.Event) (map[stri
 	defer m.mu.Unlock()
 	for _, ev := range events {
 		if ev.Kv == nil {
-			m.log.V(5).Info("empty etcd event", "event", fmt.Sprintf("%+v", ev))
+			m.log.V(5).Info("empty etcdTrx event", "event", fmt.Sprintf("%+v", ev))
 			continue
 		}
 		key, err := common.ParseKey(string(ev.Kv.Key))
