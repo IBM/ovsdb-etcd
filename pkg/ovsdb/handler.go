@@ -71,27 +71,48 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 		log.V(1).Info("Unknown schema", "dbName", ovsReq.DBName)
 		return nil, err
 	}
-	txn := NewTransaction(ctx, ch.etcdClient, ovsReq, schema, log)
+	cache := ch.db.GetCache()
+	if cache == nil {
+		err := errors.New(E_INTERNAL_ERROR)
+		log.V(1).Info("Cache is not created")
+		return nil, err
+	}
+	dbCache, ok := (*cache)[ovsReq.DBName]
+	if !ok {
+		err := errors.New(E_INTERNAL_ERROR)
+		log.V(1).Info("Database cache is not created", "dbName", ovsReq.DBName)
+		return nil, err
+	}
+	txn, err := NewTransaction(ctx, ch.etcdClient, ovsReq, &dbCache, schema, log)
+	if err != nil {
+		return nil, errors.New(E_INTERNAL_ERROR)
+	}
 
 	monitor, thereIsMonitor := ch.monitors[txn.request.DBName]
-
+	txn.log.V(7).Info("before tables lock")
 	// temporary solution to provide consistency
 	err = txn.lockTables()
 	if err != nil {
 		return nil, err
 	}
+	txn.log.V(7).Info("got tables lock")
 	if thereIsMonitor {
 		monitor.tQueue.startTransaction()
 	}
-	rev, err := txn.Commit()
-	if err != nil {
-		return nil, err
-	}
+	rev, errC := txn.Commit()
 	err = txn.unLockTables()
-	if err != nil {
+	txn.log.V(7).Info("tables unlocked")
+	if errC != nil || err != nil {
+		if thereIsMonitor {
+			monitor.tQueue.abbortTransaction()
+		}
+		if errC != nil {
+			txn.log.Error(errC, "commit returned")
+			return nil, errC
+		}
+		txn.log.Error(err, "unlock returned")
 		return nil, err
 	}
-
 	if thereIsMonitor {
 		// we have to guarantee that a new monitor call if it runs concurrently with the transaction, returns first
 		var wg sync.WaitGroup

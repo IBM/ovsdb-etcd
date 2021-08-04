@@ -2,6 +2,7 @@ package ovsdb
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/go-logr/logr"
 
@@ -26,6 +27,8 @@ type Condition struct {
 	ColumnSchema *libovsdb.ColumnSchema
 	Log          logr.Logger
 }
+
+type Conditions []Condition
 
 func NewCondition(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, condition []interface{}, log logr.Logger) (*Condition, error) {
 	var err error
@@ -55,7 +58,6 @@ func NewCondition(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, 
 		log.Error(err, "failed to convert function to string", "condition", condition)
 		return nil, err
 	}
-
 	value := condition[2]
 	if columnSchema != nil {
 		tmp, err := columnSchema.Unmarshal(value)
@@ -65,7 +67,7 @@ func NewCondition(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, 
 			return nil, err
 		}
 		value = tmp
-	} else if column == libovsdb.COL_UUID {
+	} else if column == libovsdb.COL_UUID { // TODO add libovsdb.COL_VERSION
 		tmp, err := libovsdb.UnmarshalUUID(value)
 		if err != nil {
 			err = errors.New(E_INTERNAL_ERROR)
@@ -74,8 +76,7 @@ func NewCondition(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, 
 		}
 		value = tmp
 	}
-
-	tmp, err := mapUUID.Resolv(value, log)
+	tmp, err := mapUUID.Resolve(value, log)
 	if err != nil {
 		err := errors.New(E_INTERNAL_ERROR)
 		log.Error(err, "failed to resolve named-uuid condition", "column", column, "value", value)
@@ -83,13 +84,63 @@ func NewCondition(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, 
 	}
 	value = tmp
 
-	return &Condition{
+	cond := &Condition{
 		Column:       column,
 		Function:     fn,
 		Value:        value,
 		ColumnSchema: columnSchema,
 		Log:          log,
-	}, nil
+	}
+	err = cond.validateCompareFunction()
+	if err != nil {
+		return nil, err
+	}
+	return cond, nil
+}
+
+func (c Conditions) getUUIDIfSelected() (string, error) {
+	for _, cond := range c {
+		uuid, err := cond.getUUIDIfExists()
+		if err != nil {
+			return "", err
+		}
+		if uuid != "" {
+			return uuid, nil
+		}
+	}
+	return "", nil
+}
+
+func (c Conditions) isRowSelected(row *map[string]interface{}) (bool, error) {
+	for _, cond := range c {
+		ok, err := cond.Compare(row)
+		if err != nil {
+			return false, err
+		}
+		if !ok {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func (c *Condition) validateCompareFunction() error {
+	switch c.Function {
+	case FN_EQ, FN_NE, FN_EX, FN_IN:
+		// these functions are acceptable for all types
+		return nil
+	case FN_GE, FN_GT, FN_LE, FN_LT:
+		if c.ColumnSchema.Type != libovsdb.TypeInteger && c.ColumnSchema.Type != libovsdb.TypeReal {
+			err := errors.New(E_CONSTRAINT_VIOLATION)
+			c.Log.Error(err, "incompatible compare function", "compare function", c.Function, "column type", c.ColumnSchema.Type)
+			return err
+		}
+		return nil
+	default:
+		err := errors.New(E_CONSTRAINT_VIOLATION)
+		c.Log.Error(err, "unsupported compare function", "compare function", c.Function)
+		return err
+	}
 }
 
 func (c *Condition) CompareInteger(row *map[string]interface{}) (bool, error) {
@@ -314,6 +365,23 @@ func (c *Condition) CompareMap(row *map[string]interface{}) (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+// a short cat for a most usual condition requests, when condition is uuid.
+func (c *Condition) getUUIDIfExists() (string, error) {
+	if c.Column != libovsdb.COL_UUID {
+		return "", nil
+	}
+	if c.Function != FN_EQ && c.Function != FN_IN {
+		return "", nil
+	}
+	ovsUUID, ok := c.Value.(libovsdb.UUID)
+	if !ok {
+		err := fmt.Errorf("failed to convert condition value %v, its type is %T", c.Value, c.Value)
+		c.Log.Error(err, "")
+		return "", err
+	}
+	return ovsUUID.GoUUID, nil
 }
 
 func (c *Condition) Compare(row *map[string]interface{}) (bool, error) {

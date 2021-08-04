@@ -3,7 +3,6 @@ package ovsdb
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sync"
 	"time"
 
@@ -28,12 +27,15 @@ type Databaser interface {
 	GetData(keys []common.Key) (*clientv3.TxnResponse, error)
 	PutData(ctx context.Context, key common.Key, obj interface{}) error
 	GetSchema(name string) map[string]interface{}
+	GetCache() *cache
 }
 
 type DatabaseEtcd struct {
 	cli        *clientv3.Client
 	Schemas    libovsdb.Schemas // dataBaseName -> schema
 	strSchemas map[string]map[string]interface{}
+	cache      cache
+	log        logr.Logger
 	mu         sync.Mutex
 }
 
@@ -81,8 +83,8 @@ func NewEtcdClient(endpoints []string) (*clientv3.Client, error) {
 	return cli, nil
 }
 
-func NewDatabaseEtcd(cli *clientv3.Client) (Databaser, error) {
-	return &DatabaseEtcd{cli: cli,
+func NewDatabaseEtcd(cli *clientv3.Client, log logr.Logger) (Databaser, error) {
+	return &DatabaseEtcd{cli: cli, log: log, cache: cache{},
 		Schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}}, nil
 }
 
@@ -115,9 +117,11 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 	schemaName := schemaMap["name"].(string)
 	con.mu.Lock()
 	con.strSchemas[schemaName] = schemaMap
-	//con.locks[schemaName] = &sync.Mutex{}
+	con.cache.addDatabaseCache(schemaName, con.cli)
 	con.mu.Unlock()
 	schemaSet, err := libovsdb.NewOvsSet(string(data))
+	// the _Server.Database entries should be unique per database, so we don't use a standard key schema when the row key
+	// is its _uuid, but here we use database / schema name as the key.
 	srv := _Server.Database{Model: "standalone", Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
 		Connected: true, Leader: true, Schema: *schemaSet, Version: libovsdb.UUID{GoUUID: uuid.NewString()}}
 	key := common.NewDataKey("_Server", "Database", schemaName)
@@ -131,6 +135,10 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 
 func (con *DatabaseEtcd) GetSchemas() libovsdb.Schemas {
 	return con.Schemas
+}
+
+func (con *DatabaseEtcd) GetCache() *cache {
+	return &con.cache
 }
 
 func (con *DatabaseEtcd) GetKeyData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
@@ -254,35 +262,6 @@ func (evList EventList) String() string {
 	return string(b)
 }
 
-type KeyValue struct {
-	Key   common.Key
-	Value map[string]interface{}
-}
-
-func NewKeyValue(etcdKV *mvccpb.KeyValue) (*KeyValue, error) {
-	if etcdKV == nil {
-		return nil, fmt.Errorf("nil etcdKV")
-	}
-	kv := new(KeyValue)
-
-	/* key */
-	if etcdKV.Key == nil {
-		return nil, fmt.Errorf("nil key")
-	}
-	key, err := common.ParseKey(string(etcdKV.Key))
-	if err != nil {
-		return nil, err
-	}
-	kv.Key = *key
-	/* value */
-	err = json.Unmarshal(etcdKV.Value, &kv.Value)
-	if err != nil {
-		return nil, err
-	}
-
-	return kv, nil
-}
-
 type DatabaseMock struct {
 	Response interface{}
 	Error    error
@@ -355,4 +334,9 @@ func (con *DatabaseMock) CreateMonitor(dbName string, handler *Handler, log logr
 	_, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
 	return m
+}
+
+func (con *DatabaseMock) GetCache() *cache {
+	// TODO
+	return nil
 }

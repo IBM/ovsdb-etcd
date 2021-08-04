@@ -19,9 +19,8 @@ import (
 	"github.com/creachadair/jrpc2/channel"
 	"github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/metrics"
-
 	"github.com/go-logr/logr"
-	klog "k8s.io/klog/v2"
+	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
@@ -110,7 +109,7 @@ func main() {
 	}
 	defer cli.Close()
 
-	db, _ := ovsdb.NewDatabaseEtcd(cli)
+	db, _ := ovsdb.NewDatabaseEtcd(cli, log)
 
 	err = db.AddSchema(path.Join(*schemaBasedir, "_server.ovsschema"))
 	if err != nil {
@@ -123,6 +122,7 @@ func main() {
 		log.Error(err, "failed to add schema")
 		os.Exit(1)
 	}
+
 	// TODO for development only, will be remove later
 	if *loadServerDataFlag {
 		err = loadServerData(db.(*ovsdb.DatabaseEtcd))

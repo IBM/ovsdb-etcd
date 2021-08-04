@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
-	klog "k8s.io/klog/v2"
-	klogr "k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2"
+	"k8s.io/klog/v2/klogr"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
