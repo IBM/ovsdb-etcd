@@ -31,6 +31,7 @@ type updater struct {
 	isV1             bool
 	notificationType ovsjson.UpdateNotificationType
 	jasonValueStr    string
+	log              logr.Logger
 }
 
 type handlerMonitorData struct {
@@ -286,11 +287,11 @@ func (m *dbMonitor) cancelDbMonitor() {
 	}
 }
 
-func mcrToUpdater(mcr ovsjson.MonitorCondRequest, jsonValue string, tableSchema *libovsdb.TableSchema, isV1 bool) *updater {
+func mcrToUpdater(mcr ovsjson.MonitorCondRequest, jsonValue string, tableSchema *libovsdb.TableSchema, isV1 bool, log logr.Logger) *updater {
 	if mcr.Select == nil {
 		mcr.Select = &libovsdb.MonitorSelect{}
 	}
-	return &updater{mcr: mcr, jasonValueStr: jsonValue, isV1: isV1, tableSchema: tableSchema}
+	return &updater{mcr: mcr, jasonValueStr: jsonValue, isV1: isV1, tableSchema: tableSchema, log: log}
 }
 
 func (m *dbMonitor) prepareTableNotification(events []*clientv3.Event) (map[string]ovsjson.TableUpdates, error) {
