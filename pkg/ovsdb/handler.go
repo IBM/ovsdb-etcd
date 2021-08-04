@@ -290,7 +290,7 @@ func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) 
 					return nil, err
 				}
 				for _, mcr := range mcrArray {
-					updater := mcrToUpdater(mcr, jsonValueString, tableSchema, monitorData.notificationType == ovsjson.Update)
+					updater := mcrToUpdater(mcr, jsonValueString, tableSchema, monitorData.notificationType == ovsjson.Update, ch.log)
 					updaters = append(updaters, *updater)
 				}
 				monitorData.updatersKeys = append(monitorData.updatersKeys, key)
@@ -461,7 +461,7 @@ func (ch *Handler) addMonitor(params []interface{}, notificationType ovsjson.Upd
 			return nil, err
 		}
 		for _, mcr := range mcrs {
-			updater := mcrToUpdater(mcr, jsonValueString, tableSchema, notificationType == ovsjson.Update)
+			updater := mcrToUpdater(mcr, jsonValueString, tableSchema, notificationType == ovsjson.Update, ch.log)
 			updaters = append(updaters, *updater)
 		}
 		key := common.NewTableKey(cmpr.DatabaseName, tableName)
