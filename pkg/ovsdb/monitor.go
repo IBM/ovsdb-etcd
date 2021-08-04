@@ -114,6 +114,10 @@ func (tq *transactionsQueue) startTransaction() {
 	tq.mu.Lock()
 }
 
+func (tq *transactionsQueue) abbortTransaction() {
+	tq.mu.Unlock()
+}
+
 func (tq *transactionsQueue) endTransaction(rev int64, wg *sync.WaitGroup) {
 	// we are holding the lock
 	qe := queueElement{revision: rev, wg: wg}

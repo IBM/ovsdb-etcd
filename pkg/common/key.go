@@ -82,6 +82,10 @@ func (k *Key) ToTableKey() Key {
 	return Key{Prefix: k.Prefix, DBName: k.DBName, TableName: k.TableName}
 }
 
+func (k *Key) IsCommentKey() bool {
+	return k.TableName == COMMENTS
+}
+
 /* GenerateUUID generate RFC4122 UUID */
 func GenerateUUID() string {
 	return guuid.NewString()

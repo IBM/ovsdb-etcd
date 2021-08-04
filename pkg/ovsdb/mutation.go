@@ -57,15 +57,20 @@ func NewMutation(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, m
 	}
 
 	value := mutation[2]
-
 	value, err = columnSchema.Unmarshal(value)
+	if err != nil {
+		// value for mutate map with delete mutator can be map or set
+		if columnSchema.Type == libovsdb.TypeMap || mt == MT_DELETE {
+			value, err = columnSchema.UnmarshalSet(value)
+		}
+	}
 	if err != nil {
 		err = errors.New(E_CONSTRAINT_VIOLATION)
 		log.Error(err, "failed unmarshal of column", "column", column)
 		return nil, err
 	}
 
-	value, err = mapUUID.Resolv(value, log)
+	value, err = mapUUID.Resolve(value, log)
 	if err != nil {
 		err = errors.New(E_CONSTRAINT_VIOLATION)
 		log.Error(err, "failed resolv-namedUUID of column", "column", column)
@@ -79,13 +84,54 @@ func NewMutation(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, m
 		return nil, err
 	}
 
-	return &Mutation{
+	m := &Mutation{
 		Column:       column,
 		Mutator:      mt,
 		Value:        value,
 		ColumnSchema: columnSchema,
 		Log:          log,
-	}, nil
+	}
+	if err = m.validateMutator(); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (m *Mutation) validateMutator() error {
+	switch m.ColumnSchema.Type {
+	case libovsdb.TypeReal, libovsdb.TypeInteger:
+		switch m.Mutator {
+		case MT_DIFFERENCE, MT_PRODUCT, MT_QUOTIENT, MT_SUM:
+			return nil
+		case MT_REMAINDER:
+			if m.ColumnSchema.Type == libovsdb.TypeInteger {
+				return nil
+			}
+		}
+	case libovsdb.TypeMap, libovsdb.TypeSet:
+		if m.Mutator == MT_INSERT || m.Mutator == MT_DELETE {
+			return nil
+		}
+		if m.ColumnSchema.Type == libovsdb.TypeSet {
+			valueType := m.ColumnSchema.TypeObj.Value.Type
+			if valueType == libovsdb.TypeReal || valueType == libovsdb.TypeInteger {
+				switch m.Mutator {
+				case MT_DIFFERENCE, MT_PRODUCT, MT_QUOTIENT, MT_SUM:
+					return nil
+				case MT_REMAINDER:
+					if m.ColumnSchema.Type == libovsdb.TypeInteger {
+						return nil
+					}
+				}
+			}
+			err := errors.New(E_CONSTRAINT_VIOLATION)
+			m.Log.Error(err, "incompatible mutator", "mutator", m.Mutator, "set value type", valueType)
+			return err
+		}
+	}
+	err := errors.New(E_CONSTRAINT_VIOLATION)
+	m.Log.Error(err, "incompatible mutator", "mutator", m.Mutator, "column type", m.ColumnSchema.Type)
+	return err
 }
 
 func (m *Mutation) MutateInteger(row *map[string]interface{}) error {

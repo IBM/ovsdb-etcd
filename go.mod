@@ -13,6 +13,7 @@ require (
 	github.com/lithammer/shortuuid/v3 v3.0.7
 	github.com/onsi/ginkgo v1.16.1
 	github.com/onsi/gomega v1.11.0
+	github.com/pkg/errors v0.8.1
 	github.com/spf13/cobra v1.1.3
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.7.1
@@ -23,6 +24,7 @@ require (
 	go.uber.org/zap v1.17.0 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	google.golang.org/genproto v0.0.0-20201210142538-e3217bee35cc // indirect
+	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.6.0
 )
 

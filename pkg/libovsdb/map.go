@@ -3,6 +3,7 @@ package libovsdb
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 )
 
@@ -41,7 +42,10 @@ func (o *OvsMap) UnmarshalJSON(b []byte) (err error) {
 	if err := json.Unmarshal(b, &oMap); err == nil && len(oMap) > 1 {
 		innerSlice := oMap[1].([]interface{})
 		for _, val := range innerSlice {
-			f := val.([]interface{})
+			f, ok  := val.([]interface{})
+			if !ok {
+				return fmt.Errorf("innerSlice type is not []interface{}, it's %T", val)
+			}
 			o.GoMap[f[0]] = f[1]
 		}
 	}

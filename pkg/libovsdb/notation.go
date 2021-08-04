@@ -6,6 +6,29 @@ import (
 	"fmt"
 )
 
+const (
+	// OperationInsert is an insert operation
+	OperationInsert = "insert"
+	// OperationSelect is a select operation
+	OperationSelect = "select"
+	// OperationUpdate is an update operation
+	OperationUpdate = "update"
+	// OperationMutate is a mutate operation
+	OperationMutate = "mutate"
+	// OperationDelete is a delete operation
+	OperationDelete = "delete"
+	// OperationWait is a wait operation
+	OperationWait = "wait"
+	// OperationCommit is a commit operation
+	OperationCommit = "commit"
+	// OperationAbort is an abort operation
+	OperationAbort = "abort"
+	// OperationComment is a comment operation
+	OperationComment = "comment"
+	// OperationAssert is an assert operation
+	OperationAssert = "assert"
+)
+
 // Operation represents an operation according to RFC7047 section 5.2
 type Operation struct {
 	Op        string                    `json:"op"`

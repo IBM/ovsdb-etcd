@@ -513,53 +513,70 @@ func (schemas *Schemas) Default(dbname, table string, row *map[string]interface{
 
 /* convert types */
 func UnmarshalInteger(from interface{}) (interface{}, error) {
-	data, err := json.Marshal(from)
-	if err != nil {
-		return nil, err
+	to, ok := from.(int)
+	if !ok {
+		data, err := json.Marshal(from)
+		if err != nil {
+			return nil, err
+		}
+		err = json.Unmarshal(data, &to)
 	}
-	var to int
-	err = json.Unmarshal(data, &to)
-	return to, err
+	return to, nil
 }
 
 func UnmarshalReal(from interface{}) (interface{}, error) {
-	data, err := json.Marshal(from)
-	if err != nil {
-		return nil, err
+	to, ok := from.(float64)
+	if !ok {
+		data, err := json.Marshal(from)
+		if err != nil {
+			return nil, err
+		}
+		err = json.Unmarshal(data, &to)
 	}
-	var to float64
-	err = json.Unmarshal(data, &to)
-	return to, err
+	return to, nil
 }
 
 func UnmarshalString(from interface{}) (interface{}, error) {
-	data, err := json.Marshal(from)
-	if err != nil {
-		return nil, err
+	to, ok := from.(string)
+	if !ok {
+		data, err := json.Marshal(from)
+		if err != nil {
+			return nil, err
+		}
+		err = json.Unmarshal(data, &to)
 	}
-	var to string
-	err = json.Unmarshal(data, &to)
-	return to, err
+	return to, nil
 }
 
 func UnmarshalBoolean(from interface{}) (interface{}, error) {
-	data, err := json.Marshal(from)
-	if err != nil {
-		return nil, err
+	to, ok := from.(bool)
+	if !ok {
+		data, err := json.Marshal(from)
+		if err != nil {
+			return nil, err
+		}
+		err = json.Unmarshal(data, &to)
 	}
-	var to bool
-	err = json.Unmarshal(data, &to)
-	return to, err
+	return to, nil
 }
 
 func UnmarshalUUID(from interface{}) (interface{}, error) {
-	data, err := json.Marshal(from)
-	if err != nil {
-		return nil, err
+	to, ok := from.(UUID)
+	if ok {
+		return to, nil
 	}
-	var to UUID
-	err = json.Unmarshal(data, &to)
-	return to, err
+	array, ok := from.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("cannot convert %T to []interface{}, %v", from, from)
+	}
+	if len(array) != 2 {
+		return nil, fmt.Errorf("wrong array size %d", len(array))
+	}
+	uuid, ok := array[1].(string)
+	if !ok {
+		return nil, fmt.Errorf("cannot convert the second UUID member %#v to string, %v", array[1])
+	}
+	return UUID{GoUUID: uuid}, nil
 }
 
 func UnmarshalEnum(from interface{}) (interface{}, error) {
@@ -593,11 +610,14 @@ func (baseType *BaseType) Unmarshal(from interface{}) (interface{}, error) {
 }
 
 func (columnSchema *ColumnSchema) UnmarshalSet(from interface{}) (interface{}, error) {
+	to1, ok := from.(OvsSet)
+	if ok {
+		return to1, nil
+	}
 	data, err := json.Marshal(from)
 	if err != nil {
 		return nil, err
 	}
-	var to1 OvsSet
 	err = json.Unmarshal(data, &to1)
 	if err != nil {
 		return nil, err
@@ -616,11 +636,14 @@ func (columnSchema *ColumnSchema) UnmarshalSet(from interface{}) (interface{}, e
 }
 
 func (columnSchema *ColumnSchema) UnmarshalMap(from interface{}) (interface{}, error) {
+	to1, ok := from.(OvsMap)
+	if ok {
+		return to1, nil
+	}
 	data, err := json.Marshal(from)
 	if err != nil {
 		return nil, err
 	}
-	var to1 OvsMap
 	err = json.Unmarshal(data, &to1)
 	if err != nil {
 		return nil, err
