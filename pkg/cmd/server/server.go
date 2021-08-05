@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path"
 	"runtime"
+	"runtime/pprof"
 	"strings"
 	"syscall"
 	"time"
@@ -40,7 +41,8 @@ var (
 	serviceName        = flag.String("service-name", "", "Deployment service name, e.g. 'nbdb' or 'sbdb'")
 	schemaFile         = flag.String("schema-file", "", "schema-file")
 	loadServerDataFlag = flag.Bool("load-server-data", false, "load-server-data")
-	pidfile            = flag.String("pid-file", "", "Name of file that will hold the pid")
+	pidFile            = flag.String("pid-file", "", "Name of file that will hold the pid")
+	cpuProfile         = flag.String("cpu-profile", "", "write cpu profile to file")
 )
 
 var GitCommit string
@@ -53,12 +55,22 @@ func main() {
 	defer klog.Flush()
 	log = klogr.New()
 
+	if *cpuProfile != "" {
+		f, err := os.Create(*cpuProfile)
+		if err != nil {
+			log.Error(err, "failed to create cpu profile")
+			os.Exit(1)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
 	log.V(3).Info("start the ovsdb-etcd server", "git-commit", GitCommit,
 		"tcp-address", tcpAddress, "unix-address", unixAddress, "etcd-members",
 		etcdMembers, "schema-basedir", schemaBasedir, "max-tasks", maxTasks,
 		"database-prefix", databasePrefix, "service-name", serviceName,
 		"schema-file", schemaFile, "load-server-data-flag", loadServerDataFlag,
-		"pidfile", pidfile)
+		"pid-file", pidFile, "cpu-profile", cpuProfile)
 
 	if len(*tcpAddress) == 0 && len(*unixAddress) == 0 {
 		log.Info("You must provide a network-address (TCP and/or UNIX) to listen on")
@@ -74,9 +86,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *pidfile != "" {
-		defer delPidfile(*pidfile)
-		if err := setupPIDFile(*pidfile); err != nil {
+	if *pidFile != "" {
+		defer delPIDFile(*pidFile)
+		if err := setupPIDFile(*pidFile); err != nil {
 			klog.Fatal(err)
 		}
 	}
@@ -229,39 +241,39 @@ func createServicesMap(sharedService *ovsdb.Service, clientHandler *ovsdb.Handle
 	return &handlerMap
 }
 
-func delPidfile(pidfile string) {
-	if pidfile != "" {
-		if _, err := os.Stat(pidfile); err == nil {
-			if err := os.Remove(pidfile); err != nil {
-				log.Error(err, "delete failed", "pidfile", pidfile)
+func delPIDFile(pidFile string) {
+	if pidFile != "" {
+		if _, err := os.Stat(pidFile); err == nil {
+			if err := os.Remove(pidFile); err != nil {
+				log.Error(err, "delete failed", "pidFile", pidFile)
 			}
 		}
 	}
 }
 
-func setupPIDFile(pidfile string) error {
+func setupPIDFile(pidFile string) error {
 	// need to test if already there
-	_, err := os.Stat(pidfile)
+	_, err := os.Stat(pidFile)
 
 	// Create if it doesn't exist, else exit with error
 	if os.IsNotExist(err) {
-		if err := ioutil.WriteFile(pidfile, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
-			log.Error(err, "failed to write pidfile. ignoring..", "pidfile", pidfile)
+		if err := ioutil.WriteFile(pidFile, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
+			log.Error(err, "failed to write pidFile. ignoring..", "pidFile", pidFile)
 		}
 	} else {
 		// get the pid and see if it exists
-		pid, err := ioutil.ReadFile(pidfile)
+		pid, err := ioutil.ReadFile(pidFile)
 		if err != nil {
-			return fmt.Errorf("pidfile %s exists but can't be read: %v", pidfile, err)
+			return fmt.Errorf("pidFile %s exists but can't be read: %v", pidFile, err)
 		}
 		_, err1 := os.Stat("/proc/" + string(pid[:]) + "/cmdline")
 		if os.IsNotExist(err1) {
 			// Left over pid from dead process
-			if err := ioutil.WriteFile(pidfile, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
-				log.Error(err, "failed to write pidfile. ignoring..", "pidfile", pidfile)
+			if err := ioutil.WriteFile(pidFile, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
+				log.Error(err, "failed to write pidFile. ignoring..", "pidFile", pidFile)
 			}
 		} else {
-			return fmt.Errorf("pidfile %s exists and ovnkube is running", pidfile)
+			return fmt.Errorf("pidFile %s exists and ovnkube is running", pidFile)
 		}
 	}
 
