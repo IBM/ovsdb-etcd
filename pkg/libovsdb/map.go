@@ -66,3 +66,37 @@ func NewOvsMap(goMap interface{}) (*OvsMap, error) {
 	}
 	return &OvsMap{genMap}, nil
 }
+
+func IsEqualMaps(map1 OvsMap, map2 OvsMap) bool {
+	return map1.Equals(map2)
+}
+
+func (o *OvsMap) Equals(target OvsMap) bool {
+	return reflect.DeepEqual(*o, target)
+}
+
+func (o *OvsMap) containKeyValTuple(expectedKey, expectedVal interface{}) bool {
+	actualVal, ok := o.GoMap[expectedKey]
+	if !ok {
+		return false
+	}
+	return reflect.DeepEqual(expectedVal, actualVal)
+}
+
+func (o *OvsMap) IncludeMap(target OvsMap) bool {
+	for expectedKey, expectedVal := range target.GoMap {
+		if !o.containKeyValTuple(expectedKey, expectedVal) {
+			return false
+		}
+	}
+	return true
+}
+
+func (o *OvsMap) ExcludeMap(target OvsMap) bool {
+	for expectedKey, expectedVal := range target.GoMap {
+		if o.containKeyValTuple(expectedKey, expectedVal) {
+			return false
+		}
+	}
+	return true
+}

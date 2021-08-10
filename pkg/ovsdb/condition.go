@@ -203,25 +203,22 @@ func (c *Condition) CompareReal(row *map[string]interface{}) (bool, error) {
 		return false, err
 	}
 
-	if (fn == FN_EQ || fn == FN_IN) && actual == expected {
-		return true, nil
+	switch fn {
+	case FN_EQ, FN_IN:
+		return actual == expected, nil
+	case FN_NE, FN_EX:
+		return actual != expected, nil
+	case FN_GT:
+		return actual > expected, nil
+	case FN_GE:
+		return actual >= expected, nil
+	case FN_LT:
+		return actual < expected, nil
+	case FN_LE:
+		return actual <= expected, nil
+	default:
+		return false, nil
 	}
-	if (fn == FN_NE || fn == FN_EX) && actual != expected {
-		return true, nil
-	}
-	if fn == FN_GT && actual > expected {
-		return true, nil
-	}
-	if fn == FN_GE && actual >= expected {
-		return true, nil
-	}
-	if fn == FN_LT && actual < expected {
-		return true, nil
-	}
-	if fn == FN_LE && actual <= expected {
-		return true, nil
-	}
-	return false, nil
 }
 
 func (c *Condition) CompareBoolean(row *map[string]interface{}) (bool, error) {
@@ -239,14 +236,14 @@ func (c *Condition) CompareBoolean(row *map[string]interface{}) (bool, error) {
 		c.Log.Error(err, "failed to convert condition value", "value", c.Value)
 		return false, err
 	}
-
-	if (fn == FN_EQ || fn == FN_IN) && actual == expected {
-		return true, nil
+	switch fn {
+	case FN_EQ, FN_IN:
+		return actual == expected, nil
+	case FN_NE, FN_EX:
+		return actual != expected, nil
+	default:
+		return false, nil
 	}
-	if (fn == FN_NE || fn == FN_EX) && actual != expected {
-		return true, nil
-	}
-	return false, nil
 }
 
 func (c *Condition) CompareString(row *map[string]interface{}) (bool, error) {
@@ -264,14 +261,14 @@ func (c *Condition) CompareString(row *map[string]interface{}) (bool, error) {
 		c.Log.Error(err, "failed to convert condition value", "value", c.Value)
 		return false, err
 	}
-
-	if (fn == FN_EQ || fn == FN_IN) && actual == expected {
-		return true, nil
+	switch fn {
+	case FN_EQ, FN_IN:
+		return actual == expected, nil
+	case FN_NE, FN_EX:
+		return actual != expected, nil
+	default:
+		return false, nil
 	}
-	if (fn == FN_NE || fn == FN_EX) && actual != expected {
-		return true, nil
-	}
-	return false, nil
 }
 
 func (c *Condition) CompareUUID(row *map[string]interface{}) (bool, error) {
@@ -295,14 +292,14 @@ func (c *Condition) CompareUUID(row *map[string]interface{}) (bool, error) {
 		c.Log.Error(err, "failed to convert condition value", "value", c.Value)
 		return false, err
 	}
-
-	if (fn == FN_EQ || fn == FN_IN) && actual.GoUUID == expected.GoUUID {
-		return true, nil
+	switch fn {
+	case FN_EQ, FN_IN:
+		return actual.GoUUID == expected.GoUUID, nil
+	case FN_NE, FN_EX:
+		return actual.GoUUID != expected.GoUUID, nil
+	default:
+		return false, nil
 	}
-	if (fn == FN_NE || fn == FN_EX) && actual.GoUUID != expected.GoUUID {
-		return true, nil
-	}
-	return false, nil
 }
 
 func (c *Condition) CompareEnum(row *map[string]interface{}) (bool, error) {
@@ -319,8 +316,13 @@ func (c *Condition) CompareEnum(row *map[string]interface{}) (bool, error) {
 
 func (c *Condition) CompareSet(row *map[string]interface{}) (bool, error) {
 	var err error
-	actual, ok := (*row)[c.Column].(libovsdb.OvsSet)
-	if !ok {
+	var actual libovsdb.OvsSet
+	switch data := (*row)[c.Column].(type) {
+	case libovsdb.OvsSet:
+		actual = data
+	case int, float64, bool, string, libovsdb.UUID, libovsdb.OvsMap:
+		actual = libovsdb.OvsSet{GoSet: []interface{}{data}}
+	default:
 		err = errors.New(E_CONSTRAINT_VIOLATION)
 		c.Log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
 		return false, err
@@ -333,13 +335,18 @@ func (c *Condition) CompareSet(row *map[string]interface{}) (bool, error) {
 		return false, err
 	}
 
-	if (fn == FN_EQ || fn == FN_IN) && isEqualSet(actual, expected) {
-		return true, nil
+	switch fn {
+	case FN_IN:
+		return actual.IncludeSet(expected), nil
+	case FN_EX:
+		return actual.ExcludeSet(expected), nil
+	case FN_EQ:
+		return actual.Equals(expected), nil
+	case FN_NE:
+		return !actual.Equals(expected), nil
+	default:
+		return false, nil
 	}
-	if (fn == FN_NE || fn == FN_EX) && !isEqualSet(actual, expected) {
-		return true, nil
-	}
-	return false, nil
 }
 
 func (c *Condition) CompareMap(row *map[string]interface{}) (bool, error) {
@@ -358,13 +365,18 @@ func (c *Condition) CompareMap(row *map[string]interface{}) (bool, error) {
 		return false, err
 	}
 
-	if (fn == FN_EQ || fn == FN_IN) && isEqualMap(actual, expected) {
-		return true, nil
+	switch fn {
+	case FN_IN:
+		return actual.IncludeMap(expected), nil
+	case FN_EX:
+		return actual.ExcludeMap(expected), nil
+	case FN_EQ:
+		return actual.Equals(expected), nil
+	case FN_NE:
+		return !actual.Equals(expected), nil
+	default:
+		return false, nil
 	}
-	if (fn == FN_NE || fn == FN_EX) && !isEqualMap(actual, expected) {
-		return true, nil
-	}
-	return false, nil
 }
 
 // a short cat for a most usual condition requests, when condition is uuid.

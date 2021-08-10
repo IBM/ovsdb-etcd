@@ -633,26 +633,20 @@ func getAndDeleteUUID(data map[string]interface{}) (string, error) {
 		return "", fmt.Errorf("row doesn't contain %s", libovsdb.COL_UUID)
 	}
 	delete(data, libovsdb.COL_UUID)
-	uuid, ok := uuidInt.([]interface{})
+	uuid, ok := uuidInt.(libovsdb.UUID)
 	if !ok {
 		return "", fmt.Errorf("wrong uuid type %T %v", uuidInt, uuidInt)
 	}
-	// TODO add uuid parsing
-	if len(uuid) != 2 {
-		return "", fmt.Errorf("wrong uuid type %v", uuid)
-	}
-	uuidStr, ok := uuid[1].(string)
-	if !ok {
-		return "", fmt.Errorf("wrong type %T %v", uuidInt, uuidInt)
-	}
-	return uuidStr, nil
+	return uuid.GoUUID, nil
 }
 
 func (u *updater) prepareRow(value []byte) (map[string]interface{}, string, error) {
-	data, err := unmarshalData(value)
+	var row libovsdb.Row
+	err := row.UnmarshalJSON(value)
 	if err != nil {
 		return nil, "", err
 	}
+	data := row.Fields
 	res, err := u.isRowAppearOnWhere(data)
 	if err != nil {
 		return nil, "", err
