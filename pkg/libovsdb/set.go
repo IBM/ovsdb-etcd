@@ -92,3 +92,38 @@ func (o *OvsSet) UnmarshalJSON(b []byte) (err error) {
 		return addToSet(o, inter)
 	}
 }
+
+func IsEqualSets(set1 OvsSet, set2 OvsSet) bool {
+	return set1.Equals(set2)
+}
+
+func (o *OvsSet) Equals(target OvsSet) bool {
+	return len(o.GoSet) == len(target.GoSet) && o.IncludeSet(target)
+}
+
+func (o *OvsSet) containElement(expectedVal interface{}) bool {
+	for _, actualVal := range o.GoSet {
+		if reflect.DeepEqual(expectedVal, actualVal) {
+			return true
+		}
+	}
+	return false
+}
+
+func (o *OvsSet) IncludeSet(target OvsSet) bool {
+	for _, targetElement := range target.GoSet {
+		if !o.containElement(targetElement) {
+			return false
+		}
+	}
+	return true
+}
+
+func (o *OvsSet) ExcludeSet(target OvsSet) bool {
+	for _, targetElement := range target.GoSet {
+		if o.containElement(targetElement) {
+			return false
+		}
+	}
+	return true
+}

@@ -66,9 +66,21 @@ func TestMonitorPrepareRowCheckColumns(t *testing.T) {
 }
 
 func TestMonitorPrepareRowCheckWhere(t *testing.T) {
+	const (
+		SET_COLUMN_0 = SET_COLUMN + "0"
+		SET_COLUMN_1 = SET_COLUMN + "1"
+		SET_COLUMN_2 = SET_COLUMN + "2"
+		MAP_COLUMN_0 = MAP_COLUMN + "0"
+		MAP_COLUMN_1 = MAP_COLUMN + "1"
+	)
 	tableSchema := createTestTableSchema()
-	dataRow := map[string]interface{}{"c1": "v1", "c2": "v2", "r1": 1.5, "i1": 3, "b1": true}
-	data := map[string]interface{}{"c1": "v1", "c2": "v2", "r1": 1.5, "i1": 3, "b1": true}
+	set0 := libovsdb.OvsSet{GoSet: nil}
+	set1 := libovsdb.OvsSet{GoSet: []interface{}{"a"}}
+	set2 := libovsdb.OvsSet{GoSet: []interface{}{"a", "b"}}
+	map0 := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}
+	map1 := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}
+	dataRow := map[string]interface{}{"c1": "v1", "c2": "v2", "r1": 1.5, "i1": 3, "b1": true, SET_COLUMN_0: set0, SET_COLUMN_1: set1, SET_COLUMN_2: set2, MAP_COLUMN_0: map0, MAP_COLUMN_1: map1}
+	data := map[string]interface{}{"c1": "v1", "c2": "v2", "r1": 1.5, "i1": 3, "b1": true, SET_COLUMN_0: set0, SET_COLUMN_1: set1, SET_COLUMN_2: set2, MAP_COLUMN_0: map0, MAP_COLUMN_1: map1}
 	expectedUUID := ROW_UUID
 	data[libovsdb.COL_UUID] = libovsdb.UUID{GoUUID: expectedUUID}
 	dataJson, err := json.Marshal(data)
@@ -161,6 +173,77 @@ func TestMonitorPrepareRowCheckWhere(t *testing.T) {
 	checkWhere(&[]interface{}{[]interface{}{libovsdb.COL_UUID, "!=", libovsdb.UUID{GoUUID: expectedUUID}}}, emptyRow)
 	checkWhere(&[]interface{}{[]interface{}{libovsdb.COL_UUID, "excludes", libovsdb.UUID{GoUUID: expectedUUID}}}, emptyRow)
 
+	// Type Set with Zero elements
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_0, "==", libovsdb.OvsSet{GoSet: []interface{}{}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_0, "includes", libovsdb.OvsSet{GoSet: nil}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_0, "!=", libovsdb.OvsSet{GoSet: nil}}}, emptyRow)
+
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_0, "==", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_0, "includes", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_0, "!=", libovsdb.OvsSet{GoSet: nil}}}, emptyRow)
+
+	// Type Set with one element
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_1, "==", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_1, "includes", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_1, "!=", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_1, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, dataRow)
+
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_1, "==", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_1, "includes", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_1, "!=", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_1, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, emptyRow)
+
+	// Type Set with 2 elements
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "==", libovsdb.OvsSet{GoSet: []interface{}{"a", "b"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "==", libovsdb.OvsSet{GoSet: []interface{}{"b", "a"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "!=", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"a", "b"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"b", "a"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"c"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"c", "d"}}}}, dataRow)
+
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "==", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "!=", libovsdb.OvsSet{GoSet: []interface{}{"a", "b"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "!=", libovsdb.OvsSet{GoSet: []interface{}{"b", "a"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"a", "b"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"b", "a"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"c"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"a", "b", "c"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"c", "d"}}}}, emptyRow)
+
+	// Type Map
+
+	// Type Map without any elements
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_0, "==", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_0, "includes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_0, "!=", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_0, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, dataRow)
+
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_0, "!=", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_0, "==", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_0, "includes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, emptyRow)
+
+	// Type Map with 2 tuples
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "==", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "!=", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "includes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "includes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "includes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key2": "val2"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key3": "val1"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val3"}}}}, dataRow)
+
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "!=", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "==", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "includes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2", "key3": "val3"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key2": "val2"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key3": "val1", "key2": "val2"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val3", "key2": "val2"}}}}, emptyRow)
 }
 
 func checkPrepareRow(t *testing.T, tableSchema *libovsdb.TableSchema, dataJson []byte, isV1 bool, mcr ovsjson.MonitorCondRequest, expRow map[string]interface{}) {
@@ -177,25 +260,25 @@ func createTestTableSchema() *libovsdb.TableSchema {
 	columnSchemaReal := libovsdb.ColumnSchema{Type: libovsdb.TypeReal}
 	columnSchemaInt := libovsdb.ColumnSchema{Type: libovsdb.TypeInteger}
 	columnSchemaBool := libovsdb.ColumnSchema{Type: libovsdb.TypeBoolean}
-	tableSchema.Columns = map[string]*libovsdb.ColumnSchema{
-		"c1": &columnSchemaString,
-		"c2": &columnSchemaString,
-		"c3": &columnSchemaString,
-		"c4": &columnSchemaString,
-		"r1": &columnSchemaReal,
-		"i1": &columnSchemaInt,
-		"b1": &columnSchemaBool,
-	}
-	tableSchema.Columns[libovsdb.COL_UUID] = &columnSchemaUUID
-
-	mapColumnType := libovsdb.ColumnType{Key: &libovsdb.BaseType{Type: "string"}, Value: &libovsdb.BaseType{Type: "string"}}
-	mColumnSchema := libovsdb.ColumnSchema{Type: libovsdb.TypeMap, TypeObj: &mapColumnType}
-	tableSchema.Columns[MAP_COLUMN] = &mColumnSchema
-
 	setColumnType := libovsdb.ColumnType{Key: &libovsdb.BaseType{Type: "string"}}
 	sColumnSchema := libovsdb.ColumnSchema{Type: libovsdb.TypeSet, TypeObj: &setColumnType}
-	tableSchema.Columns[SET_COLUMN] = &sColumnSchema
-
+	mapColumnType := libovsdb.ColumnType{Key: &libovsdb.BaseType{Type: "string"}, Value: &libovsdb.BaseType{Type: "string"}}
+	mColumnSchema := libovsdb.ColumnSchema{Type: libovsdb.TypeMap, TypeObj: &mapColumnType}
+	tableSchema.Columns = map[string]*libovsdb.ColumnSchema{
+		"c1":              &columnSchemaString,
+		"c2":              &columnSchemaString,
+		"c3":              &columnSchemaString,
+		"c4":              &columnSchemaString,
+		"r1":              &columnSchemaReal,
+		"i1":              &columnSchemaInt,
+		"b1":              &columnSchemaBool,
+		SET_COLUMN + "0":  &sColumnSchema,
+		SET_COLUMN + "1":  &sColumnSchema,
+		SET_COLUMN + "2":  &sColumnSchema,
+		libovsdb.COL_UUID: &columnSchemaUUID,
+		MAP_COLUMN + "0":  &mColumnSchema,
+		MAP_COLUMN + "1":  &mColumnSchema,
+	}
 	return &tableSchema
 }
 

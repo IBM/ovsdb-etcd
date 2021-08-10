@@ -1,14 +1,12 @@
 package ovsdb
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -44,105 +42,21 @@ const (
 	E_SYNTAX_ERROR     = "syntax error or unknown column"
 )
 
-func isEqualSet(expected, actual interface{}) bool {
-	return reflect.DeepEqual(expected, actual)
-}
-
-func isIncludesSet(expected, actual interface{}) bool {
-	expectedSet := expected.(libovsdb.OvsSet)
-	actualSet := actual.(libovsdb.OvsSet)
-	for _, expectedVal := range expectedSet.GoSet {
-		foundVal := false
-		for _, actualVal := range actualSet.GoSet {
-			if isEqualValue(expectedVal, actualVal) {
-				foundVal = true
-			}
-		}
-		if !foundVal {
-			return false
-		}
-	}
-	return true
-}
-
-type Alphabetic []string
-
-func (list Alphabetic) Len() int { return len(list) }
-
-func (list Alphabetic) Swap(i, j int) { list[i], list[j] = list[j], list[i] }
-
-func (list Alphabetic) Less(i, j int) bool {
-	var si string = list[i]
-	var sj string = list[j]
-	var si_lower = strings.ToLower(si)
-	var sj_lower = strings.ToLower(sj)
-	if si_lower == sj_lower {
-		return si < sj
-	}
-	return si_lower < sj_lower
-}
-
-func splitAndSort(s string) string {
-	list := strings.Split(s, ",")
-
-	sort.Sort(Alphabetic(list))
-
-	var buffer bytes.Buffer
-	for _, val := range list {
-		buffer.WriteString(val)
-	}
-
-	return buffer.String()
-}
-
-func splitAndSortStrings(expectedVal, actualVal *interface{}) {
-	expectedValStr, expectedOK := (*expectedVal).(string)
-	actualValStr, actualOK := (*actualVal).(string)
-	if expectedOK && actualOK {
-		(*expectedVal) = splitAndSort(expectedValStr)
-		(*actualVal) = splitAndSort(actualValStr)
-	}
-}
-
-func isEqualMap(expected, actual interface{}) bool {
-	return reflect.DeepEqual(expected, actual)
-}
-
-func isIncludesMap(expected, actual interface{}) bool {
-	expectedMap := expected.(libovsdb.OvsMap)
-	actualMap := actual.(libovsdb.OvsMap)
-	for key, expectedVal := range expectedMap.GoMap {
-		actualVal, ok := actualMap.GoMap[key]
-		if !ok {
-			return false
-		}
-
-		// the following is a due to discovering that some map values
-		// are a string encoding of either:
-		// map: "<key1:val1>:<key2:val2>..."
-		// set: "<val1>,<val2>..."
-		// thus we sort before comparison
-		splitAndSortStrings(&expectedVal, &actualVal)
-
-		if !isEqualValue(expectedVal, actualVal) {
-			return false
-		}
-	}
-	return true
-}
-
-func isEqualValue(expected, actual interface{}) bool {
-	return reflect.DeepEqual(expected, actual)
-}
-
 func isEqualColumn(columnSchema *libovsdb.ColumnSchema, expected, actual interface{}) bool {
 	switch columnSchema.Type {
 	case libovsdb.TypeSet:
-		return isEqualSet(expected, actual)
+		expectedSet, ok1 := expected.(libovsdb.OvsSet)
+		actualSet, ok2 := actual.(libovsdb.OvsSet)
+		if ok1 && ok2 {
+			return libovsdb.IsEqualSets(expectedSet, actualSet)
+		}
+		return reflect.DeepEqual(expected, actual)
 	case libovsdb.TypeMap:
-		return isEqualMap(expected, actual)
+		expectedMap := expected.(libovsdb.OvsMap)
+		actualMap := actual.(libovsdb.OvsMap)
+		return libovsdb.IsEqualMaps(expectedMap, actualMap)
 	default:
-		return isEqualValue(expected, actual)
+		return reflect.DeepEqual(expected, actual)
 	}
 }
 

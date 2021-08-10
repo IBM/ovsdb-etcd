@@ -2,6 +2,7 @@ package ovsdb
 
 import (
 	"errors"
+	"reflect"
 
 	"github.com/go-logr/logr"
 	"github.com/jinzhu/copier"
@@ -166,7 +167,7 @@ func (m *Mutation) mutateReal(row *map[string]interface{}) error {
 
 func inSet(set *libovsdb.OvsSet, a interface{}) bool {
 	for _, b := range set.GoSet {
-		if isEqualValue(a, b) {
+		if reflect.DeepEqual(a, b) {
 			return true
 		}
 	}
@@ -260,7 +261,7 @@ func (m *Mutation) deleteFromSet(original *libovsdb.OvsSet) (*libovsdb.OvsSet, e
 	for _, current := range original.GoSet {
 		found := false
 		for _, v := range toDeleteSet.GoSet {
-			if isEqualValue(current, v) {
+			if reflect.DeepEqual(current, v) {
 				found = true
 				break
 			}
