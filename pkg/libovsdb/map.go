@@ -42,7 +42,7 @@ func (o *OvsMap) UnmarshalJSON(b []byte) (err error) {
 	if err := json.Unmarshal(b, &oMap); err == nil && len(oMap) > 1 {
 		innerSlice := oMap[1].([]interface{})
 		for _, val := range innerSlice {
-			f, ok  := val.([]interface{})
+			f, ok := val.([]interface{})
 			if !ok {
 				return fmt.Errorf("innerSlice type is not []interface{}, it's %T", val)
 			}

@@ -841,7 +841,7 @@ func (txn *Transaction) RowPrepare(tableSchema *libovsdb.TableSchema, mapUUID na
 
 /* insert */
 func (txn *Transaction) doInsert(ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) (err error, details string) {
-	if ovsResult.Error != nil{
+	if ovsResult.Error != nil {
 		return fmt.Errorf(*ovsResult.Error), ""
 	}
 	tableSchema, e := txn.schema.LookupTable(*ovsOp.Table)
@@ -903,7 +903,7 @@ func (txn *Transaction) doSelect(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 	}
 	uuid, e := cond.getUUIDIfSelected()
 	if e != nil {
-		errors.New(E_INTERNAL_ERROR)
+		err = errors.New(E_INTERNAL_ERROR)
 		return
 	}
 
@@ -1236,13 +1236,23 @@ func (txn *Transaction) doWait(ovsOp *libovsdb.Operation, ovsResult *libovsdb.Op
 	return
 }
 
-func (txn *Transaction) doCommit(ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) (error, string) {
-	return nil, ""
+func (txn *Transaction) doCommit(ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) (err error, details string) {
+	if ovsOp.Durable == nil {
+		err = errors.New(E_CONSTRAINT_VIOLATION)
+		txn.log.Error(err, "missing durable parameter")
+		return
+	}
+	if *ovsOp.Durable {
+		err = errors.New(E_NOT_SUPPORTED)
+		txn.log.Error(err, "do not support durable == true")
+		return
+	}
+	return
 }
 
 /* abort */
 func (txn *Transaction) doAbort(ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) (error, string) {
-	return nil, ""
+	return errors.New(E_ABORTED), ""
 }
 
 /* comment */

@@ -574,7 +574,7 @@ func UnmarshalUUID(from interface{}) (interface{}, error) {
 	}
 	uuid, ok := array[1].(string)
 	if !ok {
-		return nil, fmt.Errorf("cannot convert the second UUID member %#v to string, %v", array[1])
+		return nil, fmt.Errorf("cannot convert the second UUID member %#v to string, it's type %T", array[1], array[1])
 	}
 	return UUID{GoUUID: uuid}, nil
 }
