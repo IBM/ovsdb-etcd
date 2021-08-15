@@ -126,18 +126,18 @@ func (tq *transactionsQueue) endTransaction(rev int64, wg *sync.WaitGroup) {
 }
 
 func (tq *transactionsQueue) notificationSent(rev int64) {
-	klog.Infof("notificationSent rev %d", rev)
+	klog.V(7).Infof("notificationSent rev %d", rev)
 	tq.mu.Lock()
 	defer tq.mu.Unlock()
-	klog.Infof("notificationSent rev %d, size %d", rev, tq.queue.Len())
+	klog.V(7).Infof("notificationSent rev %d, size %d", rev, tq.queue.Len())
 	for tq.queue.Len() > 0 {
 		element := tq.queue.Front()
 		qElement := (element.Value).(queueElement)
-		klog.Infof("notificationSent rev %d, qElement rev %d", rev, qElement.revision)
+		klog.V(7).Infof("notificationSent rev %d, qElement rev %d", rev, qElement.revision)
 		if qElement.revision <= rev {
 			tq.queue.Remove(element)
 			qElement.wg.Done()
-			klog.Infof("notificationSent rev %d called Done", rev)
+			klog.V(7).Infof("notificationSent rev %d called Done", rev)
 		} else {
 			return
 		}
@@ -427,7 +427,7 @@ func (u *updater) prepareModifyRowUpdate(event *clientv3.Event) (*ovsjson.RowUpd
 	if err != nil {
 		return nil, "", err
 	}
-	klog.V(5).Infof("deltaRow size is %d", len(deltaRow))
+	klog.V(7).Infof("deltaRow size is %d", len(deltaRow))
 	if !u.isV1 {
 		return &ovsjson.RowUpdate{Modify: &deltaRow}, uuid, nil
 	}

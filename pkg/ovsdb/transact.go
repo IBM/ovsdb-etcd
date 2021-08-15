@@ -171,7 +171,7 @@ func (txn *Transaction) etcdRemoveDupThen() {
 		key := string(op.KeyBytes())
 		prev, ok := prevKeyIndex[key]
 		if ok {
-			txn.log.V(6).Info("[then] removing key", "key", key, "index", prev)
+			txn.log.V(6).Info("[then] removing duplicate key", "key", key, "index", prev)
 			duplicatedKeys[prev] = prev
 		}
 		prevKeyIndex[key] = curr
@@ -903,17 +903,17 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 	}
 
 	for key, row := range lCache {
-		if uuid == "" || len(cond) > 1 {
-			// there are other conditions in addition or instead of _uuid
-			var ok bool
-			ok, err = cond.isRowSelected(&row)
-			if err != nil {
-				return
-			}
-			if !ok {
-				continue
-			}
+		//	if uuid == "" || len(cond) > 1 {
+		// there are other conditions in addition or instead of _uuid
+		var ok bool
+		ok, err = cond.isRowSelected(&row)
+		if err != nil {
+			return
 		}
+		if !ok {
+			continue
+		}
+		//	}
 		var newRow *map[string]interface{}
 		if ovsOp.Op == libovsdb.OperationUpdate {
 			err = txn.RowPrepare(tableSchema, txn.mapUUID, ovsOp.Row)
