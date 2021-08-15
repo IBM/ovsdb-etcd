@@ -800,6 +800,9 @@ func TestTransactUpdateSimple(t *testing.T) {
 	row2 := map[string]interface{}{
 		"key1": "val2",
 	}
+	row3 := map[string]interface{}{
+		"key1": "val3",
+	}
 	req1 := &libovsdb.Transact{
 		DBName: dbName,
 		Operations: []libovsdb.Operation{
@@ -812,13 +815,18 @@ func TestTransactUpdateSimple(t *testing.T) {
 				Table: &table,
 				Row:   &row2,
 			},
+			{Op: libovsdb.OperationUpdate,
+				Table: &table,
+				Row:   &row3,
+			},
 		},
 	}
 	testEtcdCleanup(t)
 	// insert a row
 	resp := testTransact(t, req1, testSchemaSimple, 0)
-	validateInsertResult(t, resp, 2, 0, "")
-	validateUpdateResult(t, resp, 2, 1, 1)
+	validateInsertResult(t, resp, 3, 0, "")
+	validateUpdateResult(t, resp, 3, 1, 1)
+	validateUpdateResult(t, resp, 3, 2, 1)
 
 	// check the updated value
 	req3 := &libovsdb.Transact{
@@ -833,7 +841,81 @@ func TestTransactUpdateSimple(t *testing.T) {
 	resp = testTransact(t, req3, testSchemaSimple, 1)
 	validateSelectResult(t, resp, 1, 0, 1)
 	row := (*resp.Result[0].Rows)[0]
-	assert.Equal(t, "val2", row["key1"])
+	assert.Equal(t, "val3", row["key1"])
+}
+
+func TestTransactUpdateMT(t *testing.T) {
+	table := "table1"
+	dbName := "simple"
+	n := 5
+	rowOrg := map[string]interface{}{
+		"key1": "val1",
+	}
+	rowNew := map[string]interface{}{
+		"key1": "val2",
+	}
+
+	uuids := make([]libovsdb.UUID, n)
+	for i := 0; i < n; i++ {
+		uuids[i] = libovsdb.UUID{GoUUID: common.GenerateUUID()}
+	}
+
+	ops := make([]libovsdb.Operation, n)
+	for i := 0; i < n; i++ {
+		ops[i] = libovsdb.Operation{
+			Op:    libovsdb.OperationInsert,
+			Table: &table,
+			Row:   &rowOrg,
+			UUID:  &uuids[i],
+		}
+	}
+
+	req := &libovsdb.Transact{
+		DBName:     dbName,
+		Operations: ops,
+	}
+	testEtcdCleanup(t)
+	// insert a row
+	resp := testTransact(t, req, testSchemaSimple, 0)
+	for i := 0; i < n; i++ {
+		validateInsertResult(t, resp, n, i, uuids[i].GoUUID)
+	}
+
+	for i := 0; i < n; i++ {
+		ops[i] = libovsdb.Operation{
+			Op:    libovsdb.OperationUpdate,
+			Table: &table,
+			Row:   &rowNew,
+			Where: &[]interface{}{[]interface{}{libovsdb.COL_UUID, FN_EQ, uuids[i]}},
+		}
+	}
+	req = &libovsdb.Transact{
+		DBName:     dbName,
+		Operations: ops,
+	}
+	resp = testTransact(t, req, testSchemaSimple, n)
+	for i := 0; i < n; i++ {
+		validateUpdateResult(t, resp, n, i, 1)
+	}
+
+	// check the updated value
+	for i := 0; i < n; i++ {
+		ops[i] = libovsdb.Operation{
+			Op:    libovsdb.OperationSelect,
+			Table: &table,
+			Where: &[]interface{}{[]interface{}{libovsdb.COL_UUID, FN_EQ, uuids[i]}},
+		}
+	}
+	req = &libovsdb.Transact{
+		DBName:     dbName,
+		Operations: ops,
+	}
+	resp = testTransact(t, req, testSchemaSimple, n)
+	for i := 0; i < n; i++ {
+		validateSelectResult(t, resp, n, i, 1)
+		row := (*resp.Result[0].Rows)[0]
+		assert.Equal(t, "val2", row["key1"])
+	}
 }
 
 func TestTransactUpdateMapOk(t *testing.T) {
@@ -1044,12 +1126,25 @@ func TestTransactMutateSimple(t *testing.T) {
 				Table:     &table,
 				Mutations: &mutations,
 			},
+			{
+				Op:        libovsdb.OperationMutate,
+				Table:     &table,
+				Mutations: &mutations,
+			},
+			{
+				Op:        libovsdb.OperationMutate,
+				Table:     &table,
+				Mutations: &mutations,
+			},
 		},
 	}
 	testEtcdCleanup(t)
 	resp := testTransact(t, req1, testSchemaSimple, 0)
-	validateInsertResult(t, resp, 2, 0, "")
-	validateUpdateResult(t, resp, 2, 1, 1)
+	validateInsertResult(t, resp, 4, 0, "")
+	validateUpdateResult(t, resp, 4, 1, 1)
+	validateUpdateResult(t, resp, 4, 2, 1)
+	validateUpdateResult(t, resp, 4, 3, 1)
+
 	req2 := &libovsdb.Transact{
 		DBName: dbName,
 		Operations: []libovsdb.Operation{
@@ -1062,7 +1157,7 @@ func TestTransactMutateSimple(t *testing.T) {
 	resp = testTransact(t, req2, testSchemaSimple, 1)
 	validateSelectResult(t, resp, 1, 0, 1)
 	row := (*resp.Result[0].Rows)[0]
-	assert.EqualValues(t, 2, row["key2"])
+	assert.EqualValues(t, 4, row["key2"])
 }
 
 func TestTransactMutateSetUUID(t *testing.T) {
