@@ -462,7 +462,8 @@ func (txn *Transaction) doOperation(ovsOp *libovsdb.Operation, ovsResult *libovs
 	case libovsdb.OperationSelect:
 		err, details = txn.validateOpsTableName(ovsOp.Table)
 		if err == nil {
-			err, details = txn.doSelect(ovsOp, ovsResult)
+			ovsResult.InitRows()
+			err, details = txn.doSelectDelete(ovsOp, ovsResult)
 		}
 	case libovsdb.OperationUpdate, libovsdb.OperationMutate:
 		err, details = txn.validateOpsTableName(ovsOp.Table)
@@ -472,7 +473,8 @@ func (txn *Transaction) doOperation(ovsOp *libovsdb.Operation, ovsResult *libovs
 	case libovsdb.OperationDelete:
 		err, details = txn.validateOpsTableName(ovsOp.Table)
 		if err == nil {
-			err, details = txn.doDelete(ovsOp, ovsResult)
+			ovsResult.InitCount()
+			err, details = txn.doSelectDelete(ovsOp, ovsResult)
 		}
 	case libovsdb.OperationWait:
 		err, details = txn.validateOpsTableName(ovsOp.Table)
@@ -841,6 +843,7 @@ func (txn *Transaction) RowPrepare(tableSchema *libovsdb.TableSchema, mapUUID na
 
 /* insert */
 func (txn *Transaction) doInsert(ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) (err error, details string) {
+	// we check for an error that can be created during the named-uuid preprocessing
 	if ovsResult.Error != nil {
 		return fmt.Errorf(*ovsResult.Error), ""
 	}
@@ -888,57 +891,6 @@ func (txn *Transaction) doInsert(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 	err = etcdCreateRow(txn, &key, row)
 	if err != nil {
 		return
-	}
-	return
-}
-
-/* select */
-func (txn *Transaction) doSelect(ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) (err error, details string) {
-	ovsResult.InitRows()
-	tCache := txn.cache.getTable(*ovsOp.Table)
-	cond, e := txn.conditionsFromWhere(ovsOp)
-	if e != nil {
-		err = errors.New(E_INTERNAL_ERROR)
-		return
-	}
-	uuid, e := cond.getUUIDIfSelected()
-	if e != nil {
-		err = errors.New(E_INTERNAL_ERROR)
-		return
-	}
-
-	if uuid != "" {
-		kv, ok := (*tCache)[uuid]
-		if !ok {
-			return
-		}
-		tCache = &tableCache{uuid: kv}
-	}
-	for _, kv := range *tCache {
-		row := map[string]interface{}{}
-		err = json.Unmarshal(kv.Value, &row)
-		if err != nil {
-			txn.log.Error(err, "failed to unmarshal row", "kv.Key", string(kv.Key), "kv.Value", string(kv.Value))
-			return
-		}
-		if uuid == "" || len(cond) > 1 {
-			// there are other conditions in addition or instead of _uuid
-			var ok bool
-			ok, err = cond.isRowSelected(&row)
-			if err != nil {
-				return
-			}
-			if !ok {
-				continue
-			}
-		}
-		resultRow, e := reduceRowByColumns(&row, ovsOp.Columns)
-		if e != nil {
-			txn.log.Error(err, "failed to reduce row by columns", "row", row, "columns", ovsOp.Columns)
-			err = e
-			return
-		}
-		ovsResult.AppendRows(*resultRow)
 	}
 	return
 }
@@ -1062,10 +1014,8 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 	return
 }
 
-/* delete */
-func (txn *Transaction) doDelete(ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) (err error, details string) {
-
-	ovsResult.InitCount()
+/* Select and Delete */
+func (txn *Transaction) doSelectDelete(ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) (err error, details string) {
 	tCache := txn.cache.getTable(*ovsOp.Table)
 	cond, e := txn.conditionsFromWhere(ovsOp)
 	if e != nil {
@@ -1103,9 +1053,22 @@ func (txn *Transaction) doDelete(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 				continue
 			}
 		}
-		etcdOp := clientv3.OpDelete(string(kv.Key))
-		txn.etcdTrx.Then = append(txn.etcdTrx.Then, etcdOp)
-		ovsResult.IncrementCount()
+		if ovsOp.Op == libovsdb.OperationDelete {
+			etcdOp := clientv3.OpDelete(string(kv.Key))
+			txn.etcdTrx.Then = append(txn.etcdTrx.Then, etcdOp)
+			ovsResult.IncrementCount()
+		} else if ovsOp.Op == libovsdb.OperationSelect {
+			resultRow, e := reduceRowByColumns(&row, ovsOp.Columns)
+			if e != nil {
+				txn.log.Error(err, "failed to reduce row by columns", "row", row, "columns", ovsOp.Columns)
+				err = e
+				return
+			}
+			ovsResult.AppendRows(*resultRow)
+		} else {
+			txn.log.Error(err, "wrong operation", "operation", ovsOp.Op)
+			err = errors.New(E_INTERNAL_ERROR)
+		}
 	}
 	return
 }
