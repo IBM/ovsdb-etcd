@@ -780,21 +780,7 @@ func (txn *Transaction) RowUpdate(tableSchema *libovsdb.TableSchema, mapUUID nam
 	return newRow, nil
 }
 
-func etcdCreateRow(txn *Transaction, k *common.Key, row *map[string]interface{}) error {
-	key := k.String()
-	val, err := makeValue(row)
-	if err != nil {
-		return err
-	}
-
-	table := txn.localCache.getTable(k.TableName)
-	table[key] = *row
-	etcdOp := clientv3.OpPut(key, val)
-	txn.etcdTrx.Then = append(txn.etcdTrx.Then, etcdOp)
-	return nil
-}
-
-func etcdModifyRow(txn *Transaction, key []byte, row *map[string]interface{}) error {
+func (txn *Transaction) etcdModifyRow(key []byte, row *map[string]interface{}) error {
 	comKey, err := common.ParseKey(string(key))
 	if err != nil {
 		return err
@@ -806,13 +792,6 @@ func etcdModifyRow(txn *Transaction, key []byte, row *map[string]interface{}) er
 	table := txn.localCache.getTable(comKey.TableName)
 	table[string(key)] = *row
 	etcdOp := clientv3.OpPut(string(key), val)
-	txn.etcdTrx.Then = append(txn.etcdTrx.Then, etcdOp)
-	return nil
-}
-
-func etcdDeleteRow(txn *Transaction, k *common.Key) error {
-	key := k.String()
-	etcdOp := clientv3.OpDelete(key)
 	txn.etcdTrx.Then = append(txn.etcdTrx.Then, etcdOp)
 	return nil
 }
@@ -888,10 +867,17 @@ func (txn *Transaction) doInsert(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 	}
 	setRowUUID(row, uuid)
 	setRowVersion(row)
-	err = etcdCreateRow(txn, &key, row)
-	if err != nil {
+	//err = etcdCreateRow(txn, &key, row)
+	k := key.String()
+	val, e := makeValue(row)
+	if e != nil {
+		err = e
 		return
 	}
+	table := txn.localCache.getTable(*ovsOp.Table)
+	table[k] = *row
+	etcdOp := clientv3.OpPut(k, val)
+	txn.etcdTrx.Then = append(txn.etcdTrx.Then, etcdOp)
 	return
 }
 
@@ -948,7 +934,7 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 			}
 		}
 		setRowVersion(newRow)
-		err = etcdModifyRow(txn, []byte(key), newRow)
+		err = txn.etcdModifyRow([]byte(key), newRow)
 		if err != nil {
 			return
 		}
@@ -1004,13 +990,12 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 			}
 		}
 		setRowVersion(newRow)
-		err = etcdModifyRow(txn, kv.Key, newRow)
+		err = txn.etcdModifyRow(kv.Key, newRow)
 		if err != nil {
 			return
 		}
 		ovsResult.IncrementCount()
 	}
-
 	return
 }
 
