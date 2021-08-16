@@ -847,7 +847,7 @@ func TestTransactUpdateSimple(t *testing.T) {
 func TestTransactUpdateMT(t *testing.T) {
 	table := "table1"
 	dbName := "simple"
-	n := 5
+	n := 2
 	row := map[string]interface{}{
 		"key1": "val1",
 	}
