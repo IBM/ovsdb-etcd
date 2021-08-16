@@ -15,8 +15,8 @@ The objects are mapped to etcd as follows:
 
 ```
 data:           <prefix>/<service>/<dbName>/<table>/<uuid> --> <row>
+comments:       <prefix>/<service>/<dbName>/_comments/<timestamp> --> <comment>
 locks:          <prefix>/<service>/_/_locks/<lockid> --> nil
-comments:       <prefix>/<service>/_/_comments/<timestamp> --> <comment>
 ```
 
 As ovsdb transactions have different semantics than etcd transactions, the
