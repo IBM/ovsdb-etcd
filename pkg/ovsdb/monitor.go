@@ -219,7 +219,12 @@ func (hm *handlerMonitorData) notifier(ch *Handler) {
 
 		case notificationEvent := <-hm.notificationChain:
 			if ch.handlerContext.Err() != nil {
-				ch.monitors[hm.dataBaseName].tQueue.cleanUp()
+				ch.mu.RLock()
+				dbMonitor, ok := ch.monitors[hm.dataBaseName]
+				ch.mu.RUnlock()
+				if ok && dbMonitor != nil {
+					dbMonitor.tQueue.cleanUp()
+				}
 				return
 			}
 			if notificationEvent.updates != nil {
@@ -243,7 +248,15 @@ func (hm *handlerMonitorData) notifier(ch *Handler) {
 					hm.log.Error(err, "monitor notification failed")
 				}
 			}
-			ch.monitors[hm.dataBaseName].tQueue.notificationSent(notificationEvent.revision)
+			ch.mu.RLock()
+			dbMonitor, ok := ch.monitors[hm.dataBaseName]
+			ch.mu.RUnlock()
+			if ok && dbMonitor != nil {
+				dbMonitor.tQueue.notificationSent(notificationEvent.revision)
+			} else {
+				hm.log.V(5).Info("dataBase monitor is nil", "dataBaseName", hm.dataBaseName)
+			}
+
 		}
 	}
 }
