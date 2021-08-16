@@ -309,9 +309,12 @@ func (etcd *etcdTransaction) Commit() error {
 }
 
 // [table][uuid]row
-type localCache map[string]map[string]map[string]interface{}
+type localCache map[string]localTableCache
 
-func (lc *localCache) getTable(tabelName string) map[string]map[string]interface{} {
+// [full key]row
+type localTableCache map[string]map[string]interface{}
+
+func (lc *localCache) getLocalTableCache(tabelName string) localTableCache {
 	table, ok := (*lc)[tabelName]
 	if !ok {
 		table = make(map[string]map[string]interface{})
@@ -616,61 +619,6 @@ func (txn *Transaction) getUUIDIfExists(tableSchema *libovsdb.TableSchema, mapUU
 	return ovsUUID.GoUUID, err
 }
 
-func (txn *Transaction) doesWhereContainCondTypeUUID(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, where *[]interface{}) (string, error) {
-	var err error
-	if where == nil {
-		return "", nil
-	}
-	for _, c := range *where {
-		cond, ok := c.([]interface{})
-		if !ok {
-			err = errors.New(E_INTERNAL_ERROR)
-			txn.log.Error(err, "failed to convert condition", "condition", c)
-			return "", err
-		}
-		uuid, err := txn.getUUIDIfExists(tableSchema, mapUUID, cond)
-		if err != nil {
-			return "", err
-		}
-		if uuid != "" {
-			return uuid, nil
-		}
-	}
-	return "", nil
-
-}
-
-func (txn *Transaction) isRowSelectedByWhere(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, row *map[string]interface{}, where *[]interface{}) (bool, error) {
-	var err error
-	if where == nil {
-		return true, nil
-	}
-	for _, c := range *where {
-		cond, ok := c.([]interface{})
-		if !ok {
-			err = errors.New(E_INTERNAL_ERROR)
-			txn.log.Error(err, "failed to convert condition value", "condition", c)
-			return false, err
-		}
-		ok, err := txn.isRowSelectedByCond(tableSchema, mapUUID, row, cond)
-		if err != nil {
-			return false, err
-		}
-		if !ok {
-			return false, nil
-		}
-	}
-	return true, nil
-}
-
-func (txn *Transaction) isRowSelectedByCond(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, row *map[string]interface{}, cond []interface{}) (bool, error) {
-	condition, err := NewCondition(tableSchema, mapUUID, cond, txn.log)
-	if err != nil {
-		return false, err
-	}
-	return condition.Compare(row)
-}
-
 func (txn *Transaction) validateOpsTableName(tableName *string) (error, string) {
 	if tableName == nil || *tableName == " " {
 		err := errors.New(E_CONSTRAINT_VIOLATION)
@@ -789,7 +737,7 @@ func (txn *Transaction) etcdModifyRow(key []byte, row *map[string]interface{}) e
 	if err != nil {
 		return err
 	}
-	table := txn.localCache.getTable(comKey.TableName)
+	table := txn.localCache.getLocalTableCache(comKey.TableName)
 	table[string(key)] = *row
 	etcdOp := clientv3.OpPut(string(key), val)
 	txn.etcdTrx.Then = append(txn.etcdTrx.Then, etcdOp)
@@ -874,7 +822,7 @@ func (txn *Transaction) doInsert(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 		err = e
 		return
 	}
-	table := txn.localCache.getTable(*ovsOp.Table)
+	table := txn.localCache.getLocalTableCache(*ovsOp.Table)
 	table[k] = *row
 	etcdOp := clientv3.OpPut(k, val)
 	txn.etcdTrx.Then = append(txn.etcdTrx.Then, etcdOp)
@@ -890,30 +838,14 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 		return
 	}
 	tCache := txn.cache.getTable(*ovsOp.Table)
-	lCache := txn.localCache.getTable(*ovsOp.Table)
+	lCache := txn.localCache.getLocalTableCache(*ovsOp.Table)
 	cond, e := txn.conditionsFromWhere(ovsOp)
 	if e != nil {
 		err = errors.New(E_INTERNAL_ERROR)
 		return
 	}
-	uuid, e := cond.getUUIDIfSelected()
-	if e != nil {
-		err = errors.New(E_INTERNAL_ERROR)
-		return
-	}
 
-	for key, row := range lCache {
-		//	if uuid == "" || len(cond) > 1 {
-		// there are other conditions in addition or instead of _uuid
-		var ok bool
-		ok, err = cond.isRowSelected(&row)
-		if err != nil {
-			return
-		}
-		if !ok {
-			continue
-		}
-		//	}
+	rowProcess := func(key []byte, row map[string]interface{}) {
 		var newRow *map[string]interface{}
 		if ovsOp.Op == libovsdb.OperationUpdate {
 			err = txn.RowPrepare(tableSchema, txn.mapUUID, ovsOp.Row)
@@ -934,11 +866,38 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 			}
 		}
 		setRowVersion(newRow)
-		err = txn.etcdModifyRow([]byte(key), newRow)
+		err = txn.etcdModifyRow(key, newRow)
 		if err != nil {
 			return
 		}
 		ovsResult.IncrementCount()
+	}
+
+	uuid, e := cond.getUUIDIfSelected()
+	if e != nil {
+		err = errors.New(E_INTERNAL_ERROR)
+		return
+	}
+	cache := lCache
+	if uuid != "" {
+		key := common.NewDataKey(txn.request.DBName, *ovsOp.Table, uuid)
+		keyS := key.String()
+		row, ok := lCache[keyS]
+		cache = localTableCache{}
+		if ok {
+			cache[keyS] = row
+		}
+	}
+	for key, row := range cache {
+		var ok bool
+		ok, err = cond.isRowSelected(&row)
+		if err != nil {
+			return
+		}
+		if !ok {
+			continue
+		}
+		rowProcess([]byte(key), row)
 	}
 
 	if uuid != "" {
@@ -970,31 +929,7 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 				continue
 			}
 		}
-		var newRow *map[string]interface{}
-		if ovsOp.Op == libovsdb.OperationUpdate {
-			err = txn.RowPrepare(tableSchema, txn.mapUUID, ovsOp.Row)
-			if err != nil {
-				txn.log.Error(err, "failed to prepare row", "row", ovsOp.Row)
-				return
-			}
-			newRow, err = txn.RowUpdate(tableSchema, txn.mapUUID, &row, ovsOp.Row)
-			if err != nil {
-				txn.log.Error(err, "failed to update row", "row", ovsOp.Row)
-				return
-			}
-		} else if ovsOp.Op == libovsdb.OperationMutate {
-			newRow, err = txn.RowMutate(tableSchema, txn.mapUUID, &row, ovsOp.Mutations)
-			if err != nil {
-				txn.log.Error(err, "failed to row mutate", "row", row, "mutations", ovsOp.Mutations)
-				return
-			}
-		}
-		setRowVersion(newRow)
-		err = txn.etcdModifyRow(kv.Key, newRow)
-		if err != nil {
-			return
-		}
-		ovsResult.IncrementCount()
+		rowProcess(kv.Key, row)
 	}
 	return
 }
