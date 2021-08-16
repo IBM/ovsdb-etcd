@@ -848,11 +848,14 @@ func TestTransactUpdateMT(t *testing.T) {
 	table := "table1"
 	dbName := "simple"
 	n := 5
-	rowOrg := map[string]interface{}{
+	row := map[string]interface{}{
 		"key1": "val1",
 	}
-	rowNew := map[string]interface{}{
+	row2 := map[string]interface{}{
 		"key1": "val2",
+	}
+	row3 := map[string]interface{}{
+		"key1": "val3",
 	}
 
 	uuids := make([]libovsdb.UUID, n)
@@ -865,7 +868,7 @@ func TestTransactUpdateMT(t *testing.T) {
 		ops[i] = libovsdb.Operation{
 			Op:    libovsdb.OperationInsert,
 			Table: &table,
-			Row:   &rowOrg,
+			Row:   &row,
 			UUID:  &uuids[i],
 		}
 	}
@@ -885,25 +888,30 @@ func TestTransactUpdateMT(t *testing.T) {
 		ops[i] = libovsdb.Operation{
 			Op:    libovsdb.OperationUpdate,
 			Table: &table,
-			Row:   &rowNew,
+			Row:   &row2,
 			Where: &[]interface{}{[]interface{}{libovsdb.COL_UUID, FN_EQ, uuids[i]}},
 		}
 	}
+	ops = append(ops, libovsdb.Operation{Op: libovsdb.OperationUpdate, Table: &table, Row: &row3})
+
 	req = &libovsdb.Transact{
 		DBName:     dbName,
 		Operations: ops,
 	}
 	resp = testTransact(t, req, testSchemaSimple, n)
 	for i := 0; i < n; i++ {
-		validateUpdateResult(t, resp, n, i, 1)
+		validateUpdateResult(t, resp, n+1, i, 1)
 	}
+	validateUpdateResult(t, resp, n+1, n, n)
 
 	// check the updated value
+	ops = make([]libovsdb.Operation, n)
 	for i := 0; i < n; i++ {
 		ops[i] = libovsdb.Operation{
-			Op:    libovsdb.OperationSelect,
-			Table: &table,
-			Where: &[]interface{}{[]interface{}{libovsdb.COL_UUID, FN_EQ, uuids[i]}},
+			Op:      libovsdb.OperationSelect,
+			Table:   &table,
+			Where:   &[]interface{}{[]interface{}{libovsdb.COL_UUID, FN_EQ, uuids[i]}},
+			Columns: &[]string{"key1", "key2"},
 		}
 	}
 	req = &libovsdb.Transact{
@@ -914,7 +922,7 @@ func TestTransactUpdateMT(t *testing.T) {
 	for i := 0; i < n; i++ {
 		validateSelectResult(t, resp, n, i, 1)
 		row := (*resp.Result[0].Rows)[0]
-		assert.Equal(t, "val2", row["key1"])
+		assert.Equal(t, "val3", row["key1"])
 	}
 }
 
