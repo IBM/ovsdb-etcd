@@ -37,14 +37,14 @@ type Handler struct {
 	handlerContext context.Context
 	clientCon      net.Conn
 	closed         bool // false by default
-	mu             sync.Mutex
+	mu             sync.RWMutex
 
 	// dbName->dbMonitor
 	monitors map[string]*dbMonitor
 	// json-value string to handler monitor related data
 	handlerMonitorData map[string]handlerMonitorData
 
-	databaseLocks map[string]Locker
+	databaseLocks sync.Map
 }
 
 func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interface{}, error) {
@@ -88,7 +88,9 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 		return nil, errors.New(E_INTERNAL_ERROR)
 	}
 
+	ch.mu.RLock()
 	monitor, thereIsMonitor := ch.monitors[txn.request.DBName]
+	ch.mu.RUnlock()
 	txn.log.V(7).Info("before tables lock")
 	// temporary solution to provide consistency
 	err = txn.lockTables()
@@ -167,10 +169,16 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 		ch.log.Error(err, "Lock, param parsing", "param", param)
 		return nil, err
 	}
-	ch.mu.Lock()
-	myLock, ok := ch.databaseLocks[id]
-	ch.mu.Unlock()
-	if !ok {
+	var myLock Locker
+	locI, ok := ch.databaseLocks.Load(id)
+	if ok {
+		myLock, ok = locI.(Locker)
+		if !ok {
+			err = fmt.Errorf("cannot transform to Logger, %T", locI)
+			ch.log.Error(err, "")
+			return nil, err
+		}
+	} else {
 		myLock, err = ch.db.GetLock(ch.handlerContext, id)
 		if err != nil {
 			ch.log.Error(err, "lock failed", "lockid", id)
@@ -178,13 +186,18 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 		}
 		ch.mu.Lock()
 		// validate that no other locks
-		otherLock, ok := ch.databaseLocks[id]
+		otherLock, ok := ch.databaseLocks.Load(id)
 		if !ok {
-			ch.databaseLocks[id] = myLock
+			ch.databaseLocks.Store(id, myLock)
 		} else {
 			// What should we do ?
 			myLock.cancel()
-			myLock = otherLock
+			myLock, ok = otherLock.(Locker)
+			if !ok {
+				err = fmt.Errorf("cannot transform to Logger, %T", otherLock)
+				ch.log.Error(err, "")
+				return nil, err
+			}
 		}
 		ch.mu.Unlock()
 	}
@@ -218,13 +231,16 @@ func (ch *Handler) Unlock(ctx context.Context, param interface{}) (interface{}, 
 	if err != nil {
 		return ovsjson.EmptyStruct{}, err
 	}
-	ch.mu.Lock()
-	myLock, ok := ch.databaseLocks[id]
-	delete(ch.databaseLocks, id)
-	ch.mu.Unlock()
+	iLock, ok := ch.databaseLocks.LoadAndDelete(id)
 	if !ok {
 		ch.log.V(4).Info("unlock: can't find lock", "lockid", id)
 		return ovsjson.EmptyStruct{}, nil
+	}
+	myLock, ok := iLock.(Locker)
+	if !ok {
+		err = fmt.Errorf("cannot transform to Logger, %T", iLock)
+		ch.log.Error(err, "")
+		return nil, err
 	}
 	myLock.cancel()
 	return ovsjson.EmptyStruct{}, nil
@@ -361,7 +377,7 @@ func NewHandler(tctx context.Context, db Databaser, cli *clientv3.Client, log lo
 	return &Handler{
 		handlerContext:     tctx,
 		db:                 db,
-		databaseLocks:      map[string]Locker{},
+		databaseLocks:      sync.Map{},
 		handlerMonitorData: map[string]handlerMonitorData{},
 		etcdClient:         cli,
 		monitors:           map[string]*dbMonitor{},
@@ -374,9 +390,16 @@ func (ch *Handler) Cleanup() error {
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
 	ch.closed = true
-	for _, m := range ch.databaseLocks {
-		m.unlock()
-	}
+	ch.databaseLocks.Range(func(key, value interface{}) bool {
+		mLock, ok := value.(Locker)
+		if !ok {
+			err := fmt.Errorf("cannot transform to Logger, value type %T, key %s", value, key)
+			ch.log.Error(err, "")
+		}
+		mLock.unlock()
+		ch.databaseLocks.Delete(key)
+		return true
+	})
 
 	for _, monitor := range ch.monitors {
 		monitor.cancelDbMonitor()
@@ -511,7 +534,9 @@ func (ch *Handler) addMonitor(params []interface{}, notificationType ovsjson.Upd
 
 func (ch *Handler) startNotifier(jsonValue string) {
 	ch.log.V(6).Info("start monitor notifier", "jsonValue", jsonValue)
+	ch.mu.RLock()
 	hmd, ok := ch.handlerMonitorData[jsonValue]
+	ch.mu.RUnlock()
 	if !ok {
 		ch.log.Info("there is no notifier", "jsonValue", jsonValue)
 	} else {
