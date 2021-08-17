@@ -231,7 +231,7 @@ var testSchemaUUID *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
 
 func testEtcdNewCli() (*clientv3.Client, error) {
 	endpoints := []string{"http://127.0.0.1:2379"}
-	return NewEtcdClient(endpoints)
+	return NewEtcdClient(endpoints, -1*time.Second, -1*time.Second)
 }
 
 func testEtcdCleanup(t *testing.T) {

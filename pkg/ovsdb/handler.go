@@ -310,7 +310,7 @@ func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) 
 		dbName := monitorData.dataBaseName
 		monitor, ok := ch.monitors[dbName]
 		if !ok {
-			ch.log.Info("MonitorCondChange there is no monitor", "dbname", monitorData.dataBaseName)
+			ch.log.V(5).Info("MonitorCondChange there is no monitor", "dbname", monitorData.dataBaseName)
 		}
 		databaseSchema, ok := ch.db.GetSchemas()[dbName]
 		if !ok {
@@ -386,7 +386,7 @@ func NewHandler(tctx context.Context, db Databaser, cli *clientv3.Client, log lo
 }
 
 func (ch *Handler) Cleanup() error {
-	ch.log.Info("CLEAN UP do something")
+	ch.log.V(5).Info("CLEAN UP do something")
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
 	ch.closed = true
@@ -453,13 +453,13 @@ func (ch *Handler) removeMonitor(jsonValue interface{}, notify bool) error {
 	defer ch.mu.Unlock()
 	monitorData, ok := ch.handlerMonitorData[jsonValueString]
 	if !ok {
-		ch.log.Info("removing unexisting dbMonitor", "jsonValue", jsonValue)
+		ch.log.V(5).Info("removing unexisting dbMonitor", "jsonValue", jsonValue)
 		err := fmt.Errorf("unknown monitor")
 		return err
 	}
 	monitor, ok := ch.monitors[monitorData.dataBaseName]
 	if !ok {
-		ch.log.Info("there is no monitor", "dbname", monitorData.dataBaseName)
+		ch.log.V(5).Info("there is no monitor", "dbname", monitorData.dataBaseName)
 	}
 
 	monitor.removeUpdaters(monitorData.updatersKeys, jsonValueString)
@@ -538,7 +538,7 @@ func (ch *Handler) startNotifier(jsonValue string) {
 	hmd, ok := ch.handlerMonitorData[jsonValue]
 	ch.mu.RUnlock()
 	if !ok {
-		ch.log.Info("there is no notifier", "jsonValue", jsonValue)
+		ch.log.V(5).Info("there is no notifier", "jsonValue", jsonValue)
 	} else {
 		go hmd.notifier(ch)
 	}
@@ -550,7 +550,7 @@ func (ch *Handler) getMonitoredData(dbName string, updatersMap Key2Updaters) (ov
 	for tableKey, updaters := range updatersMap {
 		if len(updaters) == 0 {
 			// nothing to update
-			ch.log.Info("there is no updaters", "for table", tableKey.String())
+			ch.log.V(5).Info("there is no updaters", "for table", tableKey.String())
 			continue
 		}
 		// validate that Initial is required
