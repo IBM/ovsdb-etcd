@@ -42,6 +42,8 @@ var (
 	loadServerDataFlag = flag.Bool("load-server-data", false, "load-server-data")
 	pidFile            = flag.String("pid-file", "", "Name of file that will hold the pid")
 	cpuProfile         = flag.String("cpu-profile", "", "write cpu profile to file")
+	keepAliveTime      = flag.Duration("keepalive-time", -1*time.Second, "keepalive time for the etcd client connection")
+	keepAliveTimeout   = flag.Duration("keepalive-timeout", -1*time.Second, "keepalive timeout for the etcd client connection")
 )
 
 var GitCommit string
@@ -102,7 +104,7 @@ func main() {
 	}
 	etcdServers := strings.Split(*etcdMembers, ",")
 
-	cli, err := ovsdb.NewEtcdClient(etcdServers)
+	cli, err := ovsdb.NewEtcdClient(etcdServers, *keepAliveTime, *keepAliveTimeout)
 	if err != nil {
 		log.Error(err, "failed creating an etcd client")
 		os.Exit(1)
