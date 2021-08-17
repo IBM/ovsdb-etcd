@@ -70,13 +70,20 @@ func (l *lock) cancel() {
 
 var EtcdClientTimeout = time.Second
 
-func NewEtcdClient(endpoints []string) (*clientv3.Client, error) {
-	cli, err := clientv3.New(clientv3.Config{
+func NewEtcdClient(endpoints []string, keepAliveTime, keepAliveTimeout time.Duration) (*clientv3.Client, error) {
+	cfg := clientv3.Config{
 		Endpoints:          endpoints,
 		DialTimeout:        30 * time.Second,
 		MaxCallSendMsgSize: 120 * 1024 * 1024,
 		MaxCallRecvMsgSize: 0, /* max */
-	})
+	}
+	if keepAliveTime > 0 {
+		cfg.DialKeepAliveTime = keepAliveTime
+	}
+	if keepAliveTimeout > 0 {
+		cfg.DialKeepAliveTimeout = keepAliveTimeout
+	}
+	cli, err := clientv3.New(cfg)
 	if err != nil {
 		return nil, err
 	}
