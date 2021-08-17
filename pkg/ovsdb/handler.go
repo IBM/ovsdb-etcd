@@ -414,7 +414,9 @@ func (ch *Handler) SetConnection(jrpcSerer JrpcServer, clientCon net.Conn) {
 }
 
 func (ch *Handler) notify(jsonValueString string, updates ovsjson.TableUpdates, revision int64) {
+	ch.mu.RLock()
 	hmd, ok := ch.handlerMonitorData[jsonValueString]
+	ch.mu.RUnlock()
 	if !ok {
 		err := fmt.Errorf("there is no handler monitor data for %s", jsonValueString)
 		ch.log.Error(err, "notify")
@@ -431,9 +433,11 @@ func (ch *Handler) notify(jsonValueString string, updates ovsjson.TableUpdates, 
 }
 
 func (ch *Handler) notifyAll(revision int64) {
+	ch.mu.RLock()
 	for _, hmd := range ch.handlerMonitorData {
 		hmd.notificationChain <- notificationEvent{revision: revision}
 	}
+	ch.mu.RUnlock()
 }
 
 func (ch *Handler) monitorCanceledNotification(jsonValue interface{}) {
