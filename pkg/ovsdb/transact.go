@@ -1002,7 +1002,7 @@ func (txn *Transaction) doWait(ovsOp *libovsdb.Operation, ovsResult *libovsdb.Op
 		return
 	}
 	if *ovsOp.Timeout != 0 {
-		txn.log.Info("ignoring non-zero wait timeout", "timeout", *ovsOp.Timeout)
+		txn.log.V(5).Info("ignoring non-zero wait timeout", "timeout", *ovsOp.Timeout)
 	}
 	if ovsOp.Rows == nil {
 		err = errors.New(E_CONSTRAINT_VIOLATION)

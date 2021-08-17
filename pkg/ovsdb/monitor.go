@@ -328,7 +328,7 @@ func (m *dbMonitor) prepareTableNotification(events []*clientv3.Event) (map[stri
 		}
 		updaters, ok := m.key2Updaters[key.ToTableKey()]
 		if !ok {
-			m.log.Info("no monitors for table path", "table-path", key.TableKeyString())
+			m.log.V(7).Info("no monitors for table path", "table-path", key.TableKeyString())
 			continue
 		}
 		for _, updater := range updaters {
@@ -339,7 +339,7 @@ func (m *dbMonitor) prepareTableNotification(events []*clientv3.Event) (map[stri
 			}
 			if rowUpdate == nil {
 				// there is no updates
-				m.log.Info("no updates for table path", "table-path", key.TableKeyString())
+				m.log.V(7).Info("no updates for table path", "table-path", key.TableKeyString())
 				continue
 			}
 			tableUpdates, ok := result[updater.jasonValueStr]
@@ -355,7 +355,7 @@ func (m *dbMonitor) prepareTableNotification(events []*clientv3.Event) (map[stri
 			// check if there is a rowUpdate for the same uuid
 			_, ok = tableUpdate[uuid]
 			if ok {
-				m.log.Info("duplicate event", "key", key.ShortString(), "table-update", tableUpdate[uuid], "row-update", rowUpdate)
+				m.log.V(5).Info("duplicate event", "key", key.ShortString(), "table-update", tableUpdate[uuid], "row-update", rowUpdate)
 				for n, eLog := range events {
 					m.log.V(7).Info("event", "index", n, "type", eLog.Type.String(), "key", string(eLog.Kv.Key), "value", string(eLog.Kv.Value), "prev-key", string(eLog.PrevKv.Key), "prev-value", string(eLog.PrevKv.Value))
 				}
