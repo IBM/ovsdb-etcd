@@ -349,16 +349,13 @@ func (m *dbMonitor) prepareTableNotification(events []*clientv3.Event) (map[stri
 			}
 			tableUpdate, ok := tableUpdates[key.TableName]
 			if !ok {
-				tableUpdate = ovsjson.TableUpdate{} // map[string]ovsjson.RowUpdate{}
+				tableUpdate = ovsjson.TableUpdate{}
 				tableUpdates[key.TableName] = tableUpdate
 			}
 			// check if there is a rowUpdate for the same uuid
 			_, ok = tableUpdate[uuid]
 			if ok {
 				m.log.V(5).Info("duplicate event", "key", key.ShortString(), "table-update", tableUpdate[uuid], "row-update", rowUpdate)
-				for n, eLog := range events {
-					m.log.V(7).Info("event", "index", n, "type", eLog.Type.String(), "key", string(eLog.Kv.Key), "value", string(eLog.Kv.Value), "prev-key", string(eLog.PrevKv.Key), "prev-value", string(eLog.PrevKv.Value))
-				}
 			}
 			tableUpdate[uuid] = *rowUpdate
 		}
