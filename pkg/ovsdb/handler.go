@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"strconv"
 	"sync"
 
 	"github.com/creachadair/jrpc2"
@@ -170,7 +171,9 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 		return nil, err
 	}
 	var myLock Locker
+	ch.log.V(6).Info("before load a DB lock", "id", id)
 	locI, ok := ch.databaseLocks.Load(id)
+	ch.log.V(6).Info("DB lock is loaded", "id", id, "ok", strconv.FormatBool(ok))
 	if ok {
 		myLock, ok = locI.(Locker)
 		if !ok {
@@ -184,12 +187,13 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 			ch.log.Error(err, "lock failed", "lockid", id)
 			return nil, err
 		}
-		ch.mu.Lock()
+		ch.log.V(6).Info("new etcd lock created", "id", id)
 		// validate that no other locks
 		otherLock, ok := ch.databaseLocks.Load(id)
 		if !ok {
 			ch.databaseLocks.Store(id, myLock)
 		} else {
+			ch.log.V(6).Info("there is another lock in the local map", "id", id)
 			// What should we do ?
 			myLock.cancel()
 			myLock, ok = otherLock.(Locker)
@@ -199,10 +203,10 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 				return nil, err
 			}
 		}
-		ch.mu.Unlock()
 	}
 	err = myLock.tryLock()
 	if err == nil {
+		ch.log.V(5).Info("lock request returned - locked: true", "id", id)
 		return map[string]bool{"locked": true}, nil
 	} else if err != concurrency.ErrLocked {
 		ch.log.Error(err, "lock failed", "lockid", id)
@@ -222,6 +226,7 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 			ch.log.Error(err, "lock failed", "lockid", id)
 		}
 	}()
+	ch.log.V(5).Info("lock request returned - locked: false", "id", id)
 	return map[string]bool{"locked": false}, nil
 }
 
