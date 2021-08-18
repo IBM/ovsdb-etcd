@@ -31,12 +31,13 @@ type Databaser interface {
 }
 
 type DatabaseEtcd struct {
-	cli        *clientv3.Client
-	Schemas    libovsdb.Schemas // dataBaseName -> schema
+	cli   *clientv3.Client
+	cache cache
+	log   logr.Logger
+	// protects fields below
+	mu         sync.RWMutex
+	schemas    libovsdb.Schemas // dataBaseName -> schema
 	strSchemas map[string]map[string]interface{}
-	cache      cache
-	log        logr.Logger
-	mu         sync.Mutex
 }
 
 type Locker interface {
@@ -92,7 +93,7 @@ func NewEtcdClient(endpoints []string, keepAliveTime, keepAliveTimeout time.Dura
 
 func NewDatabaseEtcd(cli *clientv3.Client, log logr.Logger) (Databaser, error) {
 	return &DatabaseEtcd{cli: cli, log: log, cache: cache{},
-		Schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}}, nil
+		schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}}, nil
 }
 
 func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error) {
@@ -112,19 +113,19 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 	if err != nil {
 		return err
 	}
-	err = con.Schemas.AddFromBytes(data)
-	if err != nil {
-		return err
-	}
 	schemaMap := map[string]interface{}{}
 	err = json.Unmarshal(data, &schemaMap)
 	if err != nil {
 		return err
 	}
-	schemaName := schemaMap["name"].(string)
 	con.mu.Lock()
+	err = con.schemas.AddFromBytes(data)
+	if err != nil {
+		return err
+	}
+	schemaName := schemaMap["name"].(string)
 	con.strSchemas[schemaName] = schemaMap
-	con.cache.addDatabaseCache(schemaName, con.cli)
+	con.cache.addDatabaseCache(schemaName, con.cli, con.log)
 	con.mu.Unlock()
 	schemaSet, err := libovsdb.NewOvsSet(string(data))
 	// the _Server.Database entries should be unique per database, so we don't use a standard key schema when the row key
@@ -141,7 +142,9 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 }
 
 func (con *DatabaseEtcd) GetSchemas() libovsdb.Schemas {
-	return con.Schemas
+	con.mu.RLock()
+	defer con.mu.RUnlock()
+	return con.schemas
 }
 
 func (con *DatabaseEtcd) GetCache() *cache {
@@ -187,6 +190,8 @@ func (con *DatabaseEtcd) GetData(keys []common.Key) (*clientv3.TxnResponse, erro
 }
 
 func (con *DatabaseEtcd) GetSchema(name string) map[string]interface{} {
+	con.mu.RLock()
+	defer con.mu.RUnlock()
 	return con.strSchemas[name]
 }
 

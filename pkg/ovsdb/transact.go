@@ -412,33 +412,49 @@ Loop:
 		return -1, err
 	}
 
-	// insert name-uuid preprocessing
-	for i, ovsOp := range txn.request.Operations {
-		if ovsOp.Op == libovsdb.OperationInsert {
-			if ovsOp.UUIDName != nil {
-				if _, ok := txn.mapUUID[*ovsOp.UUIDName]; ok {
-					err = errors.New(E_DUP_UUIDNAME)
-					txn.log.Error(err, "", "uuid-name", *ovsOp.UUIDName)
-					txn.response.Result[i].SetError(E_DUP_UUIDNAME)
-				} else {
-					uuid, err := txn.generateUUID(&ovsOp)
-					if err != nil {
-						return -1, err
+	processOperations := func() error {
+		txn.cache.mu.Lock()
+		defer txn.cache.mu.Unlock()
+		// insert name-uuid preprocessing
+		for i, ovsOp := range txn.request.Operations {
+			if ovsOp.Op == libovsdb.OperationInsert {
+				if ovsOp.UUIDName != nil {
+					if _, ok := txn.mapUUID[*ovsOp.UUIDName]; ok {
+						err = errors.New(E_DUP_UUIDNAME)
+						txn.log.Error(err, "", "uuid-name", *ovsOp.UUIDName)
+						txn.response.Result[i].SetError(E_DUP_UUIDNAME)
+						// we will return error for the operation processing
+					} else {
+						// TODO
+						var uuid string
+						//if ovsOp.UUID != nil {
+						//	uuid = ovsOp.UUID.GoUUID
+						//} else {
+							uuid, err = txn.generateUUID(&ovsOp)
+							if err != nil {
+								return err
+							}
+						//}
+						txn.mapUUID.Set(*ovsOp.UUIDName, uuid, txn.log)
 					}
-					txn.mapUUID.Set(*ovsOp.UUIDName, uuid, txn.log)
 				}
 			}
 		}
-	}
 
-	for i, ovsOp := range txn.request.Operations {
-		err = txn.doOperation(&ovsOp, &txn.response.Result[i])
-		if err != nil {
-			errStr := err.Error()
-			txn.response.Result[i].SetError(errStr)
-			//txn.response.Error = &errStr
-			return -1, err
+		for i, ovsOp := range txn.request.Operations {
+			err = txn.doOperation(&ovsOp, &txn.response.Result[i])
+			if err != nil {
+				errStr := err.Error()
+				txn.response.Result[i].SetError(errStr)
+				//txn.response.Error = &errStr
+				return err
+			}
 		}
+		return nil
+	}
+	err = processOperations()
+	if err != nil {
+		return -1, err
 	}
 
 	txn.etcdRemoveDup()

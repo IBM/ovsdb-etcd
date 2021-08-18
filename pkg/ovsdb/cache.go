@@ -2,6 +2,7 @@ package ovsdb
 
 import (
 	"context"
+	"sync"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -17,11 +18,13 @@ import (
 type cache map[string]databaseCache
 
 type databaseCache struct {
+	mu      *sync.Mutex
 	dbCache map[string]tableCache
 	// etcdTrx watcher channel
 	watchChannel clientv3.WatchChan
 	// cancel function to close the etcdTrx watcher
 	cancel context.CancelFunc
+	log    logr.Logger
 }
 
 type tableCache map[string]*mvccpb.KeyValue
@@ -30,11 +33,11 @@ func (tc *tableCache) size() int {
 	return len(*tc)
 }
 
-func (c *cache) addDatabaseCache(dbName string, etcdClient *clientv3.Client) error {
+func (c *cache) addDatabaseCache(dbName string, etcdClient *clientv3.Client, log logr.Logger) error {
 	if _, ok := (*c)[dbName]; ok {
 		return errors.New("Duplicate DatabaseCashe: " + dbName)
 	}
-	dbCach := databaseCache{dbCache: map[string]tableCache{}}
+	dbCach := databaseCache{dbCache: map[string]tableCache{}, mu: &sync.Mutex{}, log: log}
 	ctxt, cancel := context.WithCancel(context.Background())
 	dbCach.cancel = cancel
 	key := common.NewDBPrefixKey(dbName)
@@ -64,10 +67,13 @@ func (c *cache) addDatabaseCache(dbName string, etcdClient *clientv3.Client) err
 }
 
 func (dc *databaseCache) updateCache(events []*clientv3.Event) {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
 	for _, event := range events {
 		key, err := common.ParseKey(string(event.Kv.Key))
 		if err != nil {
-			// TODO log
+			dc.log.Error(err, "got a wrong formatted key from etcd", "key", string(event.Kv.Key))
+			continue
 		}
 		if key.IsCommentKey() {
 			continue
@@ -81,6 +87,7 @@ func (dc *databaseCache) updateCache(events []*clientv3.Event) {
 	}
 }
 
+// should be called under locked dc.mu
 func (dc *databaseCache) getTable(tableName string) *tableCache {
 	tb, ok := dc.dbCache[tableName]
 	if !ok {

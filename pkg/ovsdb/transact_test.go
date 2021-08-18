@@ -277,7 +277,7 @@ func testTransact(t *testing.T, req *libovsdb.Transact, schema *libovsdb.Databas
 	assert.Nil(t, err)
 	defer cli.Close()
 	cache := cache{}
-	cache.addDatabaseCache(schema.Name, cli)
+	cache.addDatabaseCache(schema.Name, cli, klogr.New())
 	dbCache := cache.getDatabase(schema.Name)
 	if expCacheElements > -1 {
 		var elements int
