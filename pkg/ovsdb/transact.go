@@ -430,10 +430,10 @@ Loop:
 						//if ovsOp.UUID != nil {
 						//	uuid = ovsOp.UUID.GoUUID
 						//} else {
-							uuid, err = txn.generateUUID(&ovsOp)
-							if err != nil {
-								return err
-							}
+						uuid, err = txn.generateUUID(&ovsOp)
+						if err != nil {
+							return err
+						}
 						//}
 						txn.mapUUID.Set(*ovsOp.UUIDName, uuid, txn.log)
 					}

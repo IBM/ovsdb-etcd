@@ -65,26 +65,19 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	if err != nil {
 		return nil, err
 	}
-	schemas := ch.db.GetSchemas()
-	schema, ok := schemas[ovsReq.DBName]
+	schema, ok := ch.db.GetDBSchema(ovsReq.DBName)
 	if !ok {
 		err := errors.New(E_INTERNAL_ERROR)
 		log.V(1).Info("Unknown schema", "dbName", ovsReq.DBName)
 		return nil, err
 	}
-	cache := ch.db.GetCache()
-	if cache == nil {
-		err := errors.New(E_INTERNAL_ERROR)
-		log.V(1).Info("Cache is not created")
-		return nil, err
-	}
-	dbCache, ok := (*cache)[ovsReq.DBName]
+	dbCache, err := ch.db.GetDBCache(ovsReq.DBName)
 	if !ok {
 		err := errors.New(E_INTERNAL_ERROR)
 		log.V(1).Info("Database cache is not created", "dbName", ovsReq.DBName)
 		return nil, err
 	}
-	txn, err := NewTransaction(ctx, ch.etcdClient, ovsReq, &dbCache, schema, log)
+	txn, err := NewTransaction(ctx, ch.etcdClient, ovsReq, dbCache, schema, log)
 	if err != nil {
 		return nil, errors.New(E_INTERNAL_ERROR)
 	}
@@ -317,7 +310,7 @@ func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) 
 		if !ok {
 			ch.log.V(5).Info("MonitorCondChange there is no monitor", "dbname", monitorData.dataBaseName)
 		}
-		databaseSchema, ok := ch.db.GetSchemas()[dbName]
+		databaseSchema, ok := ch.db.GetDBSchema(dbName)
 		if !ok {
 			return nil, fmt.Errorf("there is no databaseSchema for %s", dbName)
 		}
@@ -500,7 +493,7 @@ func (ch *Handler) addMonitor(params []interface{}, notificationType ovsjson.Upd
 	if _, ok := ch.handlerMonitorData[jsonValueString]; ok {
 		return nil, fmt.Errorf("duplicate monitor ID")
 	}
-	databaseSchema, ok := ch.db.GetSchemas()[cmpr.DatabaseName]
+	databaseSchema, ok := ch.db.GetDBSchema(cmpr.DatabaseName)
 	if !ok {
 		return nil, fmt.Errorf("there is no databaseSchema for %s", cmpr.DatabaseName)
 	}

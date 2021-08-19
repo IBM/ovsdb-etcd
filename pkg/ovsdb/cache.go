@@ -6,19 +6,17 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"k8s.io/klog/v2"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
-	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 )
 
-type cache map[string]databaseCache
+type cache map[string]*databaseCache
 
 type databaseCache struct {
-	mu      *sync.Mutex
+	mu      sync.Mutex
 	dbCache map[string]tableCache
 	// etcdTrx watcher channel
 	watchChannel clientv3.WatchChan
@@ -37,7 +35,7 @@ func (c *cache) addDatabaseCache(dbName string, etcdClient *clientv3.Client, log
 	if _, ok := (*c)[dbName]; ok {
 		return errors.New("Duplicate DatabaseCashe: " + dbName)
 	}
-	dbCach := databaseCache{dbCache: map[string]tableCache{}, mu: &sync.Mutex{}, log: log}
+	dbCach := databaseCache{dbCache: map[string]tableCache{}, log: log}
 	ctxt, cancel := context.WithCancel(context.Background())
 	dbCach.cancel = cancel
 	key := common.NewDBPrefixKey(dbName)
@@ -51,7 +49,7 @@ func (c *cache) addDatabaseCache(dbName string, etcdClient *clientv3.Client, log
 		clientv3.WithCreatedNotify(),
 		clientv3.WithPrevKV())
 	dbCach.watchChannel = wch
-	(*c)[dbName] = dbCach
+	(*c)[dbName] = &dbCach
 	(*c).PutEtcdKV(resp.Kvs)
 	go func() {
 		// TODO propagate to monitors
@@ -67,8 +65,8 @@ func (c *cache) addDatabaseCache(dbName string, etcdClient *clientv3.Client, log
 }
 
 func (dc *databaseCache) updateCache(events []*clientv3.Event) {
-	dc.mu.Lock()
-	defer dc.mu.Unlock()
+	//dc.mu.Lock()
+	//defer dc.mu.Unlock()
 	for _, event := range events {
 		key, err := common.ParseKey(string(event.Kv.Key))
 		if err != nil {
@@ -116,10 +114,10 @@ func (c *cache) size() int {
 func (c *cache) getDatabase(dbname string) *databaseCache {
 	db, ok := (*c)[dbname]
 	if !ok {
-		db = databaseCache{dbCache: map[string]tableCache{}}
+		db = &databaseCache{dbCache: map[string]tableCache{}}
 		(*c)[dbname] = db
 	}
-	return &db
+	return db
 }
 
 func (c *cache) getTable(dbname, table string) *tableCache {
@@ -130,11 +128,6 @@ func (c *cache) getTable(dbname, table string) *tableCache {
 		db.dbCache[table] = tb
 	}
 	return &tb
-}
-
-func (c *cache) Row(key common.Key) *mvccpb.KeyValue {
-	tb := c.getTable(key.DBName, key.TableName)
-	return (*tb)[key.UUID]
 }
 
 func (c *cache) PutEtcdKV(kvs []*mvccpb.KeyValue) error {
@@ -151,79 +144,3 @@ func (c *cache) PutEtcdKV(kvs []*mvccpb.KeyValue) error {
 	}
 	return nil
 }
-
-func (cache *cache) GetFromEtcd(res *clientv3.TxnResponse) {
-	for _, r := range res.Responses {
-		switch v := r.Response.(type) {
-		case *etcdserverpb.ResponseOp_ResponseRange:
-			cache.PutEtcdKV(v.ResponseRange.Kvs)
-		}
-	}
-}
-
-func (cache *cache) Unmarshal(log logr.Logger, schema *libovsdb.DatabaseSchema) error {
-	/*// TODO remove database
-	for _, databaseCache := range *cache {
-		for table, tableCache := range databaseCache {
-			for _, row := range tableCache {
-				err := schema.Unmarshal(table, row)
-				if err != nil {
-					log.Error(err, "failed schema unmarshal")
-					return err
-				}
-			}
-		}
-	}*/
-	return nil
-}
-
-func (cache *cache) Validate(dataBase string, schema *libovsdb.DatabaseSchema, log logr.Logger) error {
-	/*databaseCache := cache.getDatabase(dataBase)
-	for table, tableCache := range databaseCache {
-		for _, row := range tableCache {
-			err := schema.Validate(table, row)
-			if err != nil {
-				log.Error(err, "failed schema validate")
-				return err
-			}
-		}
-	}*/
-	return nil
-}
-
-/*
-type KeyValue struct {
-	Key   common.Key
-	Value map[string]interface{}
-}
-
-func NewKeyValue(etcdKV *mvccpb.KeyValue) (*KeyValue, error) {
-	if etcdKV == nil {
-		return nil, fmt.Errorf("nil etcdKV")
-	}
-	kv := new(KeyValue)
-
-	/ * key * /
-	if etcdKV.Key == nil {
-		return nil, fmt.Errorf("nil key")
-	}
-	key, err := common.ParseKey(string(etcdKV.Key))
-	if err != nil {
-		return nil, err
-	}
-	kv.Key = *key
-	/ * value * /
-	err = json.Unmarshal(etcdKV.Value, &kv.Value)
-	if err != nil {
-		return nil, err
-	}
-
-	return kv, nil
-}
-func ParseKey(etcdKV *mvccpb.KeyValue) ( *common.Key, error) {
-	if etcdKV == nil {
-		return nil, fmt.Errorf("nil etcdKV")
-	}
-	return common.ParseKey(string(etcdKV.Key))
-}
-*/

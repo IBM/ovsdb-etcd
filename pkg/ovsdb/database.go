@@ -3,6 +3,7 @@ package ovsdb
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"time"
 
@@ -22,20 +23,19 @@ type Databaser interface {
 	GetLock(ctx context.Context, id string) (Locker, error)
 	CreateMonitor(dbName string, handler *Handler, log logr.Logger) *dbMonitor
 	AddSchema(schemaFile string) error
-	GetSchemas() libovsdb.Schemas
 	GetKeyData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error)
 	GetData(keys []common.Key) (*clientv3.TxnResponse, error)
 	PutData(ctx context.Context, key common.Key, obj interface{}) error
-	GetSchema(name string) map[string]interface{}
-	GetCache() *cache
+	GetSchema(dbName string) map[string]interface{}
+	GetDBSchema(dbName string) (*libovsdb.DatabaseSchema, bool)
+	GetDBCache(dbName string) (*databaseCache, error)
 }
 
 type DatabaseEtcd struct {
-	cli   *clientv3.Client
-	cache cache
-	log   logr.Logger
-	// protects fields below
-	mu         sync.RWMutex
+	cli *clientv3.Client
+	log logr.Logger
+	//  we don't protect the fields below, because they are initialized during start of the server and aren't modified after that
+	cache      cache
 	schemas    libovsdb.Schemas // dataBaseName -> schema
 	strSchemas map[string]map[string]interface{}
 }
@@ -118,7 +118,6 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 	if err != nil {
 		return err
 	}
-	con.mu.Lock()
 	err = con.schemas.AddFromBytes(data)
 	if err != nil {
 		return err
@@ -126,7 +125,6 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 	schemaName := schemaMap["name"].(string)
 	con.strSchemas[schemaName] = schemaMap
 	con.cache.addDatabaseCache(schemaName, con.cli, con.log)
-	con.mu.Unlock()
 	schemaSet, err := libovsdb.NewOvsSet(string(data))
 	// the _Server.Database entries should be unique per database, so we don't use a standard key schema when the row key
 	// is its _uuid, but here we use database / schema name as the key.
@@ -141,14 +139,24 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 	return nil
 }
 
-func (con *DatabaseEtcd) GetSchemas() libovsdb.Schemas {
-	con.mu.RLock()
-	defer con.mu.RUnlock()
-	return con.schemas
+func (con *DatabaseEtcd) GetDBSchema(dbName string) (*libovsdb.DatabaseSchema, bool) {
+	s, ok := con.schemas[dbName]
+	return s, ok
 }
 
-func (con *DatabaseEtcd) GetCache() *cache {
-	return &con.cache
+func (con *DatabaseEtcd) GetDBCache(dbName string) (*databaseCache, error) {
+	if con.cache == nil {
+		err := errors.New(E_INTERNAL_ERROR)
+		con.log.V(1).Info("Cache is not created")
+		return nil, err
+	}
+	dbCache, ok := con.cache[dbName]
+	if !ok {
+		err := errors.New(E_INTERNAL_ERROR)
+		con.log.V(1).Info("Database cache is not created", "dbName", dbName)
+		return nil, err
+	}
+	return dbCache, nil
 }
 
 func (con *DatabaseEtcd) GetKeyData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
@@ -190,8 +198,6 @@ func (con *DatabaseEtcd) GetData(keys []common.Key) (*clientv3.TxnResponse, erro
 }
 
 func (con *DatabaseEtcd) GetSchema(name string) map[string]interface{} {
-	con.mu.RLock()
-	defer con.mu.RUnlock()
 	return con.strSchemas[name]
 }
 
@@ -317,8 +323,9 @@ func (con *DatabaseMock) AddSchema(schemaFile string) error {
 	return con.Error
 }
 
-func (con *DatabaseMock) GetSchemas() libovsdb.Schemas {
-	return con.Response.(libovsdb.Schemas)
+func (con *DatabaseMock) GetDBSchema(dbName string) (*libovsdb.DatabaseSchema, bool) {
+	s, ok := con.Response.(libovsdb.Schemas)[dbName]
+	return s, ok
 }
 
 func (con *DatabaseMock) GetKeyData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
@@ -348,7 +355,7 @@ func (con *DatabaseMock) CreateMonitor(dbName string, handler *Handler, log logr
 	return m
 }
 
-func (con *DatabaseMock) GetCache() *cache {
+func (con *DatabaseMock) GetDBCache(dbName string) (*databaseCache, error) {
 	// TODO
-	return nil
+	return nil, nil
 }
