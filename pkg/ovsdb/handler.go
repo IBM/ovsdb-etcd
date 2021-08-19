@@ -81,10 +81,11 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	if err != nil {
 		return nil, errors.New(E_INTERNAL_ERROR)
 	}
-
+	ch.log.V(6).Info("Before asking the handler mutex for read")
 	ch.mu.RLock()
 	monitor, thereIsMonitor := ch.monitors[txn.request.DBName]
 	ch.mu.RUnlock()
+	ch.log.V(6).Info("the handler mutex released from read")
 	txn.log.V(7).Info("before tables lock")
 	// temporary solution to provide consistency
 	err = txn.lockTables()
@@ -100,7 +101,7 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	txn.log.V(7).Info("tables unlocked")
 	if errC != nil || err != nil {
 		if thereIsMonitor {
-			monitor.tQueue.abbortTransaction()
+			monitor.tQueue.abortTransaction()
 		}
 		if errC != nil {
 			txn.log.Error(errC, "commit returned")
@@ -136,7 +137,6 @@ func (ch *Handler) Monitor(ctx context.Context, params []interface{}) (interface
 		return nil, err
 	}
 	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
-	ch.log.V(5).Info("monitor response", "jsonValue", params[1], "data", data)
 	if err != nil {
 		ch.log.Error(err, "failed to get monitored data")
 		ch.removeMonitor(params[1], false)
@@ -144,6 +144,7 @@ func (ch *Handler) Monitor(ctx context.Context, params []interface{}) (interface
 	}
 	jsonValueString := jsonValueToString(params[1])
 	ch.startNotifier(jsonValueString)
+	ch.log.V(5).Info("monitor response", "jsonValue", params[1], "data", data)
 	return data, nil
 }
 
@@ -258,7 +259,6 @@ func (ch *Handler) MonitorCond(ctx context.Context, params []interface{}) (inter
 		return nil, err
 	}
 	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
-	ch.log.V(5).Info("monitorCond response", "jsonValue", params[1], "data", data)
 	if err != nil {
 		ch.log.Error(err, "failed to get monitored data")
 		ch.removeMonitor(params[1], false)
@@ -266,6 +266,7 @@ func (ch *Handler) MonitorCond(ctx context.Context, params []interface{}) (inter
 	}
 	jsonValueString := jsonValueToString(params[1])
 	ch.startNotifier(jsonValueString)
+	ch.log.V(5).Info("monitorCond response", "jsonValue", params[1], "data", data)
 	return data, nil
 }
 
@@ -297,8 +298,12 @@ func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) 
 	if reflect.DeepEqual(oldJsonValue, newJsonValue) {
 		ch.log.V(5).Info("MonitorCondChange, update existing monitor")
 		jsonValueString := jsonValueToString(oldJsonValue)
+		ch.log.V(6).Info("Before asking the handler mutex")
 		ch.mu.Lock()
-		defer ch.mu.Unlock()
+		defer func() {
+			ch.mu.Unlock()
+			ch.log.V(6).Info("the handler mutex released")
+		}()
 		monitorData, ok := ch.handlerMonitorData[jsonValueString]
 		if !ok {
 			err := fmt.Errorf("unknown monitor")
@@ -346,7 +351,6 @@ func (ch *Handler) MonitorCondSince(ctx context.Context, params []interface{}) (
 	}
 
 	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
-	ch.log.V(5).Info("MonitorCondSince response", "jsonValue", params[1], "data", fmt.Sprintf("%v", data))
 	if err != nil {
 		ch.log.Error(err, "failed to get monitored data")
 		ch.removeMonitor(params[1], false)
@@ -354,6 +358,7 @@ func (ch *Handler) MonitorCondSince(ctx context.Context, params []interface{}) (
 	}
 	jsonValueString := jsonValueToString(params[1])
 	ch.startNotifier(jsonValueString)
+	ch.log.V(5).Info("MonitorCondSince response", "jsonValue", params[1], "data", fmt.Sprintf("%v", data))
 	return []interface{}{false, ovsjson.ZERO_UUID, data}, nil
 }
 
@@ -386,7 +391,10 @@ func NewHandler(tctx context.Context, db Databaser, cli *clientv3.Client, log lo
 func (ch *Handler) Cleanup() error {
 	ch.log.V(5).Info("CLEAN UP do something")
 	ch.mu.Lock()
-	defer ch.mu.Unlock()
+	defer func() {
+		ch.mu.Unlock()
+		ch.log.V(6).Info("the handler mutex released in cleanup")
+	}()
 	ch.closed = true
 	ch.databaseLocks.Range(func(key, value interface{}) bool {
 		mLock, ok := value.(Locker)
@@ -412,9 +420,9 @@ func (ch *Handler) SetConnection(jrpcSerer JrpcServer, clientCon net.Conn) {
 }
 
 func (ch *Handler) notify(jsonValueString string, updates ovsjson.TableUpdates, revision int64) {
-	ch.mu.RLock()
+	//ch.mu.RLock()
 	hmd, ok := ch.handlerMonitorData[jsonValueString]
-	ch.mu.RUnlock()
+	//ch.mu.RUnlock()
 	if !ok {
 		err := fmt.Errorf("there is no handler monitor data for %s", jsonValueString)
 		ch.log.Error(err, "notify")
@@ -431,11 +439,17 @@ func (ch *Handler) notify(jsonValueString string, updates ovsjson.TableUpdates, 
 }
 
 func (ch *Handler) notifyAll(revision int64) {
-	ch.mu.RLock()
+	// TODO optimize
+	//ch.mu.RLock()
+	nmdArray := make([]handlerMonitorData, len(ch.handlerMonitorData))
 	for _, hmd := range ch.handlerMonitorData {
+		nmdArray = append(nmdArray, hmd)
+	}
+	//ch.mu.RUnlock()
+	// we don't send event from the lock
+	for _, hmd := range nmdArray {
 		hmd.notificationChain <- notificationEvent{revision: revision}
 	}
-	ch.mu.RUnlock()
 }
 
 func (ch *Handler) monitorCanceledNotification(jsonValue interface{}) {
@@ -451,8 +465,12 @@ func (ch *Handler) removeMonitor(jsonValue interface{}, notify bool) error {
 	ch.log.V(5).Info("removeMonitor failed", "jsonValue", jsonValue)
 
 	jsonValueString := jsonValueToString(jsonValue)
+	ch.log.V(6).Info("Before asking the handler mutex")
 	ch.mu.Lock()
-	defer ch.mu.Unlock()
+	defer func() {
+		ch.mu.Unlock()
+		ch.log.V(6).Info("the handler mutex released in cleanup")
+	}()
 	monitorData, ok := ch.handlerMonitorData[jsonValueString]
 	if !ok {
 		ch.log.V(5).Info("removing unexisting dbMonitor", "jsonValue", jsonValue)
@@ -488,8 +506,12 @@ func (ch *Handler) addMonitor(params []interface{}, notificationType ovsjson.Upd
 	}
 
 	jsonValueString := jsonValueToString(cmpr.JsonValue)
+	ch.log.V(6).Info("Before asking the handler mutex")
 	ch.mu.Lock()
-	defer ch.mu.Unlock()
+	defer func() {
+		ch.mu.Unlock()
+		ch.log.V(6).Info("the handler mutex released")
+	}()
 	if _, ok := ch.handlerMonitorData[jsonValueString]; ok {
 		return nil, fmt.Errorf("duplicate monitor ID")
 	}
@@ -536,9 +558,11 @@ func (ch *Handler) addMonitor(params []interface{}, notificationType ovsjson.Upd
 
 func (ch *Handler) startNotifier(jsonValue string) {
 	ch.log.V(6).Info("start monitor notifier", "jsonValue", jsonValue)
+	ch.log.V(6).Info("Before asking the handler mutex for read")
 	ch.mu.RLock()
 	hmd, ok := ch.handlerMonitorData[jsonValue]
 	ch.mu.RUnlock()
+	ch.log.V(6).Info("the handler mutex released from read")
 	if !ok {
 		ch.log.V(5).Info("there is no notifier", "jsonValue", jsonValue)
 	} else {

@@ -114,7 +114,7 @@ func (tq *transactionsQueue) startTransaction() {
 	tq.mu.Lock()
 }
 
-func (tq *transactionsQueue) abbortTransaction() {
+func (tq *transactionsQueue) abortTransaction() {
 	tq.mu.Unlock()
 }
 
@@ -219,9 +219,11 @@ func (hm *handlerMonitorData) notifier(ch *Handler) {
 
 		case notificationEvent := <-hm.notificationChain:
 			if ch.handlerContext.Err() != nil {
+				ch.log.V(6).Info("Before asking the handler mutex for read")
 				ch.mu.RLock()
 				dbMonitor, ok := ch.monitors[hm.dataBaseName]
 				ch.mu.RUnlock()
+				ch.log.V(6).Info("the handler mutex released from read")
 				if ok && dbMonitor != nil {
 					dbMonitor.tQueue.cleanUp()
 				}
@@ -248,9 +250,11 @@ func (hm *handlerMonitorData) notifier(ch *Handler) {
 					hm.log.Error(err, "monitor notification failed")
 				}
 			}
+			ch.log.V(6).Info("Before asking the handler mutex for read")
 			ch.mu.RLock()
 			dbMonitor, ok := ch.monitors[hm.dataBaseName]
 			ch.mu.RUnlock()
+			ch.log.V(6).Info("the handler mutex released from read")
 			if ok && dbMonitor != nil {
 				dbMonitor.tQueue.notificationSent(notificationEvent.revision)
 			} else {
