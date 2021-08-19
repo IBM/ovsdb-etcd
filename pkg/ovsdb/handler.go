@@ -65,30 +65,22 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	if err != nil {
 		return nil, err
 	}
-	schemas := ch.db.GetSchemas()
-	schema, ok := schemas[ovsReq.DBName]
+	schema, ok := ch.db.GetDBSchema(ovsReq.DBName)
 	if !ok {
 		err := errors.New(E_INTERNAL_ERROR)
 		log.V(1).Info("Unknown schema", "dbName", ovsReq.DBName)
 		return nil, err
 	}
-	cache := ch.db.GetCache()
-	if cache == nil {
-		err := errors.New(E_INTERNAL_ERROR)
-		log.V(1).Info("Cache is not created")
-		return nil, err
-	}
-	dbCache, ok := (*cache)[ovsReq.DBName]
+	dbCache, err := ch.db.GetDBCache(ovsReq.DBName)
 	if !ok {
 		err := errors.New(E_INTERNAL_ERROR)
 		log.V(1).Info("Database cache is not created", "dbName", ovsReq.DBName)
 		return nil, err
 	}
-	txn, err := NewTransaction(ctx, ch.etcdClient, ovsReq, &dbCache, schema, log)
+	txn, err := NewTransaction(ctx, ch.etcdClient, ovsReq, dbCache, schema, log)
 	if err != nil {
 		return nil, errors.New(E_INTERNAL_ERROR)
 	}
-
 	ch.mu.RLock()
 	monitor, thereIsMonitor := ch.monitors[txn.request.DBName]
 	ch.mu.RUnlock()
@@ -107,7 +99,7 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	txn.log.V(7).Info("tables unlocked")
 	if errC != nil || err != nil {
 		if thereIsMonitor {
-			monitor.tQueue.abbortTransaction()
+			monitor.tQueue.abortTransaction()
 		}
 		if errC != nil {
 			txn.log.Error(errC, "commit returned")
@@ -143,7 +135,6 @@ func (ch *Handler) Monitor(ctx context.Context, params []interface{}) (interface
 		return nil, err
 	}
 	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
-	ch.log.V(5).Info("monitor response", "jsonValue", params[1], "data", data)
 	if err != nil {
 		ch.log.Error(err, "failed to get monitored data")
 		ch.removeMonitor(params[1], false)
@@ -151,6 +142,7 @@ func (ch *Handler) Monitor(ctx context.Context, params []interface{}) (interface
 	}
 	jsonValueString := jsonValueToString(params[1])
 	ch.startNotifier(jsonValueString)
+	ch.log.V(5).Info("monitor response", "jsonValue", params[1], "data", data)
 	return data, nil
 }
 
@@ -171,9 +163,7 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 		return nil, err
 	}
 	var myLock Locker
-	ch.log.V(6).Info("before load a DB lock", "id", id)
 	locI, ok := ch.databaseLocks.Load(id)
-	ch.log.V(6).Info("DB lock is loaded", "id", id, "ok", strconv.FormatBool(ok))
 	if ok {
 		myLock, ok = locI.(Locker)
 		if !ok {
@@ -206,7 +196,7 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 	}
 	err = myLock.tryLock()
 	if err == nil {
-		ch.log.V(5).Info("lock request returned - locked: true", "id", id)
+		ch.log.V(5).Info("lock request returned - \"locked: true\"", "id", id)
 		return map[string]bool{"locked": true}, nil
 	} else if err != concurrency.ErrLocked {
 		ch.log.Error(err, "lock failed", "lockid", id)
@@ -217,16 +207,16 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 		err = myLock.lock()
 		if err == nil {
 			// Send notification
-			ch.log.V(5).Info("lock succeeded", "lockid", id)
+			ch.log.V(5).Info("lock succeeded", "id", id)
 			if err := ch.jrpcServer.Notify(ch.handlerContext, "locked", []string{id}); err != nil {
 				klog.Errorf("notification %v\n", err)
 				return
 			}
 		} else {
-			ch.log.Error(err, "lock failed", "lockid", id)
+			ch.log.Error(err, "lock failed", "id", id)
 		}
 	}()
-	ch.log.V(5).Info("lock request returned - locked: false", "id", id)
+	ch.log.V(5).Info("lock request returned - \"locked: false\"", "id", id)
 	return map[string]bool{"locked": false}, nil
 }
 
@@ -265,7 +255,6 @@ func (ch *Handler) MonitorCond(ctx context.Context, params []interface{}) (inter
 		return nil, err
 	}
 	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
-	ch.log.V(5).Info("monitorCond response", "jsonValue", params[1], "data", data)
 	if err != nil {
 		ch.log.Error(err, "failed to get monitored data")
 		ch.removeMonitor(params[1], false)
@@ -273,6 +262,7 @@ func (ch *Handler) MonitorCond(ctx context.Context, params []interface{}) (inter
 	}
 	jsonValueString := jsonValueToString(params[1])
 	ch.startNotifier(jsonValueString)
+	ch.log.V(5).Info("monitorCond response", "jsonValue", params[1], "data", data)
 	return data, nil
 }
 
@@ -317,10 +307,11 @@ func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) 
 		if !ok {
 			ch.log.V(5).Info("MonitorCondChange there is no monitor", "dbname", monitorData.dataBaseName)
 		}
-		databaseSchema, ok := ch.db.GetSchemas()[dbName]
+		databaseSchema, ok := ch.db.GetDBSchema(dbName)
 		if !ok {
 			return nil, fmt.Errorf("there is no databaseSchema for %s", dbName)
 		}
+		ch.log.V(5).Info("MonitorCondChange 2")
 		for tableName, mcrArray := range mcrs {
 			key := common.NewTableKey(dbName, tableName)
 			_, ok := monitor.key2Updaters[key]
@@ -334,6 +325,7 @@ func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) 
 			if err != nil {
 				return nil, err
 			}
+			ch.log.V(5).Info("MonitorCondChange 2", "tableName", tableName)
 			for _, mcr := range mcrArray {
 				updater := mcrToUpdater(mcr, jsonValueString, tableSchema, monitorData.notificationType == ovsjson.Update, ch.log)
 				updaters = append(updaters, *updater)
@@ -341,6 +333,7 @@ func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) 
 			ch.monitors[dbName].key2Updaters[key] = updaters
 		}
 	}
+	ch.log.V(5).Info("MonitorCondChange END")
 	return ovsjson.EmptyStruct{}, nil
 }
 
@@ -353,7 +346,6 @@ func (ch *Handler) MonitorCondSince(ctx context.Context, params []interface{}) (
 	}
 
 	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
-	ch.log.V(5).Info("MonitorCondSince response", "jsonValue", params[1], "data", fmt.Sprintf("%v", data))
 	if err != nil {
 		ch.log.Error(err, "failed to get monitored data")
 		ch.removeMonitor(params[1], false)
@@ -361,6 +353,7 @@ func (ch *Handler) MonitorCondSince(ctx context.Context, params []interface{}) (
 	}
 	jsonValueString := jsonValueToString(params[1])
 	ch.startNotifier(jsonValueString)
+	ch.log.V(5).Info("MonitorCondSince response", "jsonValue", params[1], "data", fmt.Sprintf("%v", data))
 	return []interface{}{false, ovsjson.ZERO_UUID, data}, nil
 }
 
@@ -392,8 +385,6 @@ func NewHandler(tctx context.Context, db Databaser, cli *clientv3.Client, log lo
 
 func (ch *Handler) Cleanup() error {
 	ch.log.V(5).Info("CLEAN UP do something")
-	ch.mu.Lock()
-	defer ch.mu.Unlock()
 	ch.closed = true
 	ch.databaseLocks.Range(func(key, value interface{}) bool {
 		mLock, ok := value.(Locker)
@@ -435,22 +426,32 @@ func (ch *Handler) notify(jsonValueString string, updates ovsjson.TableUpdates, 
 		ch.log.V(5).Info("monitor notification", "jsonValue", hmd.jsonValue, "revision", revision)
 	}
 	hmd.notificationChain <- notificationEvent{updates: updates, revision: revision}
+	ch.log.V(5).Info("monitor notification, event was sent", "jsonValue", hmd.jsonValue, "revision", revision)
 }
 
 func (ch *Handler) notifyAll(revision int64) {
+	ch.log.V(7).Info("notifyAll", "revision", strconv.FormatInt(revision, 10))
+	// TODO optimize
+	hmdArray := []handlerMonitorData{}
 	ch.mu.RLock()
 	for _, hmd := range ch.handlerMonitorData {
-		hmd.notificationChain <- notificationEvent{revision: revision}
+		hmdArray = append(hmdArray, hmd)
 	}
 	ch.mu.RUnlock()
+	for _, hmd := range hmdArray {
+		hmd.notificationChain <- notificationEvent{revision: revision}
+	}
+	ch.log.V(7).Info("notifyAll finished", strconv.FormatInt(revision, 10))
 }
 
 func (ch *Handler) monitorCanceledNotification(jsonValue interface{}) {
-	ch.log.V(5).Info("monitorCanceledNotification", "jsonValue", jsonValue)
-	err := ch.jrpcServer.Notify(ch.handlerContext, MONITOR_CANCELED, jsonValue)
-	if err != nil {
-		// Usually we get this error because a client closed his connection, so we don't need to inform it as an error
-		ch.log.V(6).Info("monitorCanceledNotification failed", "error", err.Error())
+	if ch.closed {
+		ch.log.V(5).Info("monitorCanceledNotification", "jsonValue", jsonValue)
+		err := ch.jrpcServer.Notify(ch.handlerContext, MONITOR_CANCELED, jsonValue)
+		if err != nil {
+			// Usually we get this error because a client closed his connection, so we don't need to inform it as an error
+			ch.log.V(6).Info("monitorCanceledNotification failed", "error", err.Error())
+		}
 	}
 }
 
@@ -500,7 +501,7 @@ func (ch *Handler) addMonitor(params []interface{}, notificationType ovsjson.Upd
 	if _, ok := ch.handlerMonitorData[jsonValueString]; ok {
 		return nil, fmt.Errorf("duplicate monitor ID")
 	}
-	databaseSchema, ok := ch.db.GetSchemas()[cmpr.DatabaseName]
+	databaseSchema, ok := ch.db.GetDBSchema(cmpr.DatabaseName)
 	if !ok {
 		return nil, fmt.Errorf("there is no databaseSchema for %s", cmpr.DatabaseName)
 	}

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strconv"
 	"sync"
 	"time"
 
@@ -114,7 +115,7 @@ func (tq *transactionsQueue) startTransaction() {
 	tq.mu.Lock()
 }
 
-func (tq *transactionsQueue) abbortTransaction() {
+func (tq *transactionsQueue) abortTransaction() {
 	tq.mu.Unlock()
 }
 
@@ -199,25 +200,33 @@ func (m *dbMonitor) hasUpdaters() bool {
 
 func (m *dbMonitor) start() {
 	go func() {
+		m.log.V(6).Info("Start DB monitor", "dbName", m.dataBaseName)
 		for wresp := range m.watchChannel {
 			if wresp.Canceled {
+				m.log.V(6).Info("DB monitor was canceled", "dbName", m.dataBaseName)
 				m.cancelDbMonitor()
 				return
 			}
+			m.log.V(6).Info("DB monitor get events", "dbName", m.dataBaseName, "events length", strconv.Itoa(len(wresp.Events)),
+				"revision", strconv.FormatInt(wresp.Header.Revision, 10))
 			m.notify(wresp.Events, wresp.Header.Revision)
 		}
+		m.log.V(6).Info("Start DB monitor ended", "dbName", m.dataBaseName)
 	}()
 }
 
 func (hm *handlerMonitorData) notifier(ch *Handler) {
 	// we need some time to allow to the monitor calls return data
 	time.Sleep(20 * time.Millisecond)
+	hm.log.V(6).Info("Notifier started", "jsonValue", hm.jsonValue)
 	for {
 		select {
 		case <-ch.handlerContext.Done():
+			hm.log.V(5).Info("Notifier ended", "jsonValue", hm.jsonValue)
 			return
 
 		case notificationEvent := <-hm.notificationChain:
+			hm.log.V(7).Info("Notifier got event", "jsonValue", hm.jsonValue)
 			if ch.handlerContext.Err() != nil {
 				ch.mu.RLock()
 				dbMonitor, ok := ch.monitors[hm.dataBaseName]

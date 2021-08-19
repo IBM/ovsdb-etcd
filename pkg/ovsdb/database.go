@@ -3,6 +3,7 @@ package ovsdb
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"time"
 
@@ -22,21 +23,21 @@ type Databaser interface {
 	GetLock(ctx context.Context, id string) (Locker, error)
 	CreateMonitor(dbName string, handler *Handler, log logr.Logger) *dbMonitor
 	AddSchema(schemaFile string) error
-	GetSchemas() libovsdb.Schemas
 	GetKeyData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error)
 	GetData(keys []common.Key) (*clientv3.TxnResponse, error)
 	PutData(ctx context.Context, key common.Key, obj interface{}) error
-	GetSchema(name string) map[string]interface{}
-	GetCache() *cache
+	GetSchema(dbName string) map[string]interface{}
+	GetDBSchema(dbName string) (*libovsdb.DatabaseSchema, bool)
+	GetDBCache(dbName string) (*databaseCache, error)
 }
 
 type DatabaseEtcd struct {
-	cli        *clientv3.Client
-	Schemas    libovsdb.Schemas // dataBaseName -> schema
-	strSchemas map[string]map[string]interface{}
+	cli *clientv3.Client
+	log logr.Logger
+	//  we don't protect the fields below, because they are initialized during start of the server and aren't modified after that
 	cache      cache
-	log        logr.Logger
-	mu         sync.Mutex
+	schemas    libovsdb.Schemas // dataBaseName -> schema
+	strSchemas map[string]map[string]interface{}
 }
 
 type Locker interface {
@@ -92,7 +93,7 @@ func NewEtcdClient(endpoints []string, keepAliveTime, keepAliveTimeout time.Dura
 
 func NewDatabaseEtcd(cli *clientv3.Client, log logr.Logger) (Databaser, error) {
 	return &DatabaseEtcd{cli: cli, log: log, cache: cache{},
-		Schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}}, nil
+		schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}}, nil
 }
 
 func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error) {
@@ -112,20 +113,18 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 	if err != nil {
 		return err
 	}
-	err = con.Schemas.AddFromBytes(data)
-	if err != nil {
-		return err
-	}
 	schemaMap := map[string]interface{}{}
 	err = json.Unmarshal(data, &schemaMap)
 	if err != nil {
 		return err
 	}
+	err = con.schemas.AddFromBytes(data)
+	if err != nil {
+		return err
+	}
 	schemaName := schemaMap["name"].(string)
-	con.mu.Lock()
 	con.strSchemas[schemaName] = schemaMap
-	con.cache.addDatabaseCache(schemaName, con.cli)
-	con.mu.Unlock()
+	con.cache.addDatabaseCache(schemaName, con.cli, con.log)
 	schemaSet, err := libovsdb.NewOvsSet(string(data))
 	// the _Server.Database entries should be unique per database, so we don't use a standard key schema when the row key
 	// is its _uuid, but here we use database / schema name as the key.
@@ -140,12 +139,24 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 	return nil
 }
 
-func (con *DatabaseEtcd) GetSchemas() libovsdb.Schemas {
-	return con.Schemas
+func (con *DatabaseEtcd) GetDBSchema(dbName string) (*libovsdb.DatabaseSchema, bool) {
+	s, ok := con.schemas[dbName]
+	return s, ok
 }
 
-func (con *DatabaseEtcd) GetCache() *cache {
-	return &con.cache
+func (con *DatabaseEtcd) GetDBCache(dbName string) (*databaseCache, error) {
+	if con.cache == nil {
+		err := errors.New(E_INTERNAL_ERROR)
+		con.log.V(1).Info("Cache is not created")
+		return nil, err
+	}
+	dbCache, ok := con.cache[dbName]
+	if !ok {
+		err := errors.New(E_INTERNAL_ERROR)
+		con.log.V(1).Info("Database cache is not created", "dbName", dbName)
+		return nil, err
+	}
+	return dbCache, nil
 }
 
 func (con *DatabaseEtcd) GetKeyData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
@@ -312,8 +323,9 @@ func (con *DatabaseMock) AddSchema(schemaFile string) error {
 	return con.Error
 }
 
-func (con *DatabaseMock) GetSchemas() libovsdb.Schemas {
-	return con.Response.(libovsdb.Schemas)
+func (con *DatabaseMock) GetDBSchema(dbName string) (*libovsdb.DatabaseSchema, bool) {
+	s, ok := con.Response.(libovsdb.Schemas)[dbName]
+	return s, ok
 }
 
 func (con *DatabaseMock) GetKeyData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
@@ -343,7 +355,7 @@ func (con *DatabaseMock) CreateMonitor(dbName string, handler *Handler, log logr
 	return m
 }
 
-func (con *DatabaseMock) GetCache() *cache {
+func (con *DatabaseMock) GetDBCache(dbName string) (*databaseCache, error) {
 	// TODO
-	return nil
+	return nil, nil
 }
