@@ -194,6 +194,7 @@ func (m *dbMonitor) removeUpdaters(keys []common.Key, jsonValue string) {
 	}
 }
 
+// called under monitor.mu lock
 func (m *dbMonitor) hasUpdaters() bool {
 	return len(m.key2Updaters) > 0
 }

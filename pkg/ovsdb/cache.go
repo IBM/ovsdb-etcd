@@ -35,9 +35,9 @@ func (c *cache) addDatabaseCache(dbName string, etcdClient *clientv3.Client, log
 	if _, ok := (*c)[dbName]; ok {
 		return errors.New("Duplicate DatabaseCashe: " + dbName)
 	}
-	dbCach := databaseCache{dbCache: map[string]tableCache{}, log: log}
+	dbCache := databaseCache{dbCache: map[string]tableCache{}, log: log}
 	ctxt, cancel := context.WithCancel(context.Background())
-	dbCach.cancel = cancel
+	dbCache.cancel = cancel
 	key := common.NewDBPrefixKey(dbName)
 	resp, err := etcdClient.Get(ctxt, key.String(), clientv3.WithPrefix())
 	if err != nil {
@@ -48,25 +48,25 @@ func (c *cache) addDatabaseCache(dbName string, etcdClient *clientv3.Client, log
 		clientv3.WithPrefix(),
 		clientv3.WithCreatedNotify(),
 		clientv3.WithPrevKV())
-	dbCach.watchChannel = wch
-	(*c)[dbName] = &dbCach
-	(*c).PutEtcdKV(resp.Kvs)
+	dbCache.watchChannel = wch
+	(*c)[dbName] = &dbCache
+	dbCache.putEtcdKV(resp.Kvs)
 	go func() {
 		// TODO propagate to monitors
-		for wresp := range dbCach.watchChannel {
+		for wresp := range dbCache.watchChannel {
 			if wresp.Canceled {
 				// TODO: reconnect ?
 				return
 			}
-			dbCach.updateCache(wresp.Events)
+			dbCache.updateCache(wresp.Events)
 		}
 	}()
 	return nil
 }
 
 func (dc *databaseCache) updateCache(events []*clientv3.Event) {
-	//dc.mu.Lock()
-	//defer dc.mu.Unlock()
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
 	for _, event := range events {
 		key, err := common.ParseKey(string(event.Kv.Key))
 		if err != nil {
@@ -83,6 +83,26 @@ func (dc *databaseCache) updateCache(events []*clientv3.Event) {
 			(*tb)[key.UUID] = event.Kv
 		}
 	}
+}
+
+func (dc *databaseCache) putEtcdKV(kvs []*mvccpb.KeyValue) error {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
+	for _, kv := range kvs {
+		if kv == nil {
+			continue
+		}
+		key, err := common.ParseKey(string(kv.Key))
+		if err != nil {
+			return err
+		}
+		if key.IsCommentKey() {
+			continue
+		}
+		tb := dc.getTable(key.TableName)
+		(*tb)[key.UUID] = kv
+	}
+	return nil
 }
 
 // should be called under locked dc.mu
@@ -111,36 +131,11 @@ func (c *cache) size() int {
 	return ret
 }
 
-func (c *cache) getDatabase(dbname string) *databaseCache {
+func (c *cache) getDBCache(dbname string) *databaseCache {
 	db, ok := (*c)[dbname]
 	if !ok {
 		db = &databaseCache{dbCache: map[string]tableCache{}}
 		(*c)[dbname] = db
 	}
 	return db
-}
-
-func (c *cache) getTable(dbname, table string) *tableCache {
-	db := c.getDatabase(dbname)
-	tb, ok := db.dbCache[table]
-	if !ok {
-		tb = tableCache{}
-		db.dbCache[table] = tb
-	}
-	return &tb
-}
-
-func (c *cache) PutEtcdKV(kvs []*mvccpb.KeyValue) error {
-	for _, kv := range kvs {
-		if kv == nil {
-			continue
-		}
-		key, err := common.ParseKey(string(kv.Key))
-		if err != nil {
-			return err
-		}
-		tb := c.getTable(key.DBName, key.TableName)
-		(*tb)[key.UUID] = kv
-	}
-	return nil
 }

@@ -94,6 +94,7 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	if thereIsMonitor {
 		monitor.tQueue.startTransaction()
 	}
+	// lock cache
 	rev, errC := txn.Commit()
 	err = txn.unLockTables()
 	txn.log.V(7).Info("tables unlocked")
