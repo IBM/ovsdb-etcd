@@ -128,23 +128,22 @@ func (ch *Handler) Cancel(ctx context.Context, param interface{}) (interface{}, 
 	return "{Cancel}", nil
 }
 
-func (ch *Handler) Monitor(ctx context.Context, params []interface{}) (interface{}, error) {
+func (ch *Handler) Monitor(ctx context.Context, params []interface{}) (interface{}, func(), error) {
 	ch.log.V(5).Info("monitor request", "params", params)
 	updatersMap, err := ch.addMonitor(params, ovsjson.Update)
 	if err != nil {
 		ch.log.Error(err, "monitor rquest failed", "params", params)
-		return nil, err
+		return nil, nil, err
 	}
 	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
 	if err != nil {
 		ch.log.Error(err, "failed to get monitored data")
 		ch.removeMonitor(params[1], false)
-		return nil, err
+		return nil, nil, err
 	}
 	jsonValueString := jsonValueToString(params[1])
-	ch.startNotifier(jsonValueString)
 	ch.log.V(5).Info("monitor response", "jsonValue", params[1], "data", data)
-	return data, nil
+	return data, func() { ch.startNotifier(jsonValueString) }, nil
 }
 
 func (ch *Handler) MonitorCancel(ctx context.Context, param interface{}) (interface{}, error) {
@@ -248,23 +247,22 @@ func (ch *Handler) Steal(ctx context.Context, param interface{}) (interface{}, e
 	return "{Steal}", nil
 }
 
-func (ch *Handler) MonitorCond(ctx context.Context, params []interface{}) (interface{}, error) {
+func (ch *Handler) MonitorCond(ctx context.Context, params []interface{}) (interface{}, func(), error) {
 	ch.log.V(5).Info("monitorCond request", "params", params)
 	updatersMap, err := ch.addMonitor(params, ovsjson.Update2)
 	if err != nil {
 		ch.log.Error(err, "monitorCond from remote")
-		return nil, err
+		return nil, nil, err
 	}
 	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
 	if err != nil {
 		ch.log.Error(err, "failed to get monitored data")
 		ch.removeMonitor(params[1], false)
-		return nil, err
+		return nil, nil, err
 	}
 	jsonValueString := jsonValueToString(params[1])
-	ch.startNotifier(jsonValueString)
 	ch.log.V(5).Info("monitorCond response", "jsonValue", params[1], "data", data)
-	return data, nil
+	return data, func() { ch.startNotifier(jsonValueString) }, nil
 }
 
 func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) (interface{}, error) {
@@ -338,24 +336,23 @@ func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) 
 	return ovsjson.EmptyStruct{}, nil
 }
 
-func (ch *Handler) MonitorCondSince(ctx context.Context, params []interface{}) (interface{}, error) {
+func (ch *Handler) MonitorCondSince(ctx context.Context, params []interface{}) (interface{}, func(), error) {
 	ch.log.V(5).Info("MonitorCondSince request", "params", params)
 	updatersMap, err := ch.addMonitor(params, ovsjson.Update3)
 	if err != nil {
 		ch.log.Error(err, "MonitorCondSince failed")
-		return nil, err
+		return nil, nil, err
 	}
 
 	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
 	if err != nil {
 		ch.log.Error(err, "failed to get monitored data")
 		ch.removeMonitor(params[1], false)
-		return nil, err
+		return nil, nil, err
 	}
 	jsonValueString := jsonValueToString(params[1])
-	ch.startNotifier(jsonValueString)
 	ch.log.V(5).Info("MonitorCondSince response", "jsonValue", params[1], "data", fmt.Sprintf("%v", data))
-	return []interface{}{false, ovsjson.ZERO_UUID, data}, nil
+	return []interface{}{false, ovsjson.ZERO_UUID, data}, func() { ch.startNotifier(jsonValueString) }, nil
 }
 
 func (ch *Handler) SetDbChangeAware(ctx context.Context, param interface{}) interface{} {
