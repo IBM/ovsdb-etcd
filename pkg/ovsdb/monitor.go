@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/go-logr/logr"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -218,7 +217,6 @@ func (m *dbMonitor) start() {
 
 func (hm *handlerMonitorData) notifier(ch *Handler) {
 	// we need some time to allow to the monitor calls return data
-	time.Sleep(20 * time.Millisecond)
 	hm.log.V(6).Info("Notifier started", "jsonValue", hm.jsonValue)
 	for {
 		select {
