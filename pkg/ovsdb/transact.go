@@ -468,12 +468,63 @@ func (txn *Transaction) conditionsFromWhere(op *libovsdb.Operation) (Conditions,
 	return conditions, nil
 }
 
+func (txn *Transaction) isUUIDSelected(op *libovsdb.Operation) (bool, error) {
+	if op.Where == nil {
+		return false, nil
+	}
+	for _, c := range *op.Where {
+		cond, ok := c.([]interface{})
+		if !ok {
+			err := errors.New(E_INTERNAL_ERROR)
+			txn.log.Error(err, "failed to convert condition value", "condition", c)
+			return false, err
+		}
+		if len(cond) != 3 {
+			err := errors.New(E_INTERNAL_ERROR)
+			txn.log.Error(err, "expected 3 elements in condition", "condition", cond)
+			return false, err
+		}
+		column, ok := cond[0].(string)
+		if !ok {
+			err := errors.New(E_INTERNAL_ERROR)
+			txn.log.Error(err, "failed to convert column to string", "condition", cond)
+			return false, err
+		}
+		if column != libovsdb.COL_UUID {
+			continue
+		}
+		fn, ok := cond[1].(string)
+		if !ok {
+			err := errors.New(E_INTERNAL_ERROR)
+			txn.log.Error(err, "failed to convert function to string", "condition", cond)
+			return false, err
+		}
+		if fn == FN_EQ || fn == FN_IN {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (txn *Transaction) lockTables() error {
 	var tables []string
 	tMap := make(map[string]bool)
 	for _, op := range txn.request.Operations {
 		switch op.Op {
-		case libovsdb.OperationUpdate, libovsdb.OperationMutate, libovsdb.OperationDelete, libovsdb.OperationSelect:
+		case libovsdb.OperationDelete:
+			ok, err := txn.isUUIDSelected(&op)
+			if err != nil {
+				return err
+			}
+			if ok {
+				// uuid selected, we don't need to lock tables
+				continue
+			}
+			if _, value := tMap[*op.Table]; !value {
+				tMap[*op.Table] = true
+				tables = append(tables, *op.Table)
+			}
+		case libovsdb.OperationUpdate, libovsdb.OperationMutate:
 			if _, value := tMap[*op.Table]; !value {
 				tMap[*op.Table] = true
 				tables = append(tables, *op.Table)
