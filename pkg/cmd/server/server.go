@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -23,6 +24,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
 
+	"github.com/ibm/ovsdb-etcd/pkg/cmd/ssl_utils"
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/ovsdb"
 )
@@ -30,21 +32,25 @@ import (
 const ETCD_LOCALHOST = "localhost:2379"
 
 var (
-	tcpAddress       = flag.String("tcp-address", "", "TCP service address")
-	unixAddress      = flag.String("unix-address", "", "UNIX service address")
-	etcdMembers      = flag.String("etcd-members", ETCD_LOCALHOST, "ETCD service addresses, separated by ',' ")
-	schemaBasedir    = flag.String("schema-basedir", ".", "Schema base dir")
-	maxTasks         = flag.Int("max", 10, "Maximum concurrent tasks")
-	databasePrefix   = flag.String("database-prefix", "ovsdb", "Database prefix")
-	serviceName      = flag.String("service-name", "", "Deployment service name, e.g. 'nbdb' or 'sbdb'")
-	schemaFile       = flag.String("schema-file", "", "schema-file")
-	pidFile          = flag.String("pid-file", "", "Name of file that will hold the pid")
-	cpuProfile       = flag.String("cpu-profile", "", "write cpu profile to file")
-	keepAliveTime    = flag.Duration("keepalive-time", -1*time.Second, "keepalive time for the etcd client connection")
-	keepAliveTimeout = flag.Duration("keepalive-timeout", -1*time.Second, "keepalive timeout for the etcd client connection")
-	deploymentModel  = flag.String("model", "clustered", "deployment model, possible values: clustered, standalone")
+	tcpAddress      = flag.String("tcp-address", "", "TCP service address")
+	unixAddress     = flag.String("unix-address", "", "UNIX service address")
+	etcdMembers     = flag.String("etcd-members", ETCD_LOCALHOST, "ETCD service addresses, separated by ',' ")
+	schemaBasedir   = flag.String("schema-basedir", ".", "Schema base dir")
+	maxTasks        = flag.Int("max", 10, "Maximum concurrent tasks")
+	databasePrefix  = flag.String("database-prefix", "ovsdb", "Database prefix")
+	serviceName     = flag.String("service-name", "", "Deployment service name, e.g. 'nbdb' or 'sbdb'")
+	schemaFile      = flag.String("schema-file", "", "schema-file")
+	deploymentModel = flag.String("model", "clustered", "deployment model, possible values: clustered, standalone")
 	// returned back for backward compatability with executable scripts, wil be removed later
 	loadServerDataFlag = flag.Bool("load-server-data", false, "load-server-data")
+	pidFile            = flag.String("pid-file", "", "Name of file that will hold the pid")
+	cpuProfile         = flag.String("cpu-profile", "", "write cpu profile to file")
+	keepAliveTime      = flag.Duration("keepalive-time", -1*time.Second, "keepalive time for the etcd client connection")
+	keepAliveTimeout   = flag.Duration("keepalive-timeout", -1*time.Second, "keepalive timeout for the etcd client connection")
+	sslPrivateKeyFile  = flag.String("ssl-privkey", "", "path to ssl private key file")
+	sslCertificateFile = flag.String("ssl-cert", "", "path to ssl certificate file")
+	sslVersion         = ssl_utils.SslVersion
+	sslCipherSuite     = ssl_utils.SslCipherSuite
 )
 
 var GitCommit string
@@ -75,8 +81,11 @@ func main() {
 		"tcp-address", tcpAddress, "unix-address", unixAddress, "etcd-members",
 		etcdMembers, "schema-basedir", schemaBasedir, "max-tasks", maxTasks,
 		"database-prefix", databasePrefix, "service-name", serviceName,
-		"schema-file", schemaFile,
-		"pid-file", pidFile, "cpu-profile", cpuProfile)
+		"schema-file", schemaFile, "load-server-data-flag", loadServerDataFlag,
+		"pid-file", pidFile, "cpu-profile", cpuProfile,
+		"keepalive-time", keepAliveTime, "keepalive-timeout", keepAliveTimeout,
+		"ssl-privkey", sslPrivateKeyFile, "ssl-cert", sslCertificateFile,
+	)
 
 	if len(*tcpAddress) == 0 && len(*unixAddress) == 0 {
 		log.Info("You must provide a network-address (TCP and/or UNIX) to listen on")
@@ -178,9 +187,31 @@ func main() {
 		}
 	}
 	if len(*tcpAddress) > 0 {
-		lst, err := net.Listen(jrpc2.Network(*tcpAddress), *tcpAddress)
+		var lst net.Listener
+		var err error
+		if len(*sslPrivateKeyFile) > 0 && len(*sslCertificateFile) > 0 {
+			log.Info("create listener with HTTPS using:", "SSL private key file:", *sslPrivateKeyFile, ",SSL sslCertificate file:", *sslCertificateFile)
+			cer, err := tls.LoadX509KeyPair(*sslCertificateFile, *sslPrivateKeyFile)
+			if err != nil {
+				log.Error(err, "failed listen")
+				os.Exit(1)
+			}
+			conf := &tls.Config{
+				Certificates: []tls.Certificate{cer},
+			}
+			err = ssl_utils.AddSslToConfig(conf, *sslCipherSuite, *sslVersion)
+			if err != nil {
+				log.Error(err, "failed listen")
+				os.Exit(1)
+			}
+			lst, err = tls.Listen(jrpc2.Network(*tcpAddress), *tcpAddress, conf)
+		} else {
+			log.Info("create listener with HTTP")
+			lst, err = net.Listen(jrpc2.Network(*tcpAddress), *tcpAddress)
+		}
 		if err != nil {
 			log.Error(err, "failed listen")
+			os.Exit(1)
 		}
 		log.Info("listening", "on", lst.Addr())
 		go loop(lst)
@@ -190,6 +221,7 @@ func main() {
 			log.Error(err, "failed to remove all address")
 			os.Exit(1)
 		}
+		log.Info("create listener with unix sockets")
 		lst, err := net.Listen(jrpc2.Network(*unixAddress), *unixAddress)
 		if err != nil {
 			log.Error(err, "failed listen")
