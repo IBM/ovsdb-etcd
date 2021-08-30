@@ -107,7 +107,7 @@ func (txn *Transaction) etcdTransaction() (*clientv3.TxnResponse, error) {
 	txn.log.V(6).Info("etcdTrx transaction", "etcdTrx", txn.etcdTrx.String())
 	errInternal := txn.etcdTrx.Commit()
 	if errInternal != nil {
-		err := errors.New(E_IO_ERROR)
+		err := errors.New(E_INTERNAL_ERROR)
 		txn.log.Error(err, "etcdTrx transaction", "err", errInternal)
 		return nil, err
 	}
@@ -218,6 +218,9 @@ func (etcd *etcdTransaction) Commit() error {
 	if err != nil {
 		return err
 	}
+	if !res.Succeeded {
+		return errors.New(E_INTERNAL_ERROR)
+	}
 	etcd.Res = res
 	return nil
 }
@@ -274,20 +277,30 @@ func NewTransaction(ctx context.Context, cli *clientv3.Client, request *libovsdb
 	return txn, nil
 }
 
-func (txn *Transaction) generateUUID(ovsOp *libovsdb.Operation) (string, error) {
+func (txn *Transaction) getGenerateUUID(ovsOp *libovsdb.Operation) (string, error) {
 	var uuid string
 	tCache := txn.cache.getTable(*ovsOp.Table)
+	lCache := txn.localCache.getLocalTableCache(*ovsOp.Table)
 	if ovsOp.UUID != nil {
 		uuid = ovsOp.UUID.GoUUID
-		if _, ok := (*tCache)[uuid]; ok {
+		key := common.NewDataKey(txn.request.DBName, *ovsOp.Table, uuid)
+		keyS := key.String()
+		_, tCachOK := (*tCache)[uuid]
+		_, lCacheOK := lCache[keyS]
+		if tCachOK || lCacheOK {
 			err := errors.New(E_DUP_UUID)
 			txn.log.Error(err, "duplicate uuid", "uuid", uuid)
 			return "", err
 		}
 	} else {
-		uuid = common.GenerateUUID()
-		for ok := true; ok; {
-			_, ok = (*tCache)[uuid]
+		tCachOK := true
+		lCacheOK := true
+		for tCachOK || lCacheOK {
+			uuid = common.GenerateUUID()
+			_, tCachOK = (*tCache)[uuid]
+			key := common.NewDataKey(txn.request.DBName, *ovsOp.Table, uuid)
+			keyS := key.String()
+			_, lCacheOK = lCache[keyS]
 		}
 	}
 	return uuid, nil
@@ -338,16 +351,11 @@ Loop:
 						txn.log.Error(err, "", "uuid-name", *ovsOp.UUIDName)
 						txn.response.Result[i].SetError(E_DUP_UUIDNAME)
 						// we will return error for the operation processing
+						break
 					} else {
-						// TODO
-						var uuid string
-						if ovsOp.UUID != nil {
-							uuid = ovsOp.UUID.GoUUID
-						} else {
-							uuid, err = txn.generateUUID(&ovsOp)
-							if err != nil {
-								return err
-							}
+						uuid, err := txn.getGenerateUUID(&ovsOp)
+						if err != nil {
+							return err
 						}
 						txn.mapUUID.Set(*ovsOp.UUIDName, uuid, txn.log)
 					}
@@ -465,7 +473,7 @@ func (txn *Transaction) lockTables() error {
 	tMap := make(map[string]bool)
 	for _, op := range txn.request.Operations {
 		switch op.Op {
-		case libovsdb.OperationInsert, libovsdb.OperationUpdate, libovsdb.OperationMutate, libovsdb.OperationDelete, libovsdb.OperationSelect:
+		case libovsdb.OperationUpdate, libovsdb.OperationMutate, libovsdb.OperationDelete, libovsdb.OperationSelect:
 			if _, value := tMap[*op.Table]; !value {
 				tMap[*op.Table] = true
 				tables = append(tables, *op.Table)
@@ -722,9 +730,8 @@ func (txn *Transaction) doInsert(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 			txn.log.Error(err, "mismatching uuid-name and uuid", "uuid-name", *ovsOp.UUIDName, "uuid", uuid)
 			return
 		}
-	}
-	if uuid == "" {
-		uuid, err = txn.generateUUID(ovsOp)
+	} else {
+		uuid, err = txn.getGenerateUUID(ovsOp)
 		if err != nil {
 			return
 		}
@@ -745,7 +752,6 @@ func (txn *Transaction) doInsert(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 	}
 	setRowUUID(row, uuid)
 	setRowVersion(row)
-	//err = etcdCreateRow(txn, &key, row)
 	k := key.String()
 	val, e := makeValue(row)
 	if e != nil {
@@ -754,6 +760,8 @@ func (txn *Transaction) doInsert(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 	}
 	table := txn.localCache.getLocalTableCache(*ovsOp.Table)
 	table[k] = *row
+	cmp := clientv3.Compare(clientv3.Version(k), "=", 0)
+	txn.etcdTrx.If = append(txn.etcdTrx.If, cmp)
 	etcdOp := clientv3.OpPut(k, val)
 	txn.etcdTrx.Then = append(txn.etcdTrx.Then, etcdOp)
 	return
