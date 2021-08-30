@@ -566,7 +566,71 @@ func TestTransactInsertSimpleWithUUIDNameDupError(t *testing.T) {
 	validateInsertResult(t, resp, 2, 0, "")
 	assert.Nil(t, resp.Result[1].Count)
 	assert.NotNil(t, resp.Result[1].Error)
+	assert.Equal(t, E_DUP_UUIDNAME, *resp.Result[1].Error)
 	assert.Nil(t, resp.Result[1].Rows)
+}
+
+func TestTransactInsertSimpleWithUUIDDupError(t *testing.T) {
+	table := "table1"
+	dbName := "simple"
+	row := map[string]interface{}{
+		"key1": "val1",
+	}
+	uuid := libovsdb.UUID{GoUUID: "00000000-0000-0000-0000-000000000001"}
+	req := &libovsdb.Transact{
+		DBName: dbName,
+		Operations: []libovsdb.Operation{
+			{
+				Op:    libovsdb.OperationInsert,
+				Table: &table,
+				Row:   &row,
+				UUID:  &uuid,
+			},
+			{
+				Op:    libovsdb.OperationInsert,
+				Table: &table,
+				Row:   &row,
+				UUID:  &uuid,
+			},
+		},
+	}
+	testEtcdCleanup(t)
+	resp := testTransact(t, req, testSchemaSimple, 0)
+	validateInsertResult(t, resp, 2, 0, "")
+	assert.Nil(t, resp.Result[1].Count)
+	assert.NotNil(t, resp.Result[1].Error)
+	assert.Equal(t, E_DUP_UUID, *resp.Result[1].Error)
+	assert.Nil(t, resp.Result[1].Rows)
+}
+
+func TestTransactInsertSimpleWithUUIDDupError2(t *testing.T) {
+	table := "table1"
+	dbName := "simple"
+	row := map[string]interface{}{
+		"key1": "val1",
+	}
+	uuid := libovsdb.UUID{GoUUID: "00000000-0000-0000-0000-000000000001"}
+	req := &libovsdb.Transact{
+		DBName: dbName,
+		Operations: []libovsdb.Operation{
+			{
+				Op:    libovsdb.OperationInsert,
+				Table: &table,
+				Row:   &row,
+				UUID:  &uuid,
+			},
+		},
+	}
+	testEtcdCleanup(t)
+	resp := testTransact(t, req, testSchemaSimple, 0)
+	validateInsertResult(t, resp, 1, 0, uuid.GoUUID)
+
+	resp = testTransact(t, req, testSchemaSimple, 1)
+	assert.Nil(t, resp.Result[0].Count)
+	assert.NotNil(t, resp.Result[0].Error)
+	assert.Equal(t, E_DUP_UUID, *resp.Result[0].Error)
+	assert.Nil(t, resp.Result[0].Rows)
+
 }
 
 func TestTransactAtomicInsertNamedUUID(t *testing.T) {
