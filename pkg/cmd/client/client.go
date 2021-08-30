@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"net"
@@ -9,9 +10,16 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
 	"k8s.io/klog/v2"
+
+	"github.com/ibm/ovsdb-etcd/pkg/cmd/ssl_utils"
 )
 
-var serverAddr = flag.String("server", "", "Server address")
+var (
+	serverAddr     = flag.String("server", "", "Server address")
+	useSSL         = flag.Bool("use-ssl", false, "use ssl flag")
+	sslVersion     = ssl_utils.SslVersion
+	sslCipherSuite = ssl_utils.SslCipherSuite
+)
 
 func listDbs(ctx context.Context, cli *jrpc2.Client) (result []string, err error) {
 	err = cli.CallResult(ctx, "list_dbs", nil, &result)
@@ -56,8 +64,25 @@ func main() {
 	if *serverAddr == "" {
 		klog.Fatal("You must provide -server address to connect to")
 	}
-
-	conn, err := net.Dial(jrpc2.Network(*serverAddr), *serverAddr)
+	var conn net.Conn
+	var err error
+	if *useSSL {
+		klog.Infof("dial using HTTPS")
+		conf := &tls.Config{
+			InsecureSkipVerify: true, //TODO - add this as a flag
+		}
+		err = ssl_utils.AddSslToConfig(conf, *sslCipherSuite, *sslVersion)
+		if err != nil {
+			klog.Fatal(err)
+		}
+		if *sslVersion == ssl_utils.VersionTLS13 {
+			klog.Warning("using TLS 1.3. client cannot configure spesific cipher suite and will use one of the following options:", ssl_utils.GetCipherSuitesSupportedOnlyTLS3())
+		}
+		conn, err = tls.Dial("tcp", *serverAddr, conf)
+	} else {
+		klog.Infof("dial using HTTP")
+		conn, err = net.Dial(jrpc2.Network(*serverAddr), *serverAddr)
+	}
 	if err != nil {
 		klog.Fatalf("Dial %q: %v", *serverAddr, err)
 	}
@@ -105,9 +130,12 @@ func main() {
 	} else {
 		klog.Infof("unlock result=%v", lock)
 	}
-	if tx, err := transact(ctx, cli); err != nil {
-		klog.Fatalf("transact: %v", err)
-	} else {
-		klog.Infof("transact result=%v", tx)
-	}
+	//FIXME this should work?I don't think so
+	/*
+		if tx, err := transact(ctx, cli); err != nil {
+			klog.Fatalf("transact: %v", err)
+		} else {
+			klog.Infof("transact result=%v", tx)
+		}
+	*/
 }
