@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/jinzhu/copier"
+	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 
@@ -77,42 +78,10 @@ func isEqualRow(txn *Transaction, tableSchema *libovsdb.TableSchema, expectedRow
 	return true, nil
 }
 
-// etcdTrx doesn't allow modification of the same key in a single transaction.
-// we have to validate correctness of this operation removing.
-func (txn *Transaction) etcdRemoveDupThen() {
-	duplicatedKeys := map[int]int{}
-	prevKeyIndex := map[string]int{}
-	for curr, op := range txn.etcdTrx.Then {
-		key := string(op.KeyBytes())
-		prev, ok := prevKeyIndex[key]
-		if ok {
-			txn.log.V(6).Info("[then] removing duplicate key", "key", key, "index", prev)
-			duplicatedKeys[prev] = prev
-		}
-		prevKeyIndex[key] = curr
-	}
-	newThen := []clientv3.Op{}
-	for inx, op := range txn.etcdTrx.Then {
-		if _, ok := duplicatedKeys[inx]; !ok {
-			newThen = append(newThen, op)
-		}
-	}
-	txn.etcdTrx.Then = newThen
-}
-
-func (txn *Transaction) etcdRemoveDup() {
-	txn.etcdRemoveDupThen()
-}
-
 func (txn *Transaction) etcdTransaction() (*clientv3.TxnResponse, error) {
-	txn.log.V(6).Info("etcdTrx transaction", "etcdTrx", txn.etcdTrx.String())
-	errInternal := txn.etcdTrx.Commit()
-	if errInternal != nil && errInternal.Error() != E_CONCURRENCY_ERROR {
-		err := errors.New(E_INTERNAL_ERROR)
-		txn.log.Error(errInternal, "etcdTrx transaction error", "etcd trx", fmt.Sprintf("%+v", txn.etcdTrx))
-		return nil, err
-	}
-	return txn.etcdTrx.Res, nil
+	txn.etcdTrx.removeDupThen()
+	txn.log.V(6).Info("etcdTrx transaction", "if", txn.etcdTrx.ifSize(), "then", txn.etcdTrx.thenSize())
+	return txn.etcdTrx.commit()
 }
 
 type namedUUIDResolver map[string]string
@@ -195,35 +164,81 @@ func (mapUUID *namedUUIDResolver) ResolveRow(row *map[string]interface{}, log lo
 }
 
 type etcdTransaction struct {
-	Cli  *clientv3.Client
-	Ctx  context.Context
-	If   []clientv3.Cmp
-	Then []clientv3.Op
-	Else []clientv3.Op
-	Res  *clientv3.TxnResponse
+	cli  *clientv3.Client
+	ctx  context.Context
+	cmp  []clientv3.Cmp
+	then []clientv3.Op
+	// we don't use else operations, so we don't have the else entry here
 }
 
-func (etcd *etcdTransaction) Clear() {
-	etcd.If = []clientv3.Cmp{}
-	etcd.Then = []clientv3.Op{}
-	etcd.Else = []clientv3.Op{}
-	etcd.Res = nil
+func (etcd *etcdTransaction) clear() {
+	etcd.cmp = []clientv3.Cmp{}
+	etcd.then = []clientv3.Op{}
+}
+
+func (etcd *etcdTransaction) appendIf(cmp clientv3.Cmp) {
+	etcd.cmp = append(etcd.cmp, cmp)
+}
+
+func (etcd *etcdTransaction) appendThen(op clientv3.Op) {
+	etcd.then = append(etcd.then, op)
 }
 
 func (etcd etcdTransaction) String() string {
-	return fmt.Sprintf("{ txn-num-op=%d}", len(etcd.Then))
+	ifStr := "if: {"
+	if etcd.cmp != nil {
+		for _, i := range etcd.cmp {
+			cmp := etcdserverpb.Compare(i)
+			ifStr += fmt.Sprintf("{%s},", cmp.String())
+		}
+	}
+	ifStr += "}"
+	thenStr := "then:{"
+	if etcd.then != nil {
+		for _, t := range etcd.then {
+			thenStr += fmt.Sprintf("{key:%s, delete: %v, put: %v, get: %v },",
+				string(t.KeyBytes()),
+				t.IsDelete(),
+				t.IsPut(),
+				t.IsGet())
+		}
+	}
+	thenStr += "}"
+	return fmt.Sprintf("etcdTransaction: %d->%d, %s %s", etcd.ifSize(), etcd.thenSize(), ifStr, thenStr)
 }
 
-func (etcd *etcdTransaction) Commit() error {
-	res, err := etcd.Cli.Txn(etcd.Ctx).If(etcd.If...).Then(etcd.Then...).Else(etcd.Else...).Commit()
-	if err != nil {
-		return err
+func (etcd etcdTransaction) ifSize() int {
+	return len(etcd.cmp)
+}
+
+func (etcd etcdTransaction) thenSize() int {
+	return len(etcd.then)
+}
+
+func (etcd *etcdTransaction) commit() (*clientv3.TxnResponse, error) {
+	return etcd.cli.Txn(etcd.ctx).If(etcd.cmp...).Then(etcd.then...).Commit()
+}
+
+// etcdTrx doesn't allow modification of the same key in a single transaction.
+// we have to validate correctness of this operation removing.
+func (etcd *etcdTransaction) removeDupThen() {
+	duplicatedKeys := map[int]int{}
+	prevKeyIndex := map[string]int{}
+	for curr, op := range etcd.then {
+		key := string(op.KeyBytes())
+		prev, ok := prevKeyIndex[key]
+		if ok {
+			duplicatedKeys[prev] = prev
+		}
+		prevKeyIndex[key] = curr
 	}
-	if !res.Succeeded {
-		return errors.New(E_CONCURRENCY_ERROR)
+	newThen := []clientv3.Op{}
+	for inx, op := range etcd.then {
+		if _, ok := duplicatedKeys[inx]; !ok {
+			newThen = append(newThen, op)
+		}
 	}
-	etcd.Res = res
-	return nil
+	etcd.then = newThen
 }
 
 // [table][uuid]row
@@ -274,7 +289,7 @@ func NewTransaction(ctx context.Context, cli *clientv3.Client, request *libovsdb
 	txn.request = *request
 	txn.localCache = &localCache{}
 	txn.response.Result = make([]libovsdb.OperationResult, len(request.Operations))
-	txn.etcdTrx = &etcdTransaction{Ctx: ctx, Cli: cli}
+	txn.etcdTrx = &etcdTransaction{ctx: ctx, cli: cli}
 	return txn, nil
 }
 
@@ -375,37 +390,32 @@ Loop:
 		}
 		return nil
 	}
-	err = processOperations()
-	if err != nil {
-		return -1, err
-	}
-
-	txn.etcdRemoveDup()
-	trResponse, err := txn.etcdTransaction()
-	if err != nil {
-		if err.Error() == E_CONCURRENCY_ERROR {
-			// let's try again
-			txn.etcdTrx.Clear()
-			txn.response.Result = make([]libovsdb.OperationResult, len(txn.request.Operations))
-			txn.localCache = &localCache{}
-			err = processOperations()
-			if err != nil {
-				return -1, err
-			}
-			txn.etcdRemoveDup()
-			trResponse, err = txn.etcdTransaction()
-			if err == nil {
-				goto OUT
-			} else {
-				err = errors.New(E_INTERNAL_ERROR)
-			}
+	var trResponse *clientv3.TxnResponse
+	for i := 0; i < 5; i++ {
+		err = processOperations()
+		if err != nil {
+			return -1, err
 		}
-		errStr := err.Error()
-		txn.response.Error = &errStr
-		return -1, err
+		trResponse, err = txn.etcdTransaction()
+		if err != nil {
+			txn.log.Error(err, "etcd trx error", "cmpSize", txn.etcdTrx.ifSize(), "thenSize", txn.etcdTrx.thenSize())
+			return -1, err
+		}
+		if trResponse.Succeeded {
+			if i > 0 {
+				txn.log.V(6).Info("concurrency resolved", "trx", txn.etcdTrx.String())
+			}
+			break
+		}
+		txn.log.V(5).Info(E_CONCURRENCY_ERROR, "trx", txn.etcdTrx.String())
+		// let's try again
+		txn.etcdTrx.clear()
+		txn.response.Result = make([]libovsdb.OperationResult, len(txn.request.Operations))
+		txn.localCache = &localCache{}
 	}
-OUT:
-	txn.log.V(5).Info("commit transaction", "response", txn.response)
+	if !trResponse.Succeeded {
+		return -1, errors.New(E_INTERNAL_ERROR)
+	}
 	return trResponse.Header.Revision, nil
 }
 
@@ -530,7 +540,7 @@ func (txn *Transaction) lockTables() error {
 	tMap := make(map[string]bool)
 	for _, op := range txn.request.Operations {
 		switch op.Op {
-		case libovsdb.OperationDelete:
+		case libovsdb.OperationDelete, libovsdb.OperationUpdate, libovsdb.OperationMutate:
 			ok, err := txn.isUUIDSelected(&op)
 			if err != nil {
 				return err
@@ -543,11 +553,6 @@ func (txn *Transaction) lockTables() error {
 				tMap[*op.Table] = true
 				tables = append(tables, *op.Table)
 			}
-		case libovsdb.OperationUpdate, libovsdb.OperationMutate:
-			if _, value := tMap[*op.Table]; !value {
-				tMap[*op.Table] = true
-				tables = append(tables, *op.Table)
-			}
 		default:
 			// do nothing
 		}
@@ -555,7 +560,7 @@ func (txn *Transaction) lockTables() error {
 	if len(tables) > 0 {
 		// we have to sort to prevent deadlocks
 		sort.Strings(tables)
-		session, err := concurrency.NewSession(txn.etcdTrx.Cli, concurrency.WithContext(txn.etcdTrx.Ctx))
+		session, err := concurrency.NewSession(txn.etcdTrx.cli, concurrency.WithContext(txn.etcdTrx.ctx))
 		if err != nil {
 			return err
 		}
@@ -563,7 +568,7 @@ func (txn *Transaction) lockTables() error {
 		for _, table := range tables {
 			key := common.NewLockKey("__" + table)
 			mutex := concurrency.NewMutex(session, key.String())
-			mutex.Lock(txn.etcdTrx.Ctx)
+			mutex.Lock(txn.etcdTrx.ctx)
 		}
 	}
 	return nil
@@ -736,7 +741,7 @@ func (txn *Transaction) RowUpdate(tableSchema *libovsdb.TableSchema, mapUUID nam
 	return newRow, nil
 }
 
-func (txn *Transaction) etcdModifyRow(key []byte, row *map[string]interface{}) error {
+func (txn *Transaction) etcdModifyRow(key []byte, row *map[string]interface{}, version int64) error {
 	comKey, err := common.ParseKey(string(key))
 	if err != nil {
 		return err
@@ -747,8 +752,13 @@ func (txn *Transaction) etcdModifyRow(key []byte, row *map[string]interface{}) e
 	}
 	table := txn.localCache.getLocalTableCache(comKey.TableName)
 	table[string(key)] = *row
-	etcdOp := clientv3.OpPut(string(key), val)
-	txn.etcdTrx.Then = append(txn.etcdTrx.Then, etcdOp)
+	strKey := string(key)
+	etcdOp := clientv3.OpPut(strKey, val)
+	txn.etcdTrx.appendThen(etcdOp)
+	if version != -1 {
+		cmp := clientv3.Compare(clientv3.Version(strKey), "=", version)
+		txn.etcdTrx.appendIf(cmp)
+	}
 	return nil
 }
 
@@ -831,9 +841,9 @@ func (txn *Transaction) doInsert(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 	table := txn.localCache.getLocalTableCache(*ovsOp.Table)
 	table[k] = *row
 	cmp := clientv3.Compare(clientv3.Version(k), "=", 0)
-	txn.etcdTrx.If = append(txn.etcdTrx.If, cmp)
+	txn.etcdTrx.appendIf(cmp)
 	etcdOp := clientv3.OpPut(k, val)
-	txn.etcdTrx.Then = append(txn.etcdTrx.Then, etcdOp)
+	txn.etcdTrx.appendThen(etcdOp)
 	return
 }
 
@@ -853,7 +863,7 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 		return
 	}
 
-	rowProcess := func(key []byte, row map[string]interface{}) {
+	rowProcess := func(key []byte, row map[string]interface{}, version int64) {
 		var newRow *map[string]interface{}
 		if ovsOp.Op == libovsdb.OperationUpdate {
 			err = txn.RowPrepare(tableSchema, txn.mapUUID, ovsOp.Row)
@@ -874,7 +884,7 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 			}
 		}
 		setRowVersion(newRow)
-		err = txn.etcdModifyRow(key, newRow)
+		err = txn.etcdModifyRow(key, newRow, version)
 		if err != nil {
 			return
 		}
@@ -905,7 +915,7 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 		if !ok {
 			continue
 		}
-		rowProcess([]byte(key), row)
+		rowProcess([]byte(key), row, -1)
 	}
 
 	if uuid != "" {
@@ -937,7 +947,7 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 				continue
 			}
 		}
-		rowProcess(kv.Key, row)
+		rowProcess(kv.Key, row, kv.Version)
 	}
 	return
 }
@@ -983,7 +993,7 @@ func (txn *Transaction) doSelectDelete(ovsOp *libovsdb.Operation, ovsResult *lib
 		}
 		if ovsOp.Op == libovsdb.OperationDelete {
 			etcdOp := clientv3.OpDelete(string(kv.Key))
-			txn.etcdTrx.Then = append(txn.etcdTrx.Then, etcdOp)
+			txn.etcdTrx.appendThen(etcdOp)
 			ovsResult.IncrementCount()
 		} else if ovsOp.Op == libovsdb.OperationSelect {
 			resultRow, e := reduceRowByColumns(&row, ovsOp.Columns)
@@ -1152,7 +1162,7 @@ func (txn *Transaction) doComment(ovsOp *libovsdb.Operation, ovsResult *libovsdb
 	key := common.NewCommentKey(txn.request.DBName, timestamp)
 	comment := *ovsOp.Comment
 	etcdOp := clientv3.OpPut(key.String(), comment)
-	txn.etcdTrx.Then = append(txn.etcdTrx.Then, etcdOp)
+	txn.etcdTrx.appendThen(etcdOp)
 	return nil, ""
 }
 
