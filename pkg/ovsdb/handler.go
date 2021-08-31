@@ -84,20 +84,16 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	ch.mu.RLock()
 	monitor, thereIsMonitor := ch.monitors[txn.request.DBName]
 	ch.mu.RUnlock()
-	txn.log.V(7).Info("before tables lock")
 	// temporary solution to provide consistency
 	err = txn.lockTables()
 	if err != nil {
 		return nil, err
 	}
-	txn.log.V(7).Info("got tables lock")
 	if thereIsMonitor {
 		monitor.tQueue.startTransaction()
 	}
-	// lock cache
 	rev, errC := txn.Commit()
 	err = txn.unLockTables()
-	txn.log.V(7).Info("tables unlocked")
 	if errC != nil || err != nil {
 		if thereIsMonitor {
 			monitor.tQueue.abortTransaction()
