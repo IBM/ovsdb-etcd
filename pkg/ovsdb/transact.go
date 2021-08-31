@@ -35,11 +35,12 @@ const (
 	E_IO_ERROR            = "I/O error"
 
 	/* ovsdb extention */
-	E_DUP_UUID         = "duplicate uuid"
-	E_INTERNAL_ERROR   = "internal error"
-	E_OVSDB_ERROR      = "ovsdb error"
-	E_PERMISSION_ERROR = "permission error"
-	E_SYNTAX_ERROR     = "syntax error or unknown column"
+	E_DUP_UUID          = "duplicate uuid"
+	E_INTERNAL_ERROR    = "internal error"
+	E_CONCURRENCY_ERROR = "concurrency error"
+	E_OVSDB_ERROR       = "ovsdb error"
+	E_PERMISSION_ERROR  = "permission error"
+	E_SYNTAX_ERROR      = "syntax error or unknown column"
 )
 
 func isEqualColumn(columnSchema *libovsdb.ColumnSchema, expected, actual interface{}) bool {
@@ -106,9 +107,9 @@ func (txn *Transaction) etcdRemoveDup() {
 func (txn *Transaction) etcdTransaction() (*clientv3.TxnResponse, error) {
 	txn.log.V(6).Info("etcdTrx transaction", "etcdTrx", txn.etcdTrx.String())
 	errInternal := txn.etcdTrx.Commit()
-	if errInternal != nil {
+	if errInternal != nil && errInternal.Error() != E_CONCURRENCY_ERROR {
 		err := errors.New(E_INTERNAL_ERROR)
-		txn.log.Error(err, "etcdTrx transaction", "err", errInternal)
+		txn.log.Error(errInternal, "etcdTrx transaction error", "etcd trx", fmt.Sprintf("%+v", txn.etcdTrx))
 		return nil, err
 	}
 	return txn.etcdTrx.Res, nil
@@ -210,7 +211,7 @@ func (etcd *etcdTransaction) Clear() {
 }
 
 func (etcd etcdTransaction) String() string {
-	return fmt.Sprintf("{txn-num-op=%d}", len(etcd.Then))
+	return fmt.Sprintf("{ txn-num-op=%d}", len(etcd.Then))
 }
 
 func (etcd *etcdTransaction) Commit() error {
@@ -219,7 +220,7 @@ func (etcd *etcdTransaction) Commit() error {
 		return err
 	}
 	if !res.Succeeded {
-		return errors.New(E_INTERNAL_ERROR)
+		return errors.New(E_CONCURRENCY_ERROR)
 	}
 	etcd.Res = res
 	return nil
@@ -382,10 +383,25 @@ Loop:
 	txn.etcdRemoveDup()
 	trResponse, err := txn.etcdTransaction()
 	if err != nil {
+		if err.Error() == E_CONCURRENCY_ERROR {
+			// let's try again
+			err = processOperations()
+			if err != nil {
+				return -1, err
+			}
+			txn.etcdRemoveDup()
+			trResponse, err = txn.etcdTransaction()
+			if err == nil {
+				goto OUT
+			} else {
+				err = errors.New(E_INTERNAL_ERROR)
+			}
+		}
 		errStr := err.Error()
 		txn.response.Error = &errStr
 		return -1, err
 	}
+OUT:
 	txn.log.V(5).Info("commit transaction", "response", txn.response)
 	return trResponse.Header.Revision, nil
 }
