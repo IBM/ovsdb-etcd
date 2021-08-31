@@ -385,6 +385,9 @@ Loop:
 	if err != nil {
 		if err.Error() == E_CONCURRENCY_ERROR {
 			// let's try again
+			txn.etcdTrx.Clear()
+			txn.response.Result = make([]libovsdb.OperationResult, len(txn.request.Operations))
+			txn.localCache = &localCache{}
 			err = processOperations()
 			if err != nil {
 				return -1, err
