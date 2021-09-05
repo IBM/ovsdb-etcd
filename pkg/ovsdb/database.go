@@ -50,19 +50,19 @@ type Locker interface {
 type lock struct {
 	mutex    *concurrency.Mutex
 	myCancel context.CancelFunc
-	cntx     context.Context
+	ctx      context.Context
 }
 
 func (l *lock) tryLock() error {
-	return l.mutex.TryLock(l.cntx)
+	return l.mutex.TryLock(l.ctx)
 }
 
 func (l *lock) lock() error {
-	return l.mutex.Lock(l.cntx)
+	return l.mutex.Lock(l.ctx)
 }
 
 func (l *lock) unlock() error {
-	return l.mutex.Unlock(l.cntx)
+	return l.mutex.Unlock(l.ctx)
 }
 
 func (l *lock) cancel() {
@@ -97,15 +97,15 @@ func NewDatabaseEtcd(cli *clientv3.Client, log logr.Logger) (Databaser, error) {
 }
 
 func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error) {
-	ctctx, cancel := context.WithCancel(ctx)
-	session, err := concurrency.NewSession(con.cli, concurrency.WithContext(ctctx))
+	ctxt, cancel := context.WithCancel(ctx)
+	session, err := concurrency.NewSession(con.cli, concurrency.WithContext(ctxt))
 	if err != nil {
 		cancel()
 		return nil, err
 	}
 	key := common.NewLockKey(id)
 	mutex := concurrency.NewMutex(session, key.String())
-	return &lock{mutex: mutex, myCancel: cancel, cntx: ctctx}, nil
+	return &lock{mutex: mutex, myCancel: cancel, ctx: ctxt}, nil
 }
 
 func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
@@ -124,7 +124,10 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 	}
 	schemaName := schemaMap["name"].(string)
 	con.strSchemas[schemaName] = schemaMap
-	con.cache.addDatabaseCache(schemaName, con.cli, con.log)
+	err = con.cache.addDatabaseCache(schemaName, con.cli, con.log)
+	if err != nil {
+		return err
+	}
 	schemaSet, err := libovsdb.NewOvsSet(string(data))
 	// the _Server.Database entries should be unique per database, so we don't use a standard key schema when the row key
 	// is its _uuid, but here we use database / schema name as the key.
@@ -315,7 +318,6 @@ func NewDatabaseMock() (Databaser, error) {
 }
 
 func (con *DatabaseMock) GetLock(ctx context.Context, id string) (Locker, error) {
-
 	return &LockerMock{}, nil
 }
 

@@ -63,7 +63,7 @@ func NewCondition(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, 
 		tmp, err := columnSchema.Unmarshal(value)
 		if err != nil {
 			err = errors.New(E_INTERNAL_ERROR)
-			log.Error(err, "failed to unmarsahl condition", "column", column, "type", columnSchema.Type, "value", value)
+			log.Error(err, "failed to unmarshal condition", "column", column, "type", columnSchema.Type, "value", value)
 			return nil, err
 		}
 		value = tmp
@@ -71,7 +71,7 @@ func NewCondition(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, 
 		tmp, err := libovsdb.UnmarshalUUID(value)
 		if err != nil {
 			err = errors.New(E_INTERNAL_ERROR)
-			log.Error(err, "failed to unamrshal condition", "column", column, "type", libovsdb.TypeUUID, "value", value)
+			log.Error(err, "failed to unmarshal condition", "column", column, "type", libovsdb.TypeUUID, "value", value)
 			return nil, err
 		}
 		value = tmp
@@ -416,7 +416,7 @@ func (c *Condition) Compare(row *map[string]interface{}) (bool, error) {
 		return c.CompareMap(row)
 	default:
 		err := errors.New(E_CONSTRAINT_VIOLATION)
-		c.Log.Error(err, "usupported type comparison", "type", c.ColumnSchema.Type)
+		c.Log.Error(err, "unsupported type comparison", "type", c.ColumnSchema.Type)
 		return false, err
 	}
 }

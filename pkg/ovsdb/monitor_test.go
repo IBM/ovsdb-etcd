@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"os"
 	"sync"
 	"testing"
 
 	"github.com/go-logr/logr"
-
 	guuid "github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"go.etcd.io/etcd/api/v3/mvccpb"
@@ -27,7 +27,11 @@ var log logr.Logger
 func init() {
 	fs := flag.NewFlagSet("fs", flag.PanicOnError)
 	klog.InitFlags(fs)
-	fs.Set("v", "10")
+	err := fs.Set("v", "10")
+	if err != nil {
+		klog.Errorf("flags set %v", err)
+		os.Exit(1)
+	}
 	defer klog.Flush()
 	log = klogr.New()
 }
@@ -639,7 +643,7 @@ func TestMonitorAddRemoveMonitor(t *testing.T) {
 			},
 		}
 	)
-	var testSchemaSimple *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
+	var testSchemaSimple = &libovsdb.DatabaseSchema{
 		Name:    databaseSchemaName,
 		Version: databaseSchemaVer,
 		Tables: map[string]libovsdb.TableSchema{
@@ -702,7 +706,8 @@ func TestMonitorAddRemoveMonitor(t *testing.T) {
 	assert.Equal(t, expKey2Updaters, monitor.key2Updaters)
 
 	// remove the second monitor
-	handler.removeMonitor(params[1], true)
+	err = handler.removeMonitor(params[1], true)
+	assert.Nil(t, err)
 	assert.Equal(t, cloned, monitor.key2Updaters)
 
 	expMsg, err = json.Marshal(nil)
@@ -710,7 +715,8 @@ func TestMonitorAddRemoveMonitor(t *testing.T) {
 	jrpcServerMock.expMessage = expMsg
 
 	// remove the first monitor
-	handler.removeMonitor(nil, true)
+	err = handler.removeMonitor(nil, true)
+	assert.Nil(t, err)
 	assert.Equal(t, 0, len(monitor.key2Updaters))
 	assert.Equal(t, 0, len(handler.monitors))
 }
@@ -837,7 +843,7 @@ func rowsAreEqual(t *testing.T, expRow *ovsjson.RowUpdate, row *ovsjson.RowUpdat
 func initHandler(t *testing.T, jsonValue string, notificationType ovsjson.UpdateNotificationType) (*Handler, []*clientv3.Event) {
 
 	columnSchema := libovsdb.ColumnSchema{Type: libovsdb.TypeString}
-	var testSchemaSimple *libovsdb.DatabaseSchema = &libovsdb.DatabaseSchema{
+	var testSchemaSimple = &libovsdb.DatabaseSchema{
 		Name: DB_NAME,
 		Tables: map[string]libovsdb.TableSchema{
 			Table_Name: {Columns: map[string]*libovsdb.ColumnSchema{"c1": &columnSchema, "c2": &columnSchema}},
@@ -882,7 +888,7 @@ func prepareData(t *testing.T, data map[string]interface{}, withUUID bool) []byt
 func cloneKey2Updaters(key2Updaters Key2Updaters) Key2Updaters {
 	newMap := Key2Updaters{}
 	for k, v := range key2Updaters {
-		updaters := []updater{}
+		updaters := make([]updater, 0, len(v))
 		for _, u := range v {
 			updaters = append(updaters, u)
 		}
@@ -904,7 +910,7 @@ func (j *jrpcServerMock) Wait() error {
 
 func (j *jrpcServerMock) Stop() {}
 
-func (j *jrpcServerMock) Notify(ctx context.Context, method string, params interface{}) error {
+func (j *jrpcServerMock) Notify(_ context.Context, method string, _ interface{}) error {
 	assert.NotNil(j.t, method)
 	assert.Equal(j.t, j.expMethod, method)
 	if j.wg != nil {

@@ -381,19 +381,18 @@ func (u *updater) prepareRowNotification(event *clientv3.Event) (*ovsjson.RowUpd
 			return u.prepareDeleteRowUpdate(event)
 		}
 	}
-	// the event is modify
+	// a modify event
 	return u.prepareModifyRowUpdate(event)
 }
 
 func (u *updater) prepareDeleteRowUpdate(event *clientv3.Event) (*ovsjson.RowUpdate, string, error) {
-	// Delete event
 	if !libovsdb.MSIsTrue(u.mcr.Select.Delete) {
 		return nil, "", nil
 	}
 	value := event.PrevKv.Value
 	if !u.isV1 {
 		// according to https://docs.openvswitch.org/en/latest/ref/ovsdb-server.7/#update2-notification,
-		// "<row> is always a null object for a delete update."
+		// "<row> is always a null object for delete updates."
 		_, uuid, err := u.prepareRow(value)
 		if err != nil {
 			return nil, "", err
@@ -405,12 +404,11 @@ func (u *updater) prepareDeleteRowUpdate(event *clientv3.Event) (*ovsjson.RowUpd
 	if err != nil {
 		return nil, "", err
 	}
-	// the delete for !u.isV1 we have returned before
+	// for !u.isV1 we have returned before
 	return &ovsjson.RowUpdate{Old: &data}, uuid, nil
 }
 
 func (u *updater) prepareCreateRowUpdate(event *clientv3.Event) (*ovsjson.RowUpdate, string, error) {
-	// the event is create
 	if !libovsdb.MSIsTrue(u.mcr.Select.Insert) {
 		return nil, "", nil
 	}
@@ -426,7 +424,6 @@ func (u *updater) prepareCreateRowUpdate(event *clientv3.Event) (*ovsjson.RowUpd
 }
 
 func (u *updater) prepareModifyRowUpdate(event *clientv3.Event) (*ovsjson.RowUpdate, string, error) {
-	// the event is modify
 	if !libovsdb.MSIsTrue(u.mcr.Select.Modify) {
 		return nil, "", nil
 	}
@@ -588,7 +585,7 @@ func unmarshalData(data []byte) (map[string]interface{}, error) {
 
 func (u *updater) isRowAppearOnWhere(data map[string]interface{}) (bool, error) {
 	checkCondition := func(condition []interface{}) (bool, error) {
-		log := klogr.New() // TODO: propogate real loger insted of this generic one
+		log := klogr.New() // TODO: propagate real logger instead of this generic one
 		res, err := NewCondition(u.tableSchema, namedUUIDResolver{}, condition, log)
 		if err != nil {
 			return false, err
