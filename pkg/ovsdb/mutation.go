@@ -63,7 +63,7 @@ func NewMutation(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, m
 	} else {
 		value, err = columnSchema.Unmarshal(value)
 		if err != nil {
-			// value for mutate map with delete mutator can be map or set
+			// value for mutate map with delete mutator can be a Map or a Set
 			if columnSchema.Type == libovsdb.TypeMap || mt == MT_DELETE {
 				value, err = columnSchema.UnmarshalSet(value)
 			}

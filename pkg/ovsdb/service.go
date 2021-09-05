@@ -10,7 +10,7 @@ import (
 	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
 )
 
-// The interface that provides OVSDB jrpc methods defined by RFC 7047 and later extended by the OVN/OVS community,
+// Servicer interface that provides OVSDB jrpc methods defined by RFC 7047 and later extended by the OVN/OVS community,
 // see https://tools.ietf.org/html/rfc7047 and https://docs.openvswitch.org/en/latest/ref/ovsdb-server.7
 type Servicer interface {
 
@@ -221,7 +221,7 @@ func (s *Service) ListDbs(ctx context.Context, param interface{}) ([]string, err
 	if err != nil {
 		return nil, err
 	}
-	dbs := []string{}
+	dbs := make([]string, 0, len(resp.Kvs))
 	for _, kv := range resp.Kvs {
 		key, err := common.ParseKey(string(kv.Key))
 		if err != nil {

@@ -54,7 +54,7 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	if !req.IsNotification() {
 		id = req.ID()
 	}
-	log := ch.log.WithValues("id", id, "txnid", shortuuid.New())
+	log := ch.log.WithValues("id", id, "txnID", shortuuid.New())
 	log.V(5).Info("transact", "params", params)
 	if ch.closed {
 		log.V(5).Info("transact request, the handler is closed")
@@ -120,26 +120,16 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 
 func (ch *Handler) Cancel(ctx context.Context, param interface{}) (interface{}, error) {
 	ch.log.V(5).Info("cancel request", "param", param)
-
 	return "{Cancel}", nil
 }
 
 func (ch *Handler) Monitor(ctx context.Context, params []interface{}) (interface{}, func(), error) {
 	ch.log.V(5).Info("monitor request", "params", params)
-	updatersMap, err := ch.addMonitor(params, ovsjson.Update)
+	data, callback, err := ch.monitorInternal(params, ovsjson.Update)
 	if err != nil {
-		ch.log.Error(err, "monitor rquest failed", "params", params)
 		return nil, nil, err
 	}
-	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
-	if err != nil {
-		ch.log.Error(err, "failed to get monitored data")
-		ch.removeMonitor(params[1], false)
-		return nil, nil, err
-	}
-	jsonValueString := jsonValueToString(params[1])
-	ch.log.V(5).Info("monitor response", "jsonValue", params[1], "data", data)
-	return data, func() { ch.startNotifier(jsonValueString) }, nil
+	return data, callback, nil
 }
 
 func (ch *Handler) MonitorCancel(ctx context.Context, param interface{}) (interface{}, error) {
@@ -170,16 +160,16 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 	} else {
 		myLock, err = ch.db.GetLock(ch.handlerContext, id)
 		if err != nil {
-			ch.log.Error(err, "lock failed", "lockid", id)
+			ch.log.Error(err, "lock failed", "lockID", id)
 			return nil, err
 		}
-		ch.log.V(6).Info("new etcd lock created", "id", id)
+		ch.log.V(6).Info("new etcd lock created", "lockID", id)
 		// validate that no other locks
 		otherLock, ok := ch.databaseLocks.Load(id)
 		if !ok {
 			ch.databaseLocks.Store(id, myLock)
 		} else {
-			ch.log.V(6).Info("there is another lock in the local map", "id", id)
+			ch.log.V(6).Info("there is another lock in the local map", "lockID", id)
 			// What should we do ?
 			myLock.cancel()
 			myLock, ok = otherLock.(Locker)
@@ -192,10 +182,10 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 	}
 	err = myLock.tryLock()
 	if err == nil {
-		ch.log.V(5).Info("lock request returned - \"locked: true\"", "id", id)
+		ch.log.V(5).Info("lock request returned - \"locked: true\"", "lockID", id)
 		return map[string]bool{"locked": true}, nil
 	} else if err != concurrency.ErrLocked {
-		ch.log.Error(err, "lock failed", "lockid", id)
+		ch.log.Error(err, "lock failed", "lockID", id)
 		// TOD is it correct?
 		return nil, err
 	}
@@ -203,16 +193,16 @@ func (ch *Handler) Lock(ctx context.Context, param interface{}) (interface{}, er
 		err = myLock.lock()
 		if err == nil {
 			// Send notification
-			ch.log.V(5).Info("lock succeeded", "id", id)
+			ch.log.V(5).Info("lock succeeded", "lockID", id)
 			if err := ch.jrpcServer.Notify(ch.handlerContext, "locked", []string{id}); err != nil {
 				klog.Errorf("notification %v\n", err)
 				return
 			}
 		} else {
-			ch.log.Error(err, "lock failed", "id", id)
+			ch.log.Error(err, "lock failed", "lockID", id)
 		}
 	}()
-	ch.log.V(5).Info("lock request returned - \"locked: false\"", "id", id)
+	ch.log.V(5).Info("lock request returned - \"locked: false\"", "lockID", id)
 	return map[string]bool{"locked": false}, nil
 }
 
@@ -224,7 +214,7 @@ func (ch *Handler) Unlock(ctx context.Context, param interface{}) (interface{}, 
 	}
 	iLock, ok := ch.databaseLocks.LoadAndDelete(id)
 	if !ok {
-		ch.log.V(4).Info("unlock: can't find lock", "lockid", id)
+		ch.log.V(4).Info("unlock: can't find lock", "lockID", id)
 		return ovsjson.EmptyStruct{}, nil
 	}
 	myLock, ok := iLock.(Locker)
@@ -245,20 +235,11 @@ func (ch *Handler) Steal(ctx context.Context, param interface{}) (interface{}, e
 
 func (ch *Handler) MonitorCond(ctx context.Context, params []interface{}) (interface{}, func(), error) {
 	ch.log.V(5).Info("monitorCond request", "params", params)
-	updatersMap, err := ch.addMonitor(params, ovsjson.Update2)
+	data, callback, err := ch.monitorInternal(params, ovsjson.Update2)
 	if err != nil {
-		ch.log.Error(err, "monitorCond from remote")
 		return nil, nil, err
 	}
-	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
-	if err != nil {
-		ch.log.Error(err, "failed to get monitored data")
-		ch.removeMonitor(params[1], false)
-		return nil, nil, err
-	}
-	jsonValueString := jsonValueToString(params[1])
-	ch.log.V(5).Info("monitorCond response", "jsonValue", params[1], "data", data)
-	return data, func() { ch.startNotifier(jsonValueString) }, nil
+	return data, callback, nil
 }
 
 func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) (interface{}, error) {
@@ -334,21 +315,11 @@ func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) 
 
 func (ch *Handler) MonitorCondSince(ctx context.Context, params []interface{}) (interface{}, func(), error) {
 	ch.log.V(5).Info("MonitorCondSince request", "params", params)
-	updatersMap, err := ch.addMonitor(params, ovsjson.Update3)
+	data, callback, err := ch.monitorInternal(params, ovsjson.Update3)
 	if err != nil {
-		ch.log.Error(err, "MonitorCondSince failed")
 		return nil, nil, err
 	}
-
-	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
-	if err != nil {
-		ch.log.Error(err, "failed to get monitored data")
-		ch.removeMonitor(params[1], false)
-		return nil, nil, err
-	}
-	jsonValueString := jsonValueToString(params[1])
-	ch.log.V(5).Info("MonitorCondSince response", "jsonValue", params[1], "data", fmt.Sprintf("%v", data))
-	return []interface{}{false, ovsjson.ZERO_UUID, data}, func() { ch.startNotifier(jsonValueString) }, nil
+	return []interface{}{false, ovsjson.ZERO_UUID, data}, callback, nil
 }
 
 func (ch *Handler) SetDbChangeAware(ctx context.Context, param interface{}) interface{} {
@@ -365,9 +336,9 @@ func (ch *Handler) Echo(ctx context.Context, param interface{}) interface{} {
 	return param
 }
 
-func NewHandler(tctx context.Context, db Databaser, cli *clientv3.Client, log logr.Logger) *Handler {
+func NewHandler(ctx context.Context, db Databaser, cli *clientv3.Client, log logr.Logger) *Handler {
 	return &Handler{
-		handlerContext:     tctx,
+		handlerContext:     ctx,
 		db:                 db,
 		databaseLocks:      sync.Map{},
 		handlerMonitorData: map[string]handlerMonitorData{},
@@ -377,7 +348,7 @@ func NewHandler(tctx context.Context, db Databaser, cli *clientv3.Client, log lo
 	}
 }
 
-func (ch *Handler) Cleanup() error {
+func (ch *Handler) Cleanup() {
 	ch.log.V(5).Info("CLEAN UP do something")
 	ch.closed = true
 	ch.databaseLocks.Range(func(key, value interface{}) bool {
@@ -386,7 +357,10 @@ func (ch *Handler) Cleanup() error {
 			err := fmt.Errorf("cannot transform to Logger, value type %T, key %s", value, key)
 			ch.log.Error(err, "")
 		}
-		mLock.unlock()
+		if err := mLock.unlock(); err != nil {
+			ch.log.Error(err, "cannot unlock")
+			// TODO: should we do something else?
+		}
 		ch.databaseLocks.Delete(key)
 		return true
 	})
@@ -394,7 +368,6 @@ func (ch *Handler) Cleanup() error {
 	for _, monitor := range ch.monitors {
 		monitor.cancelDbMonitor()
 	}
-	return nil
 }
 
 func (ch *Handler) SetConnection(jrpcSerer JrpcServer, clientCon net.Conn) {
@@ -425,8 +398,7 @@ func (ch *Handler) notify(jsonValueString string, updates ovsjson.TableUpdates, 
 
 func (ch *Handler) notifyAll(revision int64) {
 	ch.log.V(7).Info("notifyAll", "revision", strconv.FormatInt(revision, 10))
-	// TODO optimize
-	hmdArray := []handlerMonitorData{}
+	hmdArray := make([]handlerMonitorData, 0, len(ch.handlerMonitorData))
 	ch.mu.RLock()
 	for _, hmd := range ch.handlerMonitorData {
 		hmdArray = append(hmdArray, hmd)
@@ -549,8 +521,30 @@ func (ch *Handler) startNotifier(jsonValue string) {
 
 }
 
+// monitorInternal
+// "params": [<db-name>, <json-value>, <monitor-requests>]  in the case of "monitor" request
+// "params": [<db-name>, <json-value>, <monitor-cond-requests>] in the case of "monitor_cond" request
+// "params": [<db-name>, <json-value>, <monitor-cond-requests>, <last-txn-id>] in the case of "Monitor_cond_since" request
+func (ch *Handler) monitorInternal(params []interface{}, notificationType ovsjson.UpdateNotificationType) (ovsjson.TableUpdates, func(), error) {
+	updatersMap, err := ch.addMonitor(params, notificationType)
+	if err != nil {
+		ch.log.Error(err, "monitor request failed", "params", params)
+		return nil, nil, err
+	}
+	data, err := ch.getMonitoredData(params[0].(string), updatersMap)
+	if err != nil {
+		ch.log.Error(err, "failed to get monitored data")
+		errR := ch.removeMonitor(params[1], false)
+		ch.log.Error(errR, "failed to remove monitor")
+		return nil, nil, err
+	}
+	jsonValueString := jsonValueToString(params[1])
+	ch.log.V(5).Info("monitor response", "jsonValue", params[1], "data", data)
+	return data, func() { ch.startNotifier(jsonValueString) }, nil
+}
+
 func (ch *Handler) getMonitoredData(dbName string, updatersMap Key2Updaters) (ovsjson.TableUpdates, error) {
-	keys := []common.Key{}
+	var keys []common.Key
 	for tableKey, updaters := range updatersMap {
 		if len(updaters) == 0 {
 			// nothing to update

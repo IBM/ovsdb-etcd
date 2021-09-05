@@ -17,7 +17,7 @@ import (
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/channel"
-	"github.com/creachadair/jrpc2/handler"
+	jrpcHandler "github.com/creachadair/jrpc2/handler"
 	"github.com/creachadair/jrpc2/metrics"
 	"github.com/go-logr/logr"
 	"k8s.io/klog/v2"
@@ -27,7 +27,6 @@ import (
 	"github.com/ibm/ovsdb-etcd/pkg/ovsdb"
 )
 
-const UNIX_SOCKET = "/tmp/ovsdb-etcd.sock"
 const ETCD_LOCALHOST = "localhost:2379"
 
 var (
@@ -62,7 +61,11 @@ func main() {
 			log.Error(err, "failed to create cpu profile")
 			os.Exit(1)
 		}
-		pprof.StartCPUProfile(f)
+		err = pprof.StartCPUProfile(f)
+		if err != nil {
+			log.Error(err, "failed to create cpu profile")
+			os.Exit(1)
+		}
 		defer pprof.StopCPUProfile()
 	}
 
@@ -78,11 +81,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	if len(*databasePrefix) == 0 || strings.Contains(*databasePrefix, common.KEY_DELIMETER) {
+	if len(*databasePrefix) == 0 || strings.Contains(*databasePrefix, common.KEY_DELIMITER) {
 		log.Info("Illegal databasePrefix %s", *databasePrefix)
 		os.Exit(1)
 	}
-	if len(*serviceName) == 0 || strings.Contains(*serviceName, common.KEY_DELIMETER) {
+	if len(*serviceName) == 0 || strings.Contains(*serviceName, common.KEY_DELIMITER) {
 		log.Info("Illegal serviceName %s", *serviceName)
 		os.Exit(1)
 	}
@@ -90,13 +93,14 @@ func main() {
 	if *pidFile != "" {
 		defer delPIDFile(*pidFile)
 		if err := setupPIDFile(*pidFile); err != nil {
-			klog.Fatal(err)
+			log.Error(err, "failed to setup PID file")
+			os.Exit(1)
 		}
 	}
 
 	// several OVSDB deployments can share the same etcd, but for rest of the work, we don't have to separate
 	// databasePrefix and serviceName.
-	common.SetPrefix(*databasePrefix + common.KEY_DELIMETER + *serviceName)
+	common.SetPrefix(*databasePrefix + common.KEY_DELIMITER + *serviceName)
 
 	if len(*etcdMembers) == 0 {
 		log.Info("Wrong ETCD members list", etcdMembers)
@@ -109,7 +113,10 @@ func main() {
 		log.Error(err, "failed creating an etcd client")
 		os.Exit(1)
 	}
-	defer cli.Close()
+	defer func() {
+		err := cli.Close()
+		log.Error(err, "cli close")
+	}()
 
 	db, _ := ovsdb.NewDatabaseEtcd(cli, log)
 
@@ -155,23 +162,13 @@ func main() {
 	}
 	service := ovsdb.NewService(db)
 
-	loop := func(lst net.Listener) error {
+	loop := func(lst net.Listener) {
 		for {
 			conn, err := lst.Accept()
-			conn = ConnWrapper{IntConn: conn}
-			if err != nil {
-				log.V(5).Info("connection", "from", conn.RemoteAddr(), "error", err, "is-closing", channel.IsErrClosing(err))
-				if channel.IsErrClosing(err) {
-					err = nil
-				} else {
-					log.Error(err, "failed accepting new connection")
-				}
-				return err
-			}
 			ch := channel.RawJSON(conn, conn)
 			go func() {
-				tctx, cancel := context.WithCancel(context.Background())
-				handler := ovsdb.NewHandler(tctx, db, cli, log)
+				ctxt, cancel := context.WithCancel(context.Background())
+				handler := ovsdb.NewHandler(ctxt, db, cli, log)
 				log.V(5).Info("new connection", "from", conn.RemoteAddr())
 				assigner := createServicesMap(service, handler)
 				srv := jrpc2.NewServer(assigner, servOptions)
@@ -193,8 +190,6 @@ func main() {
 			log.Error(err, "failed listen")
 		}
 		log.Info("listening", "on", lst.Addr())
-		//servOptions.Logger = log.New(os.Stderr, "[TCP.Server] ", log.LstdFlags|log.Lshortfile)
-
 		go loop(lst)
 	}
 	if runtime.GOOS == "linux" && len(*unixAddress) > 0 {
@@ -208,7 +203,6 @@ func main() {
 			os.Exit(1)
 		}
 		log.Info("listening", "on", lst.Addr())
-		//servOptions.Logger = log.New(os.Stderr, "[UNIX.Server] ", log.LstdFlags|log.Lshortfile)
 		go loop(lst)
 	}
 	select {
@@ -221,25 +215,25 @@ func main() {
 }
 
 // we pass handlerMap by value, so the function gets a proprietary copy of it.
-func createServicesMap(sharedService *ovsdb.Service, clientHandler *ovsdb.Handler) *handler.Map {
-	handlerMap := make(handler.Map)
-	handlerMap["list_dbs"] = handler.New(sharedService.ListDbs)
-	handlerMap["get_schema"] = handler.New(sharedService.GetSchema)
-	handlerMap["get_server_id"] = handler.New(sharedService.GetServerId)
-	handlerMap["convert"] = handler.New(sharedService.Convert)
+func createServicesMap(sharedService *ovsdb.Service, clientHandler *ovsdb.Handler) *jrpcHandler.Map {
+	handlerMap := make(jrpcHandler.Map)
+	handlerMap["list_dbs"] = jrpcHandler.New(sharedService.ListDbs)
+	handlerMap["get_schema"] = jrpcHandler.New(sharedService.GetSchema)
+	handlerMap["get_server_id"] = jrpcHandler.New(sharedService.GetServerId)
+	handlerMap["convert"] = jrpcHandler.New(sharedService.Convert)
 
-	handlerMap["transact"] = handler.New(clientHandler.Transact)
-	handlerMap["cancel"] = handler.New(clientHandler.Cancel)
-	handlerMap["monitor"] = handler.New(clientHandler.Monitor)
-	handlerMap["monitor_cancel"] = handler.New(clientHandler.MonitorCancel)
-	handlerMap["lock"] = handler.New(clientHandler.Lock)
-	handlerMap["steal"] = handler.New(clientHandler.Steal)
-	handlerMap["unlock"] = handler.New(clientHandler.Unlock)
-	handlerMap["monitor_cond"] = handler.New(clientHandler.MonitorCond)
-	handlerMap["monitor_cond_since"] = handler.New(clientHandler.MonitorCondSince)
-	handlerMap["monitor_cond_change"] = handler.New(clientHandler.MonitorCondChange)
-	handlerMap["set_db_change_aware"] = handler.New(clientHandler.SetDbChangeAware)
-	handlerMap["echo"] = handler.New(clientHandler.Echo)
+	handlerMap["transact"] = jrpcHandler.New(clientHandler.Transact)
+	handlerMap["cancel"] = jrpcHandler.New(clientHandler.Cancel)
+	handlerMap["monitor"] = jrpcHandler.New(clientHandler.Monitor)
+	handlerMap["monitor_cancel"] = jrpcHandler.New(clientHandler.MonitorCancel)
+	handlerMap["lock"] = jrpcHandler.New(clientHandler.Lock)
+	handlerMap["steal"] = jrpcHandler.New(clientHandler.Steal)
+	handlerMap["unlock"] = jrpcHandler.New(clientHandler.Unlock)
+	handlerMap["monitor_cond"] = jrpcHandler.New(clientHandler.MonitorCond)
+	handlerMap["monitor_cond_since"] = jrpcHandler.New(clientHandler.MonitorCondSince)
+	handlerMap["monitor_cond_change"] = jrpcHandler.New(clientHandler.MonitorCondChange)
+	handlerMap["set_db_change_aware"] = jrpcHandler.New(clientHandler.SetDbChangeAware)
+	handlerMap["echo"] = jrpcHandler.New(clientHandler.Echo)
 	return &handlerMap
 }
 
@@ -280,62 +274,4 @@ func setupPIDFile(pidFile string) error {
 	}
 
 	return nil
-}
-
-// temporary for development purpose wrapper
-type ConnWrapper struct {
-	IntConn net.Conn
-}
-
-func (cw ConnWrapper) Read(b []byte) (n int, err error) {
-	n, err = cw.IntConn.Read(b)
-	log.V(7).Info("read", "from", cw.RemoteAddr(), "bytes", n, "error", err)
-	return
-}
-
-func (cw ConnWrapper) Write(b []byte) (n int, err error) {
-	n, err = cw.IntConn.Write(b)
-	log.V(7).Info("write", "from", cw.RemoteAddr(), "bytes", n, "error", err)
-	return
-}
-
-func (cw ConnWrapper) Close() error {
-	log.V(5).Info("close", "from", cw.RemoteAddr())
-	return cw.IntConn.Close()
-}
-
-func (cw ConnWrapper) LocalAddr() net.Addr {
-	return cw.IntConn.LocalAddr()
-}
-
-type customUnixAddr struct {
-	ClientName string
-}
-
-func (c customUnixAddr) String() string {
-	return c.ClientName
-}
-func (c customUnixAddr) Network() string {
-	return "unix"
-}
-
-func (cw ConnWrapper) RemoteAddr() net.Addr {
-	switch cw.IntConn.(type) {
-	case *net.UnixConn:
-		return customUnixAddr{ClientName: "unix-client"}
-	default:
-		return cw.IntConn.RemoteAddr()
-	}
-}
-
-func (cw ConnWrapper) SetDeadline(t time.Time) error {
-	return cw.IntConn.SetDeadline(t)
-}
-
-func (cw ConnWrapper) SetReadDeadline(t time.Time) error {
-	return cw.IntConn.SetReadDeadline(t)
-}
-
-func (cw ConnWrapper) SetWriteDeadline(t time.Time) error {
-	return cw.IntConn.SetWriteDeadline(t)
 }

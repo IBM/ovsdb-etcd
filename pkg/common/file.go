@@ -5,11 +5,19 @@ import (
 	"os"
 )
 
-func ReadFile(filename string) ([]byte, error) {
-	jsonFile, err := os.Open(filename)
+func ReadFile(filename string) (data []byte, err error) {
+	var jsonFile *os.File
+	jsonFile, err = os.Open(filename)
 	if err != nil {
-		return nil, err
+		return
 	}
-	defer jsonFile.Close()
+	defer func() {
+		e := jsonFile.Close()
+		if e != nil {
+			if err == nil {
+				err = e
+			}
+		}
+	}()
 	return ioutil.ReadAll(jsonFile)
 }

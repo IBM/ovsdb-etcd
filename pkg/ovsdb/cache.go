@@ -8,7 +8,6 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
-	"k8s.io/klog/v2"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 )
@@ -33,7 +32,7 @@ func (tc *tableCache) size() int {
 
 func (c *cache) addDatabaseCache(dbName string, etcdClient *clientv3.Client, log logr.Logger) error {
 	if _, ok := (*c)[dbName]; ok {
-		return errors.New("Duplicate DatabaseCashe: " + dbName)
+		return errors.New("Duplicate DatabaseCache: " + dbName)
 	}
 	dbCache := databaseCache{dbCache: map[string]tableCache{}, log: log}
 	ctxt, cancel := context.WithCancel(context.Background())
@@ -41,7 +40,7 @@ func (c *cache) addDatabaseCache(dbName string, etcdClient *clientv3.Client, log
 	key := common.NewDBPrefixKey(dbName)
 	resp, err := etcdClient.Get(ctxt, key.String(), clientv3.WithPrefix())
 	if err != nil {
-		klog.Errorf("GetKeyData: %s", err)
+		log.Error(err, "get KeyData")
 		return err
 	}
 	wch := etcdClient.Watch(clientv3.WithRequireLeader(ctxt), key.String(),
@@ -50,7 +49,11 @@ func (c *cache) addDatabaseCache(dbName string, etcdClient *clientv3.Client, log
 		clientv3.WithPrevKV())
 	dbCache.watchChannel = wch
 	(*c)[dbName] = &dbCache
-	dbCache.putEtcdKV(resp.Kvs)
+	err = dbCache.putEtcdKV(resp.Kvs)
+	if err != nil {
+		log.Error(err, "putEtcdKV")
+		return err
+	}
 	go func() {
 		// TODO propagate to monitors
 		for wresp := range dbCache.watchChannel {

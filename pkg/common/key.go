@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	KEY_DELIMETER = "/"
+	KEY_DELIMITER = "/"
 	LOCKS         = "_locks"
 	COMMENTS      = "_comments"
 	INTERNAL_DB   = "_"
@@ -34,13 +34,13 @@ func GetPrefix() string {
 
 // Parses a key from a given string.
 func ParseKey(keyStr string) (*Key, error) {
-	keyParts := strings.Split(keyStr, KEY_DELIMETER)
-	// We used well defined formatted key, when each part is separated by the KEY_DELIMETER:
+	keyParts := strings.Split(keyStr, KEY_DELIMITER)
+	// We used well-defined formatted key, when each part is separated by the KEY_DELIMITER:
 	// <ovsdbPrefix><serviceName><dbname><tableName><uuid>
 	if len(keyParts) != 5 {
 		return nil, fmt.Errorf("wrong formatted key %q", keyStr)
 	}
-	prf := fmt.Sprintf("%s%s%s", keyParts[0], KEY_DELIMETER, keyParts[1])
+	prf := fmt.Sprintf("%s%s%s", keyParts[0], KEY_DELIMITER, keyParts[1])
 	if prf != prefix {
 		return nil, fmt.Errorf("wrong key, unmatched prefix %q, %q", prf, prefix)
 	}
@@ -55,23 +55,23 @@ func (k Key) String() string {
 	if len(k.UUID) == 0 {
 		return k.TableKeyString()
 	}
-	return fmt.Sprintf("%s%s%s%s%s%s%s", k.Prefix, KEY_DELIMETER, k.DBName, KEY_DELIMETER, k.TableName, KEY_DELIMETER, k.UUID)
+	return fmt.Sprintf("%s%s%s%s%s%s%s", k.Prefix, KEY_DELIMITER, k.DBName, KEY_DELIMITER, k.TableName, KEY_DELIMITER, k.UUID)
 }
 
 // The helper function, that can be used for logging, when we don't need the prefix.
 func (k Key) ShortString() string {
-	return fmt.Sprintf("%s%s%s%s%s", k.DBName, KEY_DELIMETER, k.TableName, KEY_DELIMETER, k.UUID)
+	return fmt.Sprintf("%s%s%s%s%s", k.DBName, KEY_DELIMITER, k.TableName, KEY_DELIMITER, k.UUID)
 }
 
 func (k *Key) TableKeyString() string {
 	if len(k.TableName) == 0 {
 		return k.DBKeyString()
 	}
-	return fmt.Sprintf("%s%s%s%s%s%s", k.Prefix, KEY_DELIMETER, k.DBName, KEY_DELIMETER, k.TableName, KEY_DELIMETER)
+	return fmt.Sprintf("%s%s%s%s%s%s", k.Prefix, KEY_DELIMITER, k.DBName, KEY_DELIMITER, k.TableName, KEY_DELIMITER)
 }
 
 func (k *Key) DBKeyString() string {
-	return fmt.Sprintf("%s%s%s%s", k.Prefix, KEY_DELIMETER, k.DBName, KEY_DELIMETER)
+	return fmt.Sprintf("%s%s%s%s", k.Prefix, KEY_DELIMITER, k.DBName, KEY_DELIMITER)
 }
 
 func (k *Key) DeploymentKeyString() string {
@@ -96,20 +96,20 @@ func GenerateDataKey(dbName, tableName string) Key {
 	return NewDataKey(dbName, tableName, GenerateUUID())
 }
 
-// Returns a new Data key. If the given uuid is an empty string, the return key will point to the entire table, and the
+// Returns a new Data key. If the given uuid is an empty string, the return key will point to the entire table, and
 // this function call is equals to call `NewTableKey` with the same dbName and tableName parameters.
 func NewDataKey(dbName, tableName, uuid string) Key {
 	return Key{Prefix: prefix, DBName: dbName, TableName: tableName, UUID: uuid}
 }
 
 // Returns a new Comment key. If the given commentID is an empty string, the return key will point to the entire
-// comments table, and the this function call is equals to call `NewCommentTableKey`.
+// comments table, and this function call is equals to call `NewCommentTableKey`.
 func NewCommentKey(dbName, commentID string) Key {
 	return NewDataKey(dbName, COMMENTS, commentID)
 }
 
 // Returns a new Lock key. If the given lockID is an empty string, the return key will point to the entire
-// locks table, and the this function call is equals to call `NewLockTableKey`.
+// locks table, and this function call is equals to call `NewLockTableKey`.
 func NewLockKey(lockID string) Key {
 	return NewDataKey(INTERNAL_DB, LOCKS, lockID)
 }
