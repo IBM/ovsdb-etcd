@@ -412,6 +412,7 @@ Loop:
 		txn.etcdTrx.clear()
 		txn.response.Result = make([]libovsdb.OperationResult, len(txn.request.Operations))
 		txn.localCache = &localCache{}
+		time.Sleep(time.Duration(i) * time.Millisecond)
 	}
 	if !trResponse.Succeeded {
 		return -1, errors.New(E_INTERNAL_ERROR)
