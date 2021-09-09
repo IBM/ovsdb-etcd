@@ -9,14 +9,12 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
-	"go.etcd.io/etcd/api/v3/mvccpb"
-	clientv3 "go.etcd.io/etcd/client/v3"
-	"go.etcd.io/etcd/client/v3/concurrency"
-	"k8s.io/klog/v2"
-
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 	"github.com/ibm/ovsdb-etcd/pkg/types/_Server"
+	"go.etcd.io/etcd/api/v3/mvccpb"
+	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
 type Databaser interface {
@@ -173,13 +171,8 @@ func (con *DatabaseEtcd) GetKeyData(key common.Key, keysOnly bool) (*clientv3.Ge
 	}
 	cancel()
 	if err != nil {
-		klog.Errorf("GetKeyData: %s", err)
+		con.log.Error(err, "GetKeyData")
 		return nil, err
-	}
-	if klog.V(8).Enabled() {
-		for k, v := range resp.Kvs {
-			klog.V(8).Infof("GetKeyData k %v, v %v\n", k, v)
-		}
 	}
 	return resp, err
 }
@@ -193,9 +186,9 @@ func (con *DatabaseEtcd) GetData(keys []common.Key) (*clientv3.TxnResponse, erro
 	res, err := con.cli.Txn(ctx).Then(ops...).Commit()
 	cancel()
 	if err != nil {
-		klog.Errorf("GetData returned error: %v", err)
+		con.log.Error(err, "GetData returned error", "then", ops)
 	} else {
-		klog.V(5).Infof("GetData succeeded %v revision %d", res.Succeeded, res.Header.Revision)
+		con.log.V(5).Info("GetData succeeded", "revision", res.Header.Revision)
 	}
 	return res, err
 }
