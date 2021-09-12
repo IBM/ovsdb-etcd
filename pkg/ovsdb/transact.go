@@ -391,7 +391,8 @@ Loop:
 		return nil
 	}
 	var trResponse *clientv3.TxnResponse
-	for i := 0; i < 5; i++ {
+	// TODO add configuration flag to iteration number
+	for i := 0; i < 10; i++ {
 		err = processOperations()
 		if err != nil {
 			return -1, err
@@ -412,7 +413,7 @@ Loop:
 		txn.etcdTrx.clear()
 		txn.response.Result = make([]libovsdb.OperationResult, len(txn.request.Operations))
 		txn.localCache = &localCache{}
-		time.Sleep(time.Duration(i) * time.Millisecond)
+		time.Sleep(time.Duration(i*5) * time.Millisecond)
 	}
 	if !trResponse.Succeeded {
 		return -1, errors.New(E_INTERNAL_ERROR)
