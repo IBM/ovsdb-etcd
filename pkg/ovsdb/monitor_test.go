@@ -947,6 +947,7 @@ func TestSetsDifferenceSubset2(t *testing.T) {
 	assert.Equal(t, expectDiff, diff)
 }
 
+// the test violates missing duplication elements, but it passes due to duplications are in the second test only.
 func TestSetsDifferenceDifferentSets(t *testing.T) {
 	set1 := libovsdb.OvsSet{GoSet: []interface{}{"one", "two", "four"}}
 	set2 := libovsdb.OvsSet{GoSet: []interface{}{"two", "three", "two"}}
