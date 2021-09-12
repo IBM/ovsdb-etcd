@@ -658,28 +658,24 @@ func (u *updater) prepareRow(value []byte) (map[string]interface{}, string, erro
 	return data, uuid, nil
 }
 
+// setsDifference returns a delta between 2 sets. It assumes that there is no duplicate elements in the sets.
 func setsDifference(set1 libovsdb.OvsSet, set2 libovsdb.OvsSet) libovsdb.OvsSet {
 	var diff libovsdb.OvsSet
+	m := make(map[interface{}]bool)
 
-	// Loop two times, first to find elements from set1 which are not in set2,
-	// second loop to find elements from set2 which are not in set1
-	for i := 0; i < 2; i++ {
-		for _, s1 := range set1.GoSet {
-			found := false
-			for _, s2 := range set2.GoSet {
-				if s1 == s2 {
-					found = true
-					break
-				}
-			}
-			if !found {
-				diff.GoSet = append(diff.GoSet, s1)
-			}
+	for _, item := range set2.GoSet {
+		m[item] = true
+	}
+
+	for _, item := range set1.GoSet {
+		if _, ok := m[item]; !ok {
+			diff.GoSet = append(diff.GoSet, item)
+		} else {
+			delete(m, item)
 		}
-		// Swap the sets, only if it was the first loop
-		if i == 0 {
-			set1, set2 = set2, set1
-		}
+	}
+	for item, _ := range m {
+		diff.GoSet = append(diff.GoSet, item)
 	}
 	return diff
 }
