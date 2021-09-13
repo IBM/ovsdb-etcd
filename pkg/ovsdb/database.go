@@ -22,7 +22,6 @@ type Databaser interface {
 	CreateMonitor(dbName string, handler *Handler, log logr.Logger) *dbMonitor
 	AddSchema(schemaFile string) error
 	GetKeyData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error)
-	GetData(keys []common.Key) (*clientv3.TxnResponse, error)
 	PutData(ctx context.Context, key common.Key, obj interface{}) error
 	GetSchema(dbName string) map[string]interface{}
 	GetDBSchema(dbName string) (*libovsdb.DatabaseSchema, bool)
@@ -177,22 +176,6 @@ func (con *DatabaseEtcd) GetKeyData(key common.Key, keysOnly bool) (*clientv3.Ge
 	return resp, err
 }
 
-func (con *DatabaseEtcd) GetData(keys []common.Key) (*clientv3.TxnResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), EtcdClientTimeout)
-	ops := []clientv3.Op{}
-	for _, key := range keys {
-		ops = append(ops, clientv3.OpGet(key.String(), clientv3.WithPrefix()))
-	}
-	res, err := con.cli.Txn(ctx).Then(ops...).Commit()
-	cancel()
-	if err != nil {
-		con.log.Error(err, "GetData returned error", "then", ops)
-	} else {
-		con.log.V(5).Info("GetData succeeded", "revision", res.Header.Revision)
-	}
-	return res, err
-}
-
 func (con *DatabaseEtcd) GetSchema(name string) map[string]interface{} {
 	return con.strSchemas[name]
 }
@@ -325,10 +308,6 @@ func (con *DatabaseMock) GetDBSchema(dbName string) (*libovsdb.DatabaseSchema, b
 
 func (con *DatabaseMock) GetKeyData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
 	return con.Response.(*clientv3.GetResponse), con.Error
-}
-
-func (con *DatabaseMock) GetData(keys []common.Key) (*clientv3.TxnResponse, error) {
-	return con.Response.(*clientv3.TxnResponse), con.Error
 }
 
 func (con *DatabaseMock) PutData(ctx context.Context, key common.Key, obj interface{}) error {
