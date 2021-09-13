@@ -72,8 +72,7 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 		return nil, err
 	}
 	dbCache, err := ch.db.GetDBCache(ovsReq.DBName)
-	if !ok {
-		err := errors.New(E_INTERNAL_ERROR)
+	if err != nil {
 		log.V(1).Info("Database cache is not created", "dbName", ovsReq.DBName)
 		return nil, err
 	}
@@ -544,57 +543,45 @@ func (ch *Handler) monitorInternal(params []interface{}, notificationType ovsjso
 }
 
 func (ch *Handler) getMonitoredData(dbName string, updatersMap Key2Updaters) (ovsjson.TableUpdates, error) {
-	var keys []common.Key
-	for tableKey, updaters := range updatersMap {
-		if len(updaters) == 0 {
-			// nothing to update
-			ch.log.V(5).Info("there is no updaters", "for table", tableKey.String())
-			continue
-		}
-		// validate that Initial is required
-		reqInitial := false
-		for _, updater := range updaters {
-			reqInitial = reqInitial || libovsdb.MSIsTrue(updater.mcr.Select.Initial)
-			if reqInitial {
-				break
-			}
-		}
-		if reqInitial {
-			keys = append(keys, tableKey)
-		}
-	}
-	resp, err := ch.db.GetData(keys)
+	dbCache, err := ch.db.GetDBCache(dbName)
 	if err != nil {
+		ch.log.V(1).Info("Database cache is not created", "dbName", dbName)
 		return nil, err
 	}
 	returnData := ovsjson.TableUpdates{}
-	for _, opRes := range resp.Responses {
-		rangeResp := opRes.GetResponseRange()
-		for _, kv := range rangeResp.Kvs {
-			key, err := common.ParseKey(string(kv.Key))
-			if err != nil {
-				ch.log.Error(err, "parse failed", "key", string(kv.Key))
-				return nil, err
+	dbCache.mu.Lock()
+	defer dbCache.mu.Unlock()
+	for tableKey, updaters := range updatersMap {
+		if len(updaters) == 0 {
+			// nothing to update
+			ch.log.V(6).Info("there is no updaters", "for table", tableKey.String())
+			continue
+		}
+		tableName := tableKey.TableName
+		tableCache := dbCache.getTable(tableName)
+		// validate that Initial is required
+		for _, updater := range updaters {
+			if !libovsdb.MSIsTrue(updater.mcr.Select.Initial) {
+				continue
 			}
-			tableKey := key.ToTableKey()
-			updaters := updatersMap[tableKey]
-			for _, updater := range updaters {
+			for _, kv := range *tableCache {
 				row, uuid, err := updater.prepareInitialRow(&kv.Value)
 				if err != nil {
 					ch.log.Error(err, "prepareInitialRow returned")
 					return nil, err
 				}
 				// TODO merge
-				tableUpdate, ok := returnData[tableKey.TableName]
+				tableUpdate, ok := returnData[tableName]
 				if !ok {
 					tableUpdate = ovsjson.TableUpdate{}
-					returnData[tableKey.TableName] = tableUpdate
+					returnData[tableName] = tableUpdate
 				}
 				tableUpdate[uuid] = *row
 			}
+
 		}
 	}
-	ch.log.V(6).Info("getMonitoredData completed", "revision", resp.Header.Revision, "data", returnData)
+	ch.log.V(6).Info("getMonitoredData completed", "data", returnData)
 	return returnData, nil
 }
 
