@@ -234,31 +234,6 @@ type Event struct {
 	PrevKv *EventKeyValue `json:"prev_kv"`
 }
 
-func NewEvent(ev *clientv3.Event) Event {
-	return Event{
-		Type:   string(ev.Type),
-		Kv:     NewEventKeyValue(ev.Kv),
-		PrevKv: NewEventKeyValue(ev.PrevKv),
-	}
-}
-
-type EventList []Event
-
-func NewEventList(events []*clientv3.Event) EventList {
-	printable := EventList{}
-	for _, ev := range events {
-		if ev != nil {
-			printable = append(printable, NewEvent(ev))
-		}
-	}
-	return printable
-}
-
-func (evList EventList) String() string {
-	b, _ := json.Marshal(evList)
-	return string(b)
-}
-
 type DatabaseMock struct {
 	Response interface{}
 	Error    error
