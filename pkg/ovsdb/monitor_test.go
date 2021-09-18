@@ -38,11 +38,12 @@ func init() {
 
 const (
 	DB_NAME    = "dbName"
-	Table_Name = "T1"
+	TABLE_NAME = "T1"
 	ROW_UUID   = "43f24179-432d-435b-a8dc-e7134cf39e32"
 	LAST_TNX   = "00000000-0000-0000-0000-000000000000"
 	SET_COLUMN = "set"
 	MAP_COLUMN = "map"
+	KEY_PREFIX = "ovsdb/nb"
 )
 
 func TestMonitorPrepareRowCheckColumns(t *testing.T) {
@@ -50,23 +51,22 @@ func TestMonitorPrepareRowCheckColumns(t *testing.T) {
 	data := map[string]interface{}{"c1": "v1", "c2": "v2"}
 	expectedUUID := guuid.NewString()
 	data[libovsdb.COL_UUID] = libovsdb.UUID{GoUUID: expectedUUID}
-	dataJson, err := json.Marshal(data)
-	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
+	row := &libovsdb.Row{Fields: data}
 
 	// Columns are nil or all columns
 	expRow := map[string]interface{}{"c1": "v1", "c2": "v2"}
-	checkPrepareRow(t, tableSchema, dataJson, false, ovsjson.MonitorCondRequest{}, expRow)
-	checkPrepareRow(t, tableSchema, dataJson, true, ovsjson.MonitorCondRequest{Columns: &[]string{"c1", "c2"}}, expRow)
-	checkPrepareRow(t, tableSchema, dataJson, true, ovsjson.MonitorCondRequest{Columns: &[]string{"c1", "c2"}}, expRow)
+	checkPrepareRow(t, tableSchema, row, false, ovsjson.MonitorCondRequest{}, expRow)
+	checkPrepareRow(t, tableSchema, row, true, ovsjson.MonitorCondRequest{Columns: &[]string{"c1", "c2"}}, expRow)
+	checkPrepareRow(t, tableSchema, row, true, ovsjson.MonitorCondRequest{Columns: &[]string{"c1", "c2"}}, expRow)
 
 	// Columns are empty array or a different column
 	expRow = map[string]interface{}{}
-	checkPrepareRow(t, tableSchema, dataJson, false, ovsjson.MonitorCondRequest{Columns: &[]string{""}}, expRow)
-	checkPrepareRow(t, tableSchema, dataJson, true, ovsjson.MonitorCondRequest{Columns: &[]string{"c3"}}, expRow)
+	checkPrepareRow(t, tableSchema, row, false, ovsjson.MonitorCondRequest{Columns: &[]string{""}}, expRow)
+	checkPrepareRow(t, tableSchema, row, true, ovsjson.MonitorCondRequest{Columns: &[]string{"c3"}}, expRow)
 
 	// Single Column
 	expRow = map[string]interface{}{"c2": "v2"}
-	checkPrepareRow(t, tableSchema, dataJson, false, ovsjson.MonitorCondRequest{Columns: &[]string{"c2"}}, expRow)
+	checkPrepareRow(t, tableSchema, row, false, ovsjson.MonitorCondRequest{Columns: &[]string{"c2"}}, expRow)
 }
 
 func TestMonitorPrepareRowCheckWhere(t *testing.T) {
@@ -87,11 +87,16 @@ func TestMonitorPrepareRowCheckWhere(t *testing.T) {
 	data := map[string]interface{}{"c1": "v1", "c2": "v2", "r1": 1.5, "i1": 3, "b1": true, SET_COLUMN_0: set0, SET_COLUMN_1: set1, SET_COLUMN_2: set2, MAP_COLUMN_0: map0, MAP_COLUMN_1: map1}
 	expectedUUID := ROW_UUID
 	data[libovsdb.COL_UUID] = libovsdb.UUID{GoUUID: expectedUUID}
-	dataJson, err := json.Marshal(data)
-	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
+	// we need marshal and unmarshal to transfer integers to float64
+	buf, err := json.Marshal(data)
+	assert.Nil(t, err)
+	row := libovsdb.Row{}
+	err = row.UnmarshalJSON(buf)
+	assert.Nil(t, err)
+
 	emptyRow := map[string]interface{}{}
 	checkWhere := func(Where *[]interface{}, expRow map[string]interface{}) {
-		checkPrepareRow(t, tableSchema, dataJson, false, ovsjson.MonitorCondRequest{Where: Where}, expRow)
+		checkPrepareRow(t, tableSchema, &row, false, ovsjson.MonitorCondRequest{Where: Where}, expRow)
 	}
 
 	// booleans
@@ -250,11 +255,11 @@ func TestMonitorPrepareRowCheckWhere(t *testing.T) {
 	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val3", "key2": "val2"}}}}, emptyRow)
 }
 
-func checkPrepareRow(t *testing.T, tableSchema *libovsdb.TableSchema, dataJson []byte, isV1 bool, mcr ovsjson.MonitorCondRequest, expRow map[string]interface{}) {
+func checkPrepareRow(t *testing.T, tableSchema *libovsdb.TableSchema, row *libovsdb.Row, isV1 bool, mcr ovsjson.MonitorCondRequest, expRow map[string]interface{}) {
 	updater := *mcrToUpdater(mcr, "", tableSchema, isV1, log)
-	row, _, err := updater.prepareRow(dataJson)
+	data, _, err := updater.prepareRow(row)
 	assert.Nil(t, err)
-	isEqualMaps(t, &expRow, &row, tableSchema)
+	isEqualMaps(t, &expRow, &data, tableSchema)
 }
 
 func createTestTableSchema() *libovsdb.TableSchema {
@@ -337,7 +342,7 @@ func TestMonitorPrepareInsertRow(t *testing.T) {
 	dataJson, err := json.Marshal(data)
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
 
-	event := &clientv3.Event{Type: mvccpb.PUT, Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/" + expectedUUID),
+	event := &clientv3.Event{Type: mvccpb.PUT, Kv: &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/" + expectedUUID),
 		Value: dataJson, CreateRevision: 1, ModRevision: 1}}
 	testMonitorPrepareInsertRow_(t, tableSchema, event, expectedUUID, true)
 	testMonitorPrepareInsertRow_(t, tableSchema, event, expectedUUID, false)
@@ -375,8 +380,8 @@ func TestMonitorPrepareDeleteRow(t *testing.T) {
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
 
 	event := &clientv3.Event{Type: mvccpb.DELETE,
-		PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/" + expectedUUID), Value: dataJson},
-		Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/" + expectedUUID)}}
+		PrevKv: &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/" + expectedUUID), Value: dataJson},
+		Kv:     &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/" + expectedUUID)}}
 
 	testMonitorPrepareDeleteRow_(t, tableSchema, event, expectedUUID, true)
 	testMonitorPrepareDeleteRow_(t, tableSchema, event, expectedUUID, false)
@@ -419,8 +424,8 @@ func TestMonitorPrepareModifyRow(t *testing.T) {
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
 
 	event := &clientv3.Event{Type: mvccpb.PUT,
-		PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/" + expectedUUID), Value: data1Json},
-		Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/" + expectedUUID), Value: data2Json, CreateRevision: 1, ModRevision: 2}}
+		PrevKv: &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/" + expectedUUID), Value: data1Json},
+		Kv:     &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/" + expectedUUID), Value: data2Json, CreateRevision: 1, ModRevision: 2}}
 
 	testMonitorPrepareModifyRow_(t, tableSchema, event, expectedUUID, true)
 	testMonitorPrepareModifyRow_(t, tableSchema, event, expectedUUID, false)
@@ -466,8 +471,8 @@ func TestMonitorPrepareModifyMapRow(t *testing.T) {
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
 
 	event := &clientv3.Event{Type: mvccpb.PUT,
-		PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/" + expectedUUID), Value: data1Json},
-		Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/" + expectedUUID), Value: data2Json, CreateRevision: 1, ModRevision: 2}}
+		PrevKv: &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/" + expectedUUID), Value: data1Json},
+		Kv:     &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/" + expectedUUID), Value: data2Json, CreateRevision: 1, ModRevision: 2}}
 
 	testMapRows := func(isV1 bool) {
 		var expRow *ovsjson.RowUpdate
@@ -500,8 +505,8 @@ func TestMonitorPrepareModifySetRow(t *testing.T) {
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
 
 	event := &clientv3.Event{Type: mvccpb.PUT,
-		PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/" + expectedUUID), Value: data1Json},
-		Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/" + expectedUUID), Value: data2Json, CreateRevision: 1, ModRevision: 2}}
+		PrevKv: &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/" + expectedUUID), Value: data1Json},
+		Kv:     &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/" + expectedUUID), Value: data2Json, CreateRevision: 1, ModRevision: 2}}
 
 	testSetRows := func(isV1 bool) {
 		var expRow *ovsjson.RowUpdate
@@ -520,7 +525,9 @@ func TestMonitorPrepareModifySetRow(t *testing.T) {
 }
 
 func validateRowNotification(t *testing.T, updater *updater, event *clientv3.Event, expectedUUID string, expRow *ovsjson.RowUpdate, tableSchema *libovsdb.TableSchema) {
-	row, uuid, err := updater.prepareRowNotification(event)
+	ovsdbEvent, err := etcd2ovsdbEvent(event)
+	assert.Nil(t, err)
+	row, uuid, err := updater.prepareRowNotification(ovsdbEvent)
 	assert.Nil(t, err)
 	assert.Equal(t, expectedUUID, uuid)
 	rowsAreEqual(t, expRow, row, tableSchema)
@@ -577,23 +584,25 @@ func TestMonitorModifyRowMap(t *testing.T) {
 		op      operation
 	}{"allColumns-v1": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{}, "", &tableSchema, true, log),
 		op: operation{MODIFY: {event: clientv3.Event{Type: mvccpb.PUT,
-			PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: oldData},
-			Kv: &mvccpb.KeyValue{Key: []byte("key/db/table/uuid"),
+			PrevKv: &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "table/000"), Value: oldData},
+			Kv: &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/uuid"),
 				Value: newData, CreateRevision: 1, ModRevision: 2}},
 			expRowUpdate: &ovsjson.RowUpdate{
 				Old: &map[string]interface{}{"map": deltaMap},
 				New: &map[string]interface{}{"map": newColMap}}}}},
 		"allColumns-v2": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{}, "", &tableSchema, false, log),
 			op: operation{MODIFY: {event: clientv3.Event{Type: mvccpb.PUT,
-				PrevKv: &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: oldData},
-				Kv:     &mvccpb.KeyValue{Key: []byte("key/db/table/000"), Value: newData, CreateRevision: 1, ModRevision: 2}},
+				PrevKv: &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/000"), Value: oldData},
+				Kv:     &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/000"), Value: newData, CreateRevision: 1, ModRevision: 2}},
 				expRowUpdate: &ovsjson.RowUpdate{
 					Modify: &map[string]interface{}{"map": deltaMap}}}}},
 	}
 	for name, ts := range tests {
 		updater := ts.updater
 		for opName, op := range ts.op {
-			row, _, err := updater.prepareRowNotification(&op.event)
+			ovsdbEvent, err := etcd2ovsdbEvent(&op.event)
+			assert.Nil(t, err)
+			row, _, err := updater.prepareRowNotification(ovsdbEvent)
 			if op.err != nil {
 				assert.EqualErrorf(t, err, op.err.Error(), "[%s-%s test] expected error %s, got %v", name, opName, op.err.Error(), err)
 				continue
@@ -846,7 +855,7 @@ func initHandler(t *testing.T, jsonValue string, notificationType ovsjson.Update
 	var testSchemaSimple = &libovsdb.DatabaseSchema{
 		Name: DB_NAME,
 		Tables: map[string]libovsdb.TableSchema{
-			Table_Name: {Columns: map[string]*libovsdb.ColumnSchema{"c1": &columnSchema, "c2": &columnSchema}},
+			TABLE_NAME: {Columns: map[string]*libovsdb.ColumnSchema{"c1": &columnSchema, "c2": &columnSchema}},
 		},
 	}
 	schemas := libovsdb.Schemas{}
@@ -854,12 +863,11 @@ func initHandler(t *testing.T, jsonValue string, notificationType ovsjson.Update
 	msg := `["dbName",` + jsonValue + `,{"T1":[{"columns":["c1","c2"]}]}]`
 	row := map[string]interface{}{"c1": "v1", "c2": "v2"}
 	dataJson := prepareData(t, row, true)
-
+	common.SetPrefix(KEY_PREFIX)
+	keyStr := fmt.Sprintf("%s/%s/%s/000", KEY_PREFIX, DB_NAME, TABLE_NAME)
 	events := []*clientv3.Event{
-		{Type: mvccpb.PUT, Kv: &mvccpb.KeyValue{Key: []byte("ovsdb/nb/dbName/T1/000"),
-			Value: dataJson, CreateRevision: 1, ModRevision: 1}}}
+		{Type: mvccpb.PUT, Kv: &mvccpb.KeyValue{Key: []byte(keyStr), Value: dataJson, CreateRevision: 1, ModRevision: 1}}}
 
-	common.SetPrefix("ovsdb/nb")
 	//db, _ := NewDatabaseMock()
 	db := DatabaseMock{Response: schemas}
 	ctx := context.Background()
@@ -980,11 +988,10 @@ func TestMonitorCondChange(t *testing.T) {
 	}
 	handlerCallToPrepareRow := func(rowInWithoutUUID map[string]interface{}) map[string]interface{} {
 		rowInWithUUID := addUuidToRow(rowInWithoutUUID)
-		dataJson, err := json.Marshal(rowInWithUUID)
-		assert.Nilf(t, err, "marshalling %v, threw %v", rowInWithUUID, err)
+		row := &libovsdb.Row{Fields: rowInWithUUID}
 		key := common.NewTableKey(dbName, tableName)
 		updater := handler.monitors[dbName].key2Updaters[key][0]
-		rowOut, _, err := updater.prepareRow(dataJson)
+		rowOut, _, err := updater.prepareRow(row)
 		assert.Nilf(t, err, " prepareRow threw %v", err)
 		return rowOut
 	}

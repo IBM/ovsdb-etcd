@@ -17,8 +17,6 @@ type cache map[string]*databaseCache
 type databaseCache struct {
 	mu      sync.Mutex
 	dbCache map[string]tableCache
-	// etcdTrx watcher channel
-	watchChannel clientv3.WatchChan
 	// cancel function to close the etcdTrx watcher
 	cancel context.CancelFunc
 	log    logr.Logger
@@ -47,7 +45,6 @@ func (c *cache) addDatabaseCache(dbName string, etcdClient *clientv3.Client, log
 		clientv3.WithPrefix(),
 		clientv3.WithCreatedNotify(),
 		clientv3.WithPrevKV())
-	dbCache.watchChannel = wch
 	(*c)[dbName] = &dbCache
 	err = dbCache.putEtcdKV(resp.Kvs)
 	if err != nil {
@@ -56,8 +53,9 @@ func (c *cache) addDatabaseCache(dbName string, etcdClient *clientv3.Client, log
 	}
 	go func() {
 		// TODO propagate to monitors
-		for wresp := range dbCache.watchChannel {
+		for wresp := range wch {
 			if wresp.Canceled {
+				log.V(1).Info("DB cache monitor was canceled", "dbName", dbName)
 				// TODO: reconnect ?
 				return
 			}

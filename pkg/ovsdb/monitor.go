@@ -61,7 +61,7 @@ func (k *Key2Updaters) removeUpdaters(key common.Key, jsonValue string) {
 	if !ok {
 		return
 	}
-	newUpdaters := []updater{}
+	var newUpdaters []updater
 	for _, u := range updaters {
 		if u.jasonValueStr != jsonValue {
 			newUpdaters = append(newUpdaters, u)
@@ -104,6 +104,48 @@ type queueElement struct {
 type transactionsQueue struct {
 	queue *list.List
 	mu    sync.Mutex
+}
+
+type ovsdbKeyValue struct {
+	key common.Key
+	row libovsdb.Row
+}
+type ovsdbNotificationEvent struct {
+	createEvent bool
+	modifyEvent bool
+	kv          *ovsdbKeyValue
+	prevKv      *ovsdbKeyValue
+}
+
+func etcd2ovsdbEvent(event *clientv3.Event) (*ovsdbNotificationEvent, error) {
+	ovsdbEvent := ovsdbNotificationEvent{
+		createEvent: event.IsCreate(),
+		modifyEvent: event.IsModify(),
+	}
+	key, err := common.ParseKey(string(event.Kv.Key))
+	if err != nil {
+		return nil, err
+	}
+	if !ovsdbEvent.createEvent && !ovsdbEvent.modifyEvent {
+		// delete event
+		ovsdbEvent.kv = &ovsdbKeyValue{key: *key}
+	} else {
+		var row libovsdb.Row
+		err = row.UnmarshalJSON(event.Kv.Value)
+		if err != nil {
+			return nil, err
+		}
+		ovsdbEvent.kv = &ovsdbKeyValue{key: *key, row: row}
+	}
+	if !ovsdbEvent.createEvent {
+		var pRow libovsdb.Row
+		err = pRow.UnmarshalJSON(event.PrevKv.Value)
+		if err != nil {
+			return nil, err
+		}
+		ovsdbEvent.prevKv = &ovsdbKeyValue{key: *key, row: pRow}
+	}
+	return &ovsdbEvent, nil
 }
 
 func newTQueue() transactionsQueue {
@@ -276,8 +318,17 @@ func (m *dbMonitor) notify(events []*clientv3.Event, revision int64) {
 		// we called here to release transaction queue, if there are elements there
 		m.handler.notifyAll(revision)
 	}
-	m.log.V(5).Info("notify:", "notification revision", revision, "events", NewEventList(events))
-	result, err := m.prepareTableNotification(events)
+	ovsdbEvents := make([]*ovsdbNotificationEvent, 0, len(events))
+	for _, event := range events {
+		ovsdbEvent, err := etcd2ovsdbEvent(event)
+		if err != nil {
+			m.log.Error(err, "etcd2ovsdbEvent returned", "event", event)
+			continue
+		}
+		ovsdbEvents = append(ovsdbEvents, ovsdbEvent)
+	}
+	m.log.V(5).Info("notify:", "notification revision", revision)
+	result, err := m.prepareTableNotification(ovsdbEvents)
 	if err != nil {
 		// TODO what should I do here?
 		m.log.Error(err, "prepareTableNotification failed")
@@ -320,20 +371,21 @@ func mcrToUpdater(mcr ovsjson.MonitorCondRequest, jsonValue string, tableSchema 
 	return &updater{mcr: mcr, jasonValueStr: jsonValue, isV1: isV1, tableSchema: tableSchema, log: log}
 }
 
-func (m *dbMonitor) prepareTableNotification(events []*clientv3.Event) (map[string]ovsjson.TableUpdates, error) {
+func (m *dbMonitor) prepareTableNotification(events []*ovsdbNotificationEvent) (map[string]ovsjson.TableUpdates, error) {
 	result := map[string]ovsjson.TableUpdates{}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, ev := range events {
-		if ev.Kv == nil {
+		if ev.kv == nil {
 			m.log.V(5).Info("empty etcdTrx event", "event", fmt.Sprintf("%+v", ev))
 			continue
 		}
-		key, err := common.ParseKey(string(ev.Kv.Key))
+		/*key, err := common.ParseKey(string(ev.Kv.Key))
 		if err != nil {
 			m.log.Error(err, "parseKey failed")
 			continue
-		}
+		}*/
+		key := ev.kv.key
 		updaters, ok := m.key2Updaters[key.ToTableKey()]
 		if !ok {
 			m.log.V(7).Info("no monitors for table path", "table-path", key.TableKeyString())
@@ -371,9 +423,9 @@ func (m *dbMonitor) prepareTableNotification(events []*clientv3.Event) (map[stri
 	return result, nil
 }
 
-func (u *updater) prepareRowNotification(event *clientv3.Event) (*ovsjson.RowUpdate, string, error) {
-	if !event.IsModify() { // the create or delete
-		if event.IsCreate() {
+func (u *updater) prepareRowNotification(event *ovsdbNotificationEvent) (*ovsjson.RowUpdate, string, error) {
+	if !event.modifyEvent { // the create or delete
+		if event.createEvent {
 			// Create event
 			return u.prepareCreateRowUpdate(event)
 		} else {
@@ -385,22 +437,21 @@ func (u *updater) prepareRowNotification(event *clientv3.Event) (*ovsjson.RowUpd
 	return u.prepareModifyRowUpdate(event)
 }
 
-func (u *updater) prepareDeleteRowUpdate(event *clientv3.Event) (*ovsjson.RowUpdate, string, error) {
+func (u *updater) prepareDeleteRowUpdate(event *ovsdbNotificationEvent) (*ovsjson.RowUpdate, string, error) {
 	if !libovsdb.MSIsTrue(u.mcr.Select.Delete) {
 		return nil, "", nil
 	}
-	value := event.PrevKv.Value
 	if !u.isV1 {
 		// according to https://docs.openvswitch.org/en/latest/ref/ovsdb-server.7/#update2-notification,
 		// "<row> is always a null object for delete updates."
-		_, uuid, err := u.prepareRow(value)
+		_, uuid, err := u.prepareRow(&event.prevKv.row)
 		if err != nil {
 			return nil, "", err
 		}
 		return &ovsjson.RowUpdate{Delete: true}, uuid, nil
 	}
 
-	data, uuid, err := u.prepareRow(value)
+	data, uuid, err := u.prepareRow(&event.prevKv.row)
 	if err != nil {
 		return nil, "", err
 	}
@@ -408,12 +459,11 @@ func (u *updater) prepareDeleteRowUpdate(event *clientv3.Event) (*ovsjson.RowUpd
 	return &ovsjson.RowUpdate{Old: &data}, uuid, nil
 }
 
-func (u *updater) prepareCreateRowUpdate(event *clientv3.Event) (*ovsjson.RowUpdate, string, error) {
+func (u *updater) prepareCreateRowUpdate(event *ovsdbNotificationEvent) (*ovsjson.RowUpdate, string, error) {
 	if !libovsdb.MSIsTrue(u.mcr.Select.Insert) {
 		return nil, "", nil
 	}
-	value := event.Kv.Value
-	data, uuid, err := u.prepareRow(value)
+	data, uuid, err := u.prepareRow(&event.kv.row)
 	if err != nil {
 		return nil, "", err
 	}
@@ -423,15 +473,15 @@ func (u *updater) prepareCreateRowUpdate(event *clientv3.Event) (*ovsjson.RowUpd
 	return &ovsjson.RowUpdate{New: &data}, uuid, nil
 }
 
-func (u *updater) prepareModifyRowUpdate(event *clientv3.Event) (*ovsjson.RowUpdate, string, error) {
+func (u *updater) prepareModifyRowUpdate(event *ovsdbNotificationEvent) (*ovsjson.RowUpdate, string, error) {
 	if !libovsdb.MSIsTrue(u.mcr.Select.Modify) {
 		return nil, "", nil
 	}
-	modifiedRow, uuid, err := u.prepareRow(event.Kv.Value)
+	modifiedRow, uuid, err := u.prepareRow(&event.kv.row)
 	if err != nil {
 		return nil, "", err
 	}
-	prevRow, prevUUID, err := u.prepareRow(event.PrevKv.Value)
+	prevRow, prevUUID, err := u.prepareRow(&event.prevKv.row)
 	if err != nil {
 		return nil, "", err
 	}
@@ -551,7 +601,12 @@ func (u *updater) prepareInitialRow(value *[]byte) (*ovsjson.RowUpdate, string, 
 	if !libovsdb.MSIsTrue(u.mcr.Select.Initial) {
 		return nil, "", nil
 	}
-	data, uuid, err := u.prepareRow(*value)
+	var row libovsdb.Row
+	err := row.UnmarshalJSON(*value)
+	if err != nil {
+		return nil, "", err
+	}
+	data, uuid, err := u.prepareRow(&row)
 	if err != nil {
 		return nil, "", err
 	}
@@ -566,6 +621,23 @@ func (u *updater) deleteUnselectedColumns(data map[string]interface{}) map[strin
 		return data
 	}
 	newData := map[string]interface{}{}
+	for _, column := range *u.mcr.Columns {
+		value, ok := data[column]
+		if ok {
+			newData[column] = value
+		}
+	}
+	return newData
+}
+
+func (u *updater) copySelectedColumns(data map[string]interface{}) map[string]interface{} {
+	newData := map[string]interface{}{}
+	if u.mcr.Columns == nil {
+		for k, v := range data {
+			newData[k] = v
+		}
+		return newData
+	}
 	for _, column := range *u.mcr.Columns {
 		value, ok := data[column]
 		if ok {
@@ -622,25 +694,7 @@ func (u *updater) isRowAppearOnWhere(data map[string]interface{}) (bool, error) 
 	return true, nil
 }
 
-func getAndDeleteUUID(data map[string]interface{}) (string, error) {
-	uuidInt, ok := data[libovsdb.COL_UUID]
-	if !ok {
-		return "", fmt.Errorf("row doesn't contain %s", libovsdb.COL_UUID)
-	}
-	delete(data, libovsdb.COL_UUID)
-	uuid, ok := uuidInt.(libovsdb.UUID)
-	if !ok {
-		return "", fmt.Errorf("wrong uuid type %T %v", uuidInt, uuidInt)
-	}
-	return uuid.GoUUID, nil
-}
-
-func (u *updater) prepareRow(value []byte) (map[string]interface{}, string, error) {
-	var row libovsdb.Row
-	err := row.UnmarshalJSON(value)
-	if err != nil {
-		return nil, "", err
-	}
+func (u *updater) prepareRow(row *libovsdb.Row) (map[string]interface{}, string, error) {
 	data := row.Fields
 	res, err := u.isRowAppearOnWhere(data)
 	if err != nil {
@@ -650,12 +704,13 @@ func (u *updater) prepareRow(value []byte) (map[string]interface{}, string, erro
 	if res == false {
 		return map[string]interface{}{}, "", nil
 	}
-	uuid, err := getAndDeleteUUID(data)
+	uuid, err := row.GetUUID()
 	if err != nil {
 		return nil, "", err
 	}
-	data = u.deleteUnselectedColumns(data)
-	return data, uuid, nil
+	data = u.copySelectedColumns(data)
+	delete(data, libovsdb.COL_UUID)
+	return data, uuid.GoUUID, nil
 }
 
 // setsDifference returns a delta between 2 sets. It assumes that there is no duplicate elements in the sets.
@@ -674,7 +729,7 @@ func setsDifference(set1 libovsdb.OvsSet, set2 libovsdb.OvsSet) libovsdb.OvsSet 
 			delete(m, item)
 		}
 	}
-	for item, _ := range m {
+	for item := range m {
 		diff.GoSet = append(diff.GoSet, item)
 	}
 	return diff
