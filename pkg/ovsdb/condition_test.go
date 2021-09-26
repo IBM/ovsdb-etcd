@@ -19,7 +19,7 @@ func TestConditionUUID(t *testing.T) {
 	cond := []interface{}{libovsdb.COL_UUID, FN_EQ, goUUID}
 	tableSchema, ok := testSchemaSimple.Tables[table]
 	assert.True(t, ok)
-	pCondition, err := NewCondition(&tableSchema, nil, cond, klogr.New())
+	pCondition, err := NewCondition(&tableSchema, cond, klogr.New())
 	assert.Nil(t, err)
 	condition := *pCondition
 	uuidStr, err := condition.getUUIDIfExists()

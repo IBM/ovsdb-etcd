@@ -278,8 +278,7 @@ type Transaction struct {
 	session *concurrency.Session
 }
 
-func NewTransaction(ctx context.Context, cli *clientv3.Client, request *libovsdb.Transact, cache *databaseCache,
-	schema *libovsdb.DatabaseSchema, log logr.Logger) (*Transaction, error) {
+func NewTransaction(ctx context.Context, cli *clientv3.Client, request *libovsdb.Transact, cache *databaseCache, schema *libovsdb.DatabaseSchema, log logr.Logger) (*Transaction, error) {
 	txn := new(Transaction)
 	txn.log = log.WithValues()
 	txn.log.V(5).Info("new transaction", "size", len(request.Operations), "request", request)
@@ -290,6 +289,10 @@ func NewTransaction(ctx context.Context, cli *clientv3.Client, request *libovsdb
 	txn.localCache = &localCache{}
 	txn.response.Result = make([]libovsdb.OperationResult, len(request.Operations))
 	txn.etcdTrx = &etcdTransaction{ctx: ctx, cli: cli}
+	err := txn.conditionsFromWhere()
+	if err != nil {
+		return nil, err
+	}
 	return txn, nil
 }
 
@@ -474,6 +477,7 @@ func (txn *Transaction) doOperation(ovsOp *libovsdb.Operation, ovsResult *libovs
 	return err
 }
 
+/*
 func (txn *Transaction) conditionsFromWhere(op *libovsdb.Operation) (Conditions, error) {
 	if op.Where == nil {
 		return make([]Condition, 0, 0), nil
@@ -498,40 +502,95 @@ func (txn *Transaction) conditionsFromWhere(op *libovsdb.Operation) (Conditions,
 	}
 	return conditions, nil
 }
+*/
+func (txn *Transaction) conditionsFromWhere() error {
+	for opIdx := range txn.request.Operations {
+		op := &txn.request.Operations[opIdx]
+		if op.Where == nil {
+			continue
+		}
+		tableSchema, err := txn.schema.LookupTable(*op.Table)
+		if err != nil {
+			return err
+		}
+		conditions := make([]interface{}, len(*op.Where), len(*op.Where))
+		for j, c := range *op.Where {
+			cond, ok := c.([]interface{})
+			if !ok {
+				err := errors.New(E_INTERNAL_ERROR)
+				txn.log.Error(err, "failed to convert condition value", "condition", c)
+				return err
+			}
+			condition, err := NewCondition(tableSchema, cond, txn.log)
+			if err != nil {
+				return err
+			}
+			conditions[j] = *condition
+		}
+		op.Where = &conditions
+	}
+	return nil
+}
 
-func (txn *Transaction) isUUIDSelected(op *libovsdb.Operation) (bool, error) {
-	if op.Where == nil {
+func (txn *Transaction) updateConditions(ovsOp *libovsdb.Operation) (Conditions, error) {
+	if ovsOp.Where == nil {
+		return make(Conditions, 0, 0), nil
+	}
+	conditions := make(Conditions, len(*ovsOp.Where), len(*ovsOp.Where))
+	for i, c := range *ovsOp.Where {
+		cond, ok := c.(Condition)
+		if !ok {
+			err := errors.New(E_INTERNAL_ERROR)
+			txn.log.Error(err, "Cannot convert \"Where\" to Condition", "condition", c, "type", fmt.Sprintf("%T", c))
+			return nil, err
+		}
+		err := cond.updateNamedUUID(txn.mapUUID, txn.log)
+		if err != nil {
+			txn.log.Error(err, "Cannot update NamedUUID")
+			return nil, err
+		}
+		conditions[i] = cond
+	}
+	return conditions, nil
+}
+
+func (txn *Transaction) isSpecificRowSelected(ovsOp *libovsdb.Operation) (bool, error) {
+	if ovsOp.Where == nil {
 		return false, nil
 	}
-	for _, c := range *op.Where {
-		cond, ok := c.([]interface{})
+	tableSchema, e := txn.schema.LookupTable(*ovsOp.Table)
+	if e != nil {
+		return false, e
+	}
+	selectedColumns := map[string]string{}
+	for _, c := range *ovsOp.Where {
+		cond, ok := c.(Condition)
 		if !ok {
 			err := errors.New(E_INTERNAL_ERROR)
 			txn.log.Error(err, "failed to convert condition value", "condition", c)
 			return false, err
 		}
-		if len(cond) != 3 {
-			err := errors.New(E_INTERNAL_ERROR)
-			txn.log.Error(err, "expected 3 elements in condition", "condition", cond)
-			return false, err
+		if cond.Function == FN_EQ || cond.Function == FN_IN {
+			if cond.Column == libovsdb.COL_UUID {
+				return true, nil
+			}
+			selectedColumns[cond.Column] = cond.Column
 		}
-		column, ok := cond[0].(string)
-		if !ok {
-			err := errors.New(E_INTERNAL_ERROR)
-			txn.log.Error(err, "failed to convert column to string", "condition", cond)
-			return false, err
-		}
-		if column != libovsdb.COL_UUID {
-			continue
-		}
-		fn, ok := cond[1].(string)
-		if !ok {
-			err := errors.New(E_INTERNAL_ERROR)
-			txn.log.Error(err, "failed to convert function to string", "condition", cond)
-			return false, err
-		}
-		if fn == FN_EQ || fn == FN_IN {
-			return true, nil
+	}
+	if len(selectedColumns) > 0 {
+		indexes := tableSchema.Indexes
+		for _, indx := range indexes {
+			indexed := true
+			for _, col := range indx {
+				if _, ok := selectedColumns[col]; !ok {
+					indexed = false
+					break
+				}
+			}
+			if indexed {
+				txn.log.V(6).Info("SpecificRowSelected by index", "index", indx)
+				return true, nil
+			}
 		}
 	}
 	return false, nil
@@ -543,7 +602,7 @@ func (txn *Transaction) lockTables() error {
 	for _, op := range txn.request.Operations {
 		switch op.Op {
 		case libovsdb.OperationDelete, libovsdb.OperationUpdate, libovsdb.OperationMutate:
-			ok, err := txn.isUUIDSelected(&op)
+			ok, err := txn.isSpecificRowSelected(&op)
 			if err != nil {
 				return err
 			}
@@ -605,7 +664,7 @@ func setRowVersion(row *map[string]interface{}) {
 	(*row)[libovsdb.COL_VERSION] = libovsdb.UUID{GoUUID: version}
 }
 
-func (txn *Transaction) getUUIDIfExists(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, cond1 interface{}) (string, error) {
+/*func (txn *Transaction) getUUIDIfExists(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, cond1 interface{}) (string, error) {
 	var err error
 	cond2, ok := cond1.([]interface{})
 	if !ok {
@@ -636,7 +695,7 @@ func (txn *Transaction) getUUIDIfExists(tableSchema *libovsdb.TableSchema, mapUU
 		return "", err
 	}
 	return ovsUUID.GoUUID, err
-}
+}*/
 
 func (txn *Transaction) validateOpsTableName(tableName *string) (error, string) {
 	if tableName == nil || *tableName == " " {
@@ -885,7 +944,7 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 	}
 	tCache := txn.cache.getTable(*ovsOp.Table)
 	lCache := txn.localCache.getLocalTableCache(*ovsOp.Table)
-	cond, e := txn.conditionsFromWhere(ovsOp)
+	conditions, e := txn.updateConditions(ovsOp)
 	if e != nil {
 		err = errors.New(E_INTERNAL_ERROR)
 		return
@@ -919,7 +978,7 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 		ovsResult.IncrementCount()
 	}
 
-	uuid, e := cond.getUUIDIfSelected()
+	uuid, e := conditions.getUUIDIfSelected()
 	if e != nil {
 		err = errors.New(E_INTERNAL_ERROR)
 		return
@@ -936,7 +995,7 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 	}
 	for key, row := range cache {
 		var ok bool
-		ok, err = cond.isRowSelected(&row)
+		ok, err = conditions.isRowSelected(&row)
 		if err != nil {
 			return
 		}
@@ -965,9 +1024,9 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 			txn.log.Error(err, "failed to unmarshal row", "kv.Key", string(kv.Key), "kv.Value", string(kv.Value))
 			return
 		}
-		if uuid == "" || len(cond) > 1 {
+		if uuid == "" || len(conditions) > 1 {
 			// there are other conditions in addition or instead of _uuid
-			ok, err = cond.isRowSelected(&row)
+			ok, err = conditions.isRowSelected(&row)
 			if err != nil {
 				return
 			}
@@ -983,12 +1042,12 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 /* Select and Delete */
 func (txn *Transaction) doSelectDelete(ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) (err error, details string) {
 	tCache := txn.cache.getTable(*ovsOp.Table)
-	cond, e := txn.conditionsFromWhere(ovsOp)
+	conditions, e := txn.updateConditions(ovsOp)
 	if e != nil {
 		err = errors.New(E_INTERNAL_ERROR)
 		return
 	}
-	uuid, e := cond.getUUIDIfSelected()
+	uuid, e := conditions.getUUIDIfSelected()
 	if e != nil {
 		err = errors.New(E_INTERNAL_ERROR)
 		return
@@ -1008,9 +1067,9 @@ func (txn *Transaction) doSelectDelete(ovsOp *libovsdb.Operation, ovsResult *lib
 			txn.log.Error(err, "failed to unmarshal row", "kv.Key", string(kv.Key), "kv.Value", string(kv.Value))
 			return
 		}
-		if uuid == "" || len(cond) > 1 {
+		if uuid == "" || len(conditions) > 1 {
 			// there are other conditions in addition or instead of _uuid
-			ok, e := cond.isRowSelected(&row)
+			ok, e := conditions.isRowSelected(&row)
 			if e != nil {
 				err = errors.New(E_INTERNAL_ERROR)
 				return
@@ -1085,12 +1144,12 @@ func (txn *Transaction) doWait(ovsOp *libovsdb.Operation, ovsResult *libovsdb.Op
 	}
 
 	tCache := txn.cache.getTable(*ovsOp.Table)
-	cond, e := txn.conditionsFromWhere(ovsOp)
+	conditions, e := txn.updateConditions(ovsOp)
 	if e != nil {
 		err = errors.New(E_INTERNAL_ERROR)
 		return
 	}
-	uuid, e := cond.getUUIDIfSelected()
+	uuid, e := conditions.getUUIDIfSelected()
 	if e != nil {
 		err = errors.New(E_INTERNAL_ERROR)
 		return
@@ -1110,9 +1169,9 @@ func (txn *Transaction) doWait(ovsOp *libovsdb.Operation, ovsResult *libovsdb.Op
 			txn.log.Error(err, "failed to unmarshal row", "kv.Key", string(kv.Key), "kv.Value", string(kv.Value))
 			return
 		}
-		if uuid == "" || len(cond) > 1 {
+		if uuid == "" || len(conditions) > 1 {
 			// there are other conditions in addition or instead of _uuid
-			ok, e := cond.isRowSelected(actualRow)
+			ok, e := conditions.isRowSelected(actualRow)
 			if e != nil {
 				err = errors.New(E_INTERNAL_ERROR)
 				return

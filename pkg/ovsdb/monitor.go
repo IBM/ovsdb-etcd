@@ -658,7 +658,7 @@ func unmarshalData(data []byte) (map[string]interface{}, error) {
 func (u *updater) isRowAppearOnWhere(data map[string]interface{}) (bool, error) {
 	checkCondition := func(condition []interface{}) (bool, error) {
 		log := klogr.New() // TODO: propagate real logger instead of this generic one
-		res, err := NewCondition(u.tableSchema, namedUUIDResolver{}, condition, log)
+		res, err := NewCondition(u.tableSchema, condition, log)
 		if err != nil {
 			return false, err
 		}

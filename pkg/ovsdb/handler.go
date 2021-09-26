@@ -83,7 +83,6 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	ch.mu.RLock()
 	monitor, thereIsMonitor := ch.monitors[txn.request.DBName]
 	ch.mu.RUnlock()
-	// temporary solution to provide consistency
 	err = txn.lockTables()
 	if err != nil {
 		return nil, err
