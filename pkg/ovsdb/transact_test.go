@@ -33,6 +33,7 @@ func TestMain(m *testing.M) {
 	testSchemaMap.AddInternalsColumns()
 	testSchemaAtomic.AddInternalsColumns()
 	testSchemaEnum.AddInternalsColumns()
+	testSchemaIndex.AddInternalsColumns()
 	common.SetPrefix("ovsdb/nb")
 	os.Exit(m.Run())
 }
@@ -229,6 +230,30 @@ var testSchemaUUID = &libovsdb.DatabaseSchema{
 					},
 				},
 			},
+		},
+	},
+}
+
+var testSchemaIndex = &libovsdb.DatabaseSchema{
+	Name:    "index",
+	Version: "0.0.0",
+	Tables: map[string]libovsdb.TableSchema{
+		"table1": {
+			Columns: map[string]*libovsdb.ColumnSchema{
+				"name": {
+					Type: libovsdb.TypeString,
+				},
+				"col1": {
+					Type: libovsdb.TypeInteger,
+				},
+				"col2": {
+					Type: libovsdb.TypeString,
+				},
+				"col3": {
+					Type: libovsdb.TypeString,
+				},
+			},
+			Indexes: [][]string{{"name"}, {"col1", "col2"}},
 		},
 	},
 }
@@ -1555,6 +1580,62 @@ func TestTransactMutateSet(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, libovsdb.OvsSet{GoSet: []interface{}{"a", "c"}}, irow["string"])
 	assert.Equal(t, libovsdb.OvsSet{GoSet: []interface{}{2, 6}}, irow["integer"])
+}
+
+func TestTransactionSelectByIndex(t *testing.T) {
+	table := "table1"
+	dbName := "index"
+
+	req := &libovsdb.Transact{
+		DBName: dbName,
+		Operations: []libovsdb.Operation{
+			{
+				Op:    libovsdb.OperationDelete,
+				Table: &table,
+				Where: &[]interface{}{[]interface{}{"name", FN_EQ, "nameValue"}},
+			},
+			{
+				Op:    libovsdb.OperationDelete,
+				Table: &table,
+				Where: &[]interface{}{[]interface{}{"col1", FN_EQ, "col1Value"}, []interface{}{"col2", FN_EQ, "col2Value"}},
+			},
+			{
+				Op:    libovsdb.OperationDelete,
+				Table: &table,
+				Where: &[]interface{}{[]interface{}{"col1", FN_EQ, "col1Value"}, []interface{}{"col3", FN_EQ, "col3Value"}},
+			},
+			{
+				Op:    libovsdb.OperationDelete,
+				Table: &table,
+				Where: &[]interface{}{[]interface{}{"col1", FN_EQ, "col1Value"}},
+			},
+			{
+				Op:    libovsdb.OperationDelete,
+				Table: &table,
+				Where: &[]interface{}{[]interface{}{"col1", FN_EQ, "col1Value"}, []interface{}{"name", FN_EQ, "nameValue"}},
+			},
+		},
+	}
+
+	cli, err := testEtcdNewCli()
+	assert.Nil(t, err)
+	trx, err := NewTransaction(context.Background(), cli, req, &databaseCache{}, testSchemaIndex, klogr.New())
+	assert.Nil(t, err)
+	ok, err := trx.isSpecificRowSelected(&req.Operations[0])
+	assert.Nil(t, err)
+	assert.True(t, ok)
+	ok, err = trx.isSpecificRowSelected(&req.Operations[1])
+	assert.Nil(t, err)
+	assert.True(t, ok)
+	ok, err = trx.isSpecificRowSelected(&req.Operations[2])
+	assert.Nil(t, err)
+	assert.False(t, ok)
+	ok, err = trx.isSpecificRowSelected(&req.Operations[3])
+	assert.Nil(t, err)
+	assert.False(t, ok)
+	ok, err = trx.isSpecificRowSelected(&req.Operations[4])
+	assert.Nil(t, err)
+	assert.True(t, ok)
 }
 
 func TestTransactDelete(t *testing.T) {

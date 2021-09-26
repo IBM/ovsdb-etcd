@@ -30,7 +30,7 @@ type Condition struct {
 
 type Conditions []Condition
 
-func NewCondition(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, condition []interface{}, log logr.Logger) (*Condition, error) {
+func NewCondition(tableSchema *libovsdb.TableSchema, condition []interface{}, log logr.Logger) (*Condition, error) {
 	var err error
 	if len(condition) != 3 {
 		err = errors.New(E_INTERNAL_ERROR)
@@ -76,14 +76,6 @@ func NewCondition(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, 
 		}
 		value = tmp
 	}
-	tmp, err := mapUUID.Resolve(value, log)
-	if err != nil {
-		err := errors.New(E_INTERNAL_ERROR)
-		log.Error(err, "failed to resolve named-uuid condition", "column", column, "value", value)
-		return nil, err
-	}
-	value = tmp
-
 	cond := &Condition{
 		Column:       column,
 		Function:     fn,
@@ -96,6 +88,17 @@ func NewCondition(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, 
 		return nil, err
 	}
 	return cond, nil
+}
+
+func (c *Condition) updateNamedUUID(mapUUID namedUUIDResolver, log logr.Logger) error {
+	tmp, err := mapUUID.Resolve(c.Value, log)
+	if err != nil {
+		err := errors.New(E_INTERNAL_ERROR)
+		log.Error(err, "failed to resolve named-uuid condition", "column", c.Column, "value", c.Value)
+		return err
+	}
+	c.Value = tmp
+	return nil
 }
 
 func (c Conditions) getUUIDIfSelected() (string, error) {
