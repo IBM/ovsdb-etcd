@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/go-logr/logr"
+	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
@@ -117,13 +118,15 @@ type ovsdbNotificationEvent struct {
 	prevKv      *ovsdbKeyValue
 }
 
-func etcd2ovsdbEvent(event *clientv3.Event) (*ovsdbNotificationEvent, error) {
+func etcd2ovsdbEvent(event *clientv3.Event, log logr.Logger) (*ovsdbNotificationEvent, error) {
+	mvccpbEvent := mvccpb.Event(*event)
 	ovsdbEvent := ovsdbNotificationEvent{
 		createEvent: event.IsCreate(),
 		modifyEvent: event.IsModify(),
 	}
 	key, err := common.ParseKey(string(event.Kv.Key))
 	if err != nil {
+		log.Error(err, "ParseKey error", "key", string(event.Kv.Key), "event", mvccpbEvent.String())
 		return nil, err
 	}
 	if !ovsdbEvent.createEvent && !ovsdbEvent.modifyEvent {
@@ -133,6 +136,7 @@ func etcd2ovsdbEvent(event *clientv3.Event) (*ovsdbNotificationEvent, error) {
 		var row libovsdb.Row
 		err = row.UnmarshalJSON(event.Kv.Value)
 		if err != nil {
+			log.Error(err, "cannot unmarshal JsonValue", "value", string(event.Kv.Value), "event", mvccpbEvent.String())
 			return nil, err
 		}
 		ovsdbEvent.kv = &ovsdbKeyValue{key: *key, row: row}
@@ -141,6 +145,7 @@ func etcd2ovsdbEvent(event *clientv3.Event) (*ovsdbNotificationEvent, error) {
 		var pRow libovsdb.Row
 		err = pRow.UnmarshalJSON(event.PrevKv.Value)
 		if err != nil {
+			log.Error(err, "cannot unmarshal previous JsonValue", "value", string(event.PrevKv.Value), "event", mvccpbEvent.String())
 			return nil, err
 		}
 		ovsdbEvent.prevKv = &ovsdbKeyValue{key: *key, row: pRow}
@@ -320,9 +325,10 @@ func (m *dbMonitor) notify(events []*clientv3.Event, revision int64) {
 	}
 	ovsdbEvents := make([]*ovsdbNotificationEvent, 0, len(events))
 	for _, event := range events {
-		ovsdbEvent, err := etcd2ovsdbEvent(event)
+		ovsdbEvent, err := etcd2ovsdbEvent(event, m.log)
 		if err != nil {
-			m.log.Error(err, "etcd2ovsdbEvent returned", "event", event)
+			mvccpbEvent := mvccpb.Event(*event)
+			m.log.Error(err, "etcd2ovsdbEvent returned", "event", mvccpbEvent.String())
 			continue
 		}
 		ovsdbEvents = append(ovsdbEvents, ovsdbEvent)
