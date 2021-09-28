@@ -525,7 +525,7 @@ func TestMonitorPrepareModifySetRow(t *testing.T) {
 }
 
 func validateRowNotification(t *testing.T, updater *updater, event *clientv3.Event, expectedUUID string, expRow *ovsjson.RowUpdate, tableSchema *libovsdb.TableSchema) {
-	ovsdbEvent, err := etcd2ovsdbEvent(event)
+	ovsdbEvent, err := etcd2ovsdbEvent(event, klogr.New())
 	assert.Nil(t, err)
 	row, uuid, err := updater.prepareRowNotification(ovsdbEvent)
 	assert.Nil(t, err)
@@ -600,7 +600,7 @@ func TestMonitorModifyRowMap(t *testing.T) {
 	for name, ts := range tests {
 		updater := ts.updater
 		for opName, op := range ts.op {
-			ovsdbEvent, err := etcd2ovsdbEvent(&op.event)
+			ovsdbEvent, err := etcd2ovsdbEvent(&op.event, klogr.New())
 			assert.Nil(t, err)
 			row, _, err := updater.prepareRowNotification(ovsdbEvent)
 			if op.err != nil {
