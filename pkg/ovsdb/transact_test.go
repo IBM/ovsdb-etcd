@@ -286,11 +286,11 @@ func testEtcdPut(t *testing.T, dbname, table string, uuid string, row map[string
 	assert.Nil(t, err)
 }
 
-func testEtcdGetComment(t *testing.T, dbName, comment string) {
+func testEtcdGetComment(t *testing.T, comment string) {
 	cli, err := testEtcdNewCli()
 	assert.Nil(t, err)
 	ctx := context.TODO()
-	key := common.NewCommentTableKey(dbName)
+	key := common.NewCommentTableKey()
 	response, err := cli.Get(ctx, key.String(), clientv3.WithPrefix(), clientv3.WithSort(clientv3.SortByKey, clientv3.SortAscend))
 	assert.Nil(t, err)
 	for _, kv := range response.Kvs {
@@ -2184,7 +2184,7 @@ func TestTransactSelectAndComment(t *testing.T) {
 	assert.EqualValues(t, 3, row["key2"])
 
 	validateEmptyResult(t, resp, 2, 1)
-	testEtcdGetComment(t, req.DBName, comment)
+	testEtcdGetComment(t, comment)
 }
 
 func TestTransactComment(t *testing.T) {
@@ -2201,7 +2201,7 @@ func TestTransactComment(t *testing.T) {
 	testEtcdCleanup(t)
 	resp := testTransact(t, req, testSchemaSimple, -1)
 	assert.Nil(t, resp.Error)
-	testEtcdGetComment(t, req.DBName, comment)
+	testEtcdGetComment(t, comment)
 }
 
 func TestTransactAssert(t *testing.T) {

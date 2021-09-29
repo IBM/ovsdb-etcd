@@ -9,8 +9,8 @@ import (
 
 const (
 	KEY_DELIMITER = "/"
-	LOCKS         = "_locks"
-	COMMENTS      = "_comments"
+	LOCKS         = "locks"
+	COMMENTS      = "comments"
 	INTERNAL_DB   = "_"
 )
 
@@ -104,8 +104,8 @@ func NewDataKey(dbName, tableName, uuid string) Key {
 
 // Returns a new Comment key. If the given commentID is an empty string, the return key will point to the entire
 // comments table, and this function call is equals to call `NewCommentTableKey`.
-func NewCommentKey(dbName, commentID string) Key {
-	return NewDataKey(dbName, COMMENTS, commentID)
+func NewCommentKey(commentID string) Key {
+	return NewDataKey(INTERNAL_DB, COMMENTS, commentID)
 }
 
 // Returns a new Lock key. If the given lockID is an empty string, the return key will point to the entire
@@ -120,8 +120,8 @@ func NewTableKey(dbName, tableName string) Key {
 }
 
 // Helper function, which returns a key to the Comments table
-func NewCommentTableKey(dbName string) Key {
-	return NewCommentKey(dbName, "")
+func NewCommentTableKey() Key {
+	return NewCommentKey("")
 }
 
 // Helper function, which returns a key to the Locks table
