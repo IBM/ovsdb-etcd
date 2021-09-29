@@ -1246,7 +1246,7 @@ func (txn *Transaction) doAbort(ovsOp *libovsdb.Operation, ovsResult *libovsdb.O
 /* comment */
 func (txn *Transaction) doComment(ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) (error, string) {
 	timestamp := time.Now().Format(time.RFC3339)
-	key := common.NewCommentKey(txn.request.DBName, timestamp)
+	key := common.NewCommentKey(timestamp)
 	comment := *ovsOp.Comment
 	etcdOp := clientv3.OpPut(key.String(), comment)
 	txn.etcdTrx.appendThen(etcdOp)
