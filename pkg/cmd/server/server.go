@@ -165,6 +165,10 @@ func main() {
 	loop := func(lst net.Listener) {
 		for {
 			conn, err := lst.Accept()
+			if err != nil {
+				log.Error(err, "Accept returned")
+				os.Exit(1)
+			}
 			ch := channel.RawJSON(conn, conn)
 			go func() {
 				ctxt, cancel := context.WithCancel(context.Background())
@@ -176,9 +180,6 @@ func main() {
 				srv.Start(ch)
 				stat := srv.WaitStatus()
 				log.V(5).Info("connection", "from", conn.RemoteAddr(), "stopped", stat.Stopped(), "closed", stat.Closed(), "success", stat.Success(), "err", stat.Err)
-				if stat.Err != nil {
-					log.Error(err, "Server exit")
-				}
 				handler.Cleanup()
 				cancel()
 			}()
