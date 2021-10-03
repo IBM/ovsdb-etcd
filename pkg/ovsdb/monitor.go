@@ -397,10 +397,10 @@ func (m *dbMonitor) prepareTableNotification(events []*ovsdbNotificationEvent) (
 			m.log.V(7).Info("no monitors for table path", "table-path", key.TableKeyString())
 			continue
 		}
-		for _, updater := range updaters {
-			rowUpdate, uuid, err := updater.prepareRowNotification(ev)
+		for _, upd := range updaters {
+			rowUpdate, uuid, err := upd.prepareRowNotification(ev)
 			if err != nil {
-				m.log.Error(err, "prepareRowNotification failed", "updater", updater)
+				m.log.Error(err, "prepareRowNotification failed", "updater", upd)
 				continue
 			}
 			if rowUpdate == nil {
@@ -408,10 +408,10 @@ func (m *dbMonitor) prepareTableNotification(events []*ovsdbNotificationEvent) (
 				m.log.V(7).Info("no updates for table path", "table-path", key.TableKeyString())
 				continue
 			}
-			tableUpdates, ok := result[updater.jasonValueStr]
+			tableUpdates, ok := result[upd.jasonValueStr]
 			if !ok {
 				tableUpdates = ovsjson.TableUpdates{}
-				result[updater.jasonValueStr] = tableUpdates
+				result[upd.jasonValueStr] = tableUpdates
 			}
 			tableUpdate, ok := tableUpdates[key.TableName]
 			if !ok {
@@ -450,9 +450,12 @@ func (u *updater) prepareDeleteRowUpdate(event *ovsdbNotificationEvent) (*ovsjso
 	if !u.isV1 {
 		// according to https://docs.openvswitch.org/en/latest/ref/ovsdb-server.7/#update2-notification,
 		// "<row> is always a null object for delete updates."
-		_, uuid, err := u.prepareRow(&event.prevKv.row)
+		data, uuid, err := u.prepareRow(&event.prevKv.row)
 		if err != nil {
 			return nil, "", err
+		}
+		if data == nil {
+			return nil, "", nil
 		}
 		return &ovsjson.RowUpdate{Delete: true}, uuid, nil
 	}
@@ -473,6 +476,9 @@ func (u *updater) prepareCreateRowUpdate(event *ovsdbNotificationEvent) (*ovsjso
 	if err != nil {
 		return nil, "", err
 	}
+	if data == nil {
+		return nil, "", nil
+	}
 	if !u.isV1 {
 		return &ovsjson.RowUpdate{Insert: &data}, uuid, nil
 	}
@@ -487,12 +493,34 @@ func (u *updater) prepareModifyRowUpdate(event *ovsdbNotificationEvent) (*ovsjso
 	if err != nil {
 		return nil, "", err
 	}
+
 	prevRow, prevUUID, err := u.prepareRow(&event.prevKv.row)
 	if err != nil {
 		return nil, "", err
 	}
+
+	if modifiedRow == nil && prevRow == nil {
+		// the row is not selected
+		return nil, "", nil
+	}
+	if modifiedRow == nil {
+		if u.isV1 {
+			u.log.V(1).Info("monitor version is V1, but modified row is nil", "event", event, "where", u.mcr.Where)
+			return nil, "", fmt.Errorf("monitor version is V1, but modified row is nil, prevUUID %s", prevUUID)
+		}
+		return &ovsjson.RowUpdate{Delete: true}, prevUUID, nil
+	}
+	if prevRow == nil {
+		if u.isV1 {
+			u.log.V(1).Info("monitor version is V1, but previous row is nil", "event", event, "where", u.mcr.Where)
+			return nil, "", fmt.Errorf("monitor version is V1, but previous row is nil, UUID %s", uuid)
+		}
+		return &ovsjson.RowUpdate{Insert: &modifiedRow}, uuid, nil
+	}
 	if uuid != prevUUID {
-		return nil, "", fmt.Errorf("UUID was changed prev uuid=%q, new uuid=%q", prevUUID, uuid)
+		err := fmt.Errorf("UUID was changed key=%s, prev uuid=%q, new uuid=%q", event.kv.key.String(), prevUUID, uuid)
+		u.log.Error(err, "prevRow", event.prevKv.row, "newRow", event.kv.row)
+		return nil, "", err
 	}
 	deltaRow, err := u.compareModifiedRows(modifiedRow, prevRow)
 	if err != nil {
@@ -662,6 +690,9 @@ func unmarshalData(data []byte) (map[string]interface{}, error) {
 }
 
 func (u *updater) isRowAppearOnWhere(data map[string]interface{}) (bool, error) {
+	if u.mcr.Where == nil {
+		return true, nil
+	}
 	checkCondition := func(condition []interface{}) (bool, error) {
 		log := klogr.New() // TODO: propagate real logger instead of this generic one
 		res, err := NewCondition(u.tableSchema, condition, log)
@@ -673,9 +704,6 @@ func (u *updater) isRowAppearOnWhere(data map[string]interface{}) (bool, error) 
 			return false, err
 		}
 		return cond, nil
-	}
-	if u.mcr.Where == nil {
-		return true, nil
 	}
 	var cond bool
 	var err error
@@ -706,9 +734,8 @@ func (u *updater) prepareRow(row *libovsdb.Row) (map[string]interface{}, string,
 	if err != nil {
 		return nil, "", err
 	}
-	// If the row do not appear on `Where` field of MonitorCondRequest, return an empty row.
 	if res == false {
-		return map[string]interface{}{}, "", nil
+		return nil, "", nil
 	}
 	uuid, err := row.GetUUID()
 	if err != nil {
