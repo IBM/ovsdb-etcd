@@ -519,7 +519,7 @@ func (u *updater) prepareModifyRowUpdate(event *ovsdbNotificationEvent) (*ovsjso
 	}
 	if uuid != prevUUID {
 		err := fmt.Errorf("UUID was changed key=%s, prev uuid=%q, new uuid=%q", event.kv.key.String(), prevUUID, uuid)
-		u.log.Error(err, "prevRow", event.prevKv.row, "newRow", event.kv.row)
+		u.log.Error(err, "", "prevRow", event.prevKv.row, "newRow", event.kv.row)
 		return nil, "", err
 	}
 	deltaRow, err := u.compareModifiedRows(modifiedRow, prevRow)
