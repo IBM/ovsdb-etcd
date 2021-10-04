@@ -190,6 +190,7 @@ type Logical_DP_Group struct {
 
 type Logical_Flow struct {
 	Actions          string          `json:"actions,omitempty"`
+	Controller_meter libovsdb.OvsSet `json:"controller_meter,omitempty"`
 	External_ids     libovsdb.OvsMap `json:"external_ids,omitempty"`
 	Logical_datapath libovsdb.OvsSet `json:"logical_datapath,omitempty"`
 	Logical_dp_group libovsdb.OvsSet `json:"logical_dp_group,omitempty"`
@@ -197,6 +198,7 @@ type Logical_Flow struct {
 	Pipeline         string          `json:"pipeline,omitempty"`
 	Priority         int64           `json:"priority,omitempty"`
 	Table_id         int64           `json:"table_id,omitempty"`
+	Tags             libovsdb.OvsMap `json:"tags,omitempty"`
 	Version          libovsdb.UUID   `json:"_version,omitempty"`
 	Uuid             libovsdb.UUID   `json:"_uuid,omitempty"`
 }
