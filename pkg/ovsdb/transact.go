@@ -866,8 +866,8 @@ func (txn *Transaction) rowPrepare(tableSchema *libovsdb.TableSchema, mapUUID na
 
 	err = tableSchema.Validate(row)
 	if err != nil {
+		txn.log.Error(err, "failed schema validation of row", "row")
 		err = errors.New(E_CONSTRAINT_VIOLATION)
-		txn.log.Error(err, "failed schema validation of row")
 		return err
 	}
 	return nil
@@ -913,8 +913,8 @@ func (txn *Transaction) doInsert(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 
 	err = txn.rowPrepare(tableSchema, txn.mapUUID, ovsOp.Row)
 	if err != nil {
+		txn.log.Error(err, "failed to prepare row", "row", row, "table", ovsOp.Table)
 		err = errors.New(E_CONSTRAINT_VIOLATION)
-		txn.log.Error(err, "failed to prepare row", "row", row)
 		return
 	}
 	setRowUUID(row, uuid)
@@ -955,7 +955,7 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 		if ovsOp.Op == libovsdb.OperationUpdate {
 			err = txn.rowPrepare(tableSchema, txn.mapUUID, ovsOp.Row)
 			if err != nil {
-				txn.log.Error(err, "failed to prepare row", "row", ovsOp.Row)
+				txn.log.Error(err, "failed to prepare row", "row", ovsOp.Row, "table", "table", ovsOp.Table)
 				return
 			}
 			newRow, err = txn.rowUpdate(tableSchema, txn.mapUUID, &row, ovsOp.Row)
@@ -1195,6 +1195,7 @@ func (txn *Transaction) doWait(ovsOp *libovsdb.Operation, ovsResult *libovsdb.Op
 		for _, expected := range *ovsOp.Rows {
 			err = txn.rowPrepare(tableSchema, txn.mapUUID, &expected)
 			if err != nil {
+				txn.log.Error(err, "failed to prepare row", "row", expected, "table", "table", ovsOp.Table)
 				return
 			}
 			cond, e := isEqualRow(txn, tableSchema, &expected, actualRow)

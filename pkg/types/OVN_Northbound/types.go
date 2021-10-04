@@ -6,6 +6,7 @@ type ACL struct {
 	Action       string          `json:"action,omitempty"`
 	Direction    string          `json:"direction,omitempty"`
 	External_ids libovsdb.OvsMap `json:"external_ids,omitempty"`
+	Label        int64           `json:"label,omitempty"`
 	Log          bool            `json:"log,omitempty"`
 	Match        string          `json:"match,omitempty"`
 	Meter        libovsdb.OvsSet `json:"meter,omitempty"`
@@ -47,6 +48,12 @@ type Connection struct {
 	Target           string          `json:"target,omitempty"`
 	Version          libovsdb.UUID   `json:"_version,omitempty"`
 	Uuid             libovsdb.UUID   `json:"_uuid,omitempty"`
+}
+
+type Copp struct {
+	Meters  libovsdb.OvsMap `json:"meters,omitempty"`
+	Version libovsdb.UUID   `json:"_version,omitempty"`
+	Uuid    libovsdb.UUID   `json:"_uuid,omitempty"`
 }
 
 type DHCP_Options struct {
@@ -123,6 +130,7 @@ type Load_Balancer_Health_Check struct {
 }
 
 type Logical_Router struct {
+	Copp          libovsdb.OvsSet `json:"copp,omitempty"`
 	Enabled       libovsdb.OvsSet `json:"enabled,omitempty"`
 	External_ids  libovsdb.OvsMap `json:"external_ids,omitempty"`
 	Load_balancer libovsdb.OvsSet `json:"load_balancer,omitempty"`
@@ -178,6 +186,7 @@ type Logical_Router_Static_Route struct {
 
 type Logical_Switch struct {
 	Acls              libovsdb.OvsSet `json:"acls,omitempty"`
+	Copp              libovsdb.OvsSet `json:"copp,omitempty"`
 	Dns_records       libovsdb.OvsSet `json:"dns_records,omitempty"`
 	External_ids      libovsdb.OvsMap `json:"external_ids,omitempty"`
 	Forwarding_groups libovsdb.OvsSet `json:"forwarding_groups,omitempty"`
