@@ -126,16 +126,20 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 		return err
 	}
 	schemaSet, err := libovsdb.NewOvsSet(string(data))
-	// the _Server.Database entries should be unique per database, so we don't use a standard key schema when the row key
-	// is its _uuid, but here we use database / schema name as the key.
-	srv := _Server.Database{Model: "standalone", Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
-		Connected: true, Leader: true, Schema: *schemaSet, Version: libovsdb.UUID{GoUUID: uuid.NewString()}}
-	key := common.NewDataKey("_Server", "Database", schemaName)
-	ctx, cancel := context.WithTimeout(context.Background(), EtcdClientTimeout)
-	defer cancel()
-	if err := (*con).PutData(ctx, key, srv); err != nil {
+	if err != nil {
 		return err
 	}
+	srv := _Server.Database{Model: "standalone", Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
+		Connected: true, Leader: true, Schema: *schemaSet, Version: libovsdb.UUID{GoUUID: uuid.NewString()}}
+	key := common.NewDataKey(INT_SERVER, INT_DATABASES, schemaName)
+	dbCache := con.cache.getDBCache(INT_SERVER)
+	val, err := json.Marshal(srv)
+	if err != nil {
+		return err
+	}
+	kv := mvccpb.KeyValue{Key: []byte(key.String()), Value: val}
+	dbCache.putEtcdKV([]*mvccpb.KeyValue{&kv})
+
 	return nil
 }
 

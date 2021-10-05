@@ -98,7 +98,6 @@ func main() {
 		}
 	}
 
-	// several OVSDB deployments can share the same etcd, but for rest of the work, we don't have to separate
 	// databasePrefix and serviceName.
 	common.SetPrefix(*databasePrefix + common.KEY_DELIMITER + *serviceName)
 
@@ -119,16 +118,14 @@ func main() {
 	}()
 
 	db, _ := ovsdb.NewDatabaseEtcd(cli, log)
-
 	err = db.AddSchema(path.Join(*schemaBasedir, "_server.ovsschema"))
 	if err != nil {
-		log.Error(err, "failed to add schema")
+		log.Error(err, "failed to add _server schema")
 		os.Exit(1)
 	}
-
 	err = db.AddSchema(path.Join(*schemaBasedir, *schemaFile))
 	if err != nil {
-		log.Error(err, "failed to add schema")
+		log.Error(err, "failed to add schema", "schema file", *schemaFile)
 		os.Exit(1)
 	}
 
@@ -153,7 +150,6 @@ func main() {
 		signal.Stop(exitCh)
 		cancel()
 	}()
-
 	servOptions := &jrpc2.ServerOptions{
 		Concurrency: *maxTasks,
 		Metrics:     metrics.New(),
