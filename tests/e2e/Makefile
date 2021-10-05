@@ -28,7 +28,6 @@ SERVER_ARGS := \
 		-database-prefix $(DATABASE-PREFIX) \
 		-service-name $(SERVICE-NAME) \
 		-schema-file $(SCHEMA-FILE) \
-		-load-server-data $(LOAD-SERVER-DATA) \
 		-pid-file $(PID-FILE)
 
 .PHONY: dbg-server

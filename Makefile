@@ -2,8 +2,7 @@ ROOT_DIR := .
 SERVER_EXECUTEBLE := "$(ROOT_DIR)/pkg/cmd/server/server"
 
 SERVER_FILES := \
-	$(ROOT_DIR)/pkg/cmd/server/server.go \
-	$(ROOT_DIR)/pkg/cmd/server/testdata.go
+	$(ROOT_DIR)/pkg/cmd/server/server.go
 
 CACHE := /tmp/.cache
 ETCD_VERSION ?= v3.5.0

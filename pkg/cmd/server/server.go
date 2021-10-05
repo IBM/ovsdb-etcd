@@ -30,19 +30,18 @@ import (
 const ETCD_LOCALHOST = "localhost:2379"
 
 var (
-	tcpAddress         = flag.String("tcp-address", "", "TCP service address")
-	unixAddress        = flag.String("unix-address", "", "UNIX service address")
-	etcdMembers        = flag.String("etcd-members", ETCD_LOCALHOST, "ETCD service addresses, separated by ',' ")
-	schemaBasedir      = flag.String("schema-basedir", ".", "Schema base dir")
-	maxTasks           = flag.Int("max", 10, "Maximum concurrent tasks")
-	databasePrefix     = flag.String("database-prefix", "ovsdb", "Database prefix")
-	serviceName        = flag.String("service-name", "", "Deployment service name, e.g. 'nbdb' or 'sbdb'")
-	schemaFile         = flag.String("schema-file", "", "schema-file")
-	loadServerDataFlag = flag.Bool("load-server-data", false, "load-server-data")
-	pidFile            = flag.String("pid-file", "", "Name of file that will hold the pid")
-	cpuProfile         = flag.String("cpu-profile", "", "write cpu profile to file")
-	keepAliveTime      = flag.Duration("keepalive-time", -1*time.Second, "keepalive time for the etcd client connection")
-	keepAliveTimeout   = flag.Duration("keepalive-timeout", -1*time.Second, "keepalive timeout for the etcd client connection")
+	tcpAddress       = flag.String("tcp-address", "", "TCP service address")
+	unixAddress      = flag.String("unix-address", "", "UNIX service address")
+	etcdMembers      = flag.String("etcd-members", ETCD_LOCALHOST, "ETCD service addresses, separated by ',' ")
+	schemaBasedir    = flag.String("schema-basedir", ".", "Schema base dir")
+	maxTasks         = flag.Int("max", 10, "Maximum concurrent tasks")
+	databasePrefix   = flag.String("database-prefix", "ovsdb", "Database prefix")
+	serviceName      = flag.String("service-name", "", "Deployment service name, e.g. 'nbdb' or 'sbdb'")
+	schemaFile       = flag.String("schema-file", "", "schema-file")
+	pidFile          = flag.String("pid-file", "", "Name of file that will hold the pid")
+	cpuProfile       = flag.String("cpu-profile", "", "write cpu profile to file")
+	keepAliveTime    = flag.Duration("keepalive-time", -1*time.Second, "keepalive time for the etcd client connection")
+	keepAliveTimeout = flag.Duration("keepalive-timeout", -1*time.Second, "keepalive timeout for the etcd client connection")
 )
 
 var GitCommit string
@@ -73,7 +72,7 @@ func main() {
 		"tcp-address", tcpAddress, "unix-address", unixAddress, "etcd-members",
 		etcdMembers, "schema-basedir", schemaBasedir, "max-tasks", maxTasks,
 		"database-prefix", databasePrefix, "service-name", serviceName,
-		"schema-file", schemaFile, "load-server-data-flag", loadServerDataFlag,
+		"schema-file", schemaFile,
 		"pid-file", pidFile, "cpu-profile", cpuProfile)
 
 	if len(*tcpAddress) == 0 && len(*unixAddress) == 0 {
@@ -127,15 +126,6 @@ func main() {
 	if err != nil {
 		log.Error(err, "failed to add schema", "schema file", *schemaFile)
 		os.Exit(1)
-	}
-
-	// TODO for development only, will be remove later
-	if *loadServerDataFlag {
-		err = loadServerData(db.(*ovsdb.DatabaseEtcd))
-		if err != nil {
-			log.Error(err, "failed to load server data")
-			os.Exit(1)
-		}
 	}
 
 	ctx := context.Background()
