@@ -487,13 +487,16 @@ func (ch *Handler) addMonitor(params []interface{}, notificationType ovsjson.Upd
 		updatersKeys = append(updatersKeys, key)
 	}
 	log := ch.log.WithValues("jsonValue", cmpr.JsonValue)
-	monitor, ok := ch.monitors[cmpr.DatabaseName]
-	if !ok {
-		monitor = ch.db.CreateMonitor(cmpr.DatabaseName, ch, log)
-		monitor.start()
-		ch.monitors[cmpr.DatabaseName] = monitor
+	if cmpr.DatabaseName != INT_SERVER {
+		monitor, ok := ch.monitors[cmpr.DatabaseName]
+		if !ok {
+			monitor = ch.db.CreateMonitor(cmpr.DatabaseName, ch, log)
+			monitor.start()
+			ch.monitors[cmpr.DatabaseName] = monitor
+		}
+		monitor.addUpdaters(updatersMap)
 	}
-	monitor.addUpdaters(updatersMap)
+
 	ch.handlerMonitorData[jsonValueString] = handlerMonitorData{
 		log:               log,
 		dataBaseName:      cmpr.DatabaseName,

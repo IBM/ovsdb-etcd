@@ -33,6 +33,10 @@ func (c *cache) addDatabaseCache(dbName string, etcdClient *clientv3.Client, log
 		return errors.New("Duplicate DatabaseCache: " + dbName)
 	}
 	dbCache := databaseCache{dbCache: map[string]tableCache{}, log: log}
+	(*c)[dbName] = &dbCache
+	if dbName == INT_SERVER {
+		return nil
+	}
 	ctxt, cancel := context.WithCancel(context.Background())
 	dbCache.cancel = cancel
 	key := common.NewDBPrefixKey(dbName)
@@ -45,7 +49,7 @@ func (c *cache) addDatabaseCache(dbName string, etcdClient *clientv3.Client, log
 		clientv3.WithPrefix(),
 		clientv3.WithCreatedNotify(),
 		clientv3.WithPrevKV())
-	(*c)[dbName] = &dbCache
+
 	err = dbCache.putEtcdKV(resp.Kvs)
 	if err != nil {
 		log.Error(err, "putEtcdKV")
