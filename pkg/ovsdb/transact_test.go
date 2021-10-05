@@ -1638,6 +1638,92 @@ func TestTransactionSelectByIndex(t *testing.T) {
 	assert.True(t, ok)
 }
 
+func TestTransactionDeleteInsert(t *testing.T) {
+	table := "table1"
+	dbName := "index"
+
+	row := map[string]interface{}{
+		"name": "rowName",
+		"col3": "val3",
+	}
+	req := &libovsdb.Transact{
+		DBName: dbName,
+		Operations: []libovsdb.Operation{
+			{
+				Op:    libovsdb.OperationInsert,
+				Table: &table,
+				Row:   &row,
+			},
+		},
+	}
+	testEtcdCleanup(t)
+	resp := testTransact(t, req, testSchemaIndex, 0)
+	validateInsertResult(t, resp, 1, 0, "")
+	oldUUID := resp.Result[0].UUID
+
+	row["col3"] = "newVal"
+	row["col2"] = "val2"
+
+	req = &libovsdb.Transact{
+		DBName: dbName,
+		Operations: []libovsdb.Operation{
+			{
+				Op:    libovsdb.OperationDelete,
+				Table: &table,
+				Where: &[]interface{}{[]interface{}{"name", FN_EQ, "rowName"}},
+			},
+			{
+				Op:    libovsdb.OperationInsert,
+				Table: &table,
+				Row:   &row,
+			},
+		},
+	}
+	resp = testTransact(t, req, testSchemaIndex, 1)
+	validateInsertResult(t, resp, 2, 1, "")
+	newUUID := resp.Result[1].UUID
+	assert.NotEqual(t, oldUUID.GoUUID, newUUID.GoUUID)
+
+	selectReq := &libovsdb.Transact{
+		DBName: dbName,
+		Operations: []libovsdb.Operation{
+			{
+				Op:    libovsdb.OperationSelect,
+				Table: &table,
+			},
+		},
+	}
+	resp = testTransact(t, selectReq, testSchemaIndex, 1)
+	retRow := (*resp.Result[0].Rows)[0]
+	assert.Equal(t, "rowName", retRow["name"])
+	assert.Equal(t, "newVal", retRow["col3"])
+
+	// check update all lines not selected by index
+	row["col2"] = "val3"
+	req = &libovsdb.Transact{
+		DBName: dbName,
+		Operations: []libovsdb.Operation{
+			{
+				Op:    libovsdb.OperationDelete,
+				Table: &table,
+				Where: &[]interface{}{[]interface{}{"col3", FN_EQ, "newVal"}},
+			},
+			{
+				Op:    libovsdb.OperationInsert,
+				Table: &table,
+				Row:   &row,
+			},
+		},
+	}
+	resp = testTransact(t, req, testSchemaIndex, 1)
+	validateInsertResult(t, resp, 2, 1, "")
+	resp = testTransact(t, selectReq, testSchemaIndex, 1)
+	retRow = (*resp.Result[0].Rows)[0]
+	assert.Equal(t, "rowName", retRow["name"])
+	assert.Equal(t, "newVal", retRow["col3"])
+	assert.Equal(t, "val3", retRow["col2"])
+}
+
 func TestTransactDelete(t *testing.T) {
 	table := "table1"
 	dbName := "simple"
