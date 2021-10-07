@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
+	"reflect"
 	"sync"
 
 	"github.com/go-logr/logr"
@@ -31,31 +32,47 @@ type databaseCache struct {
 
 func newDatabaseCache(dSchema *libovsdb.DatabaseSchema, log logr.Logger) databaseCache {
 	dCache := databaseCache{dbCache: map[string]tableCache{}, log: log}
-	for tName, tSchema := range dSchema.Tables {
-		dCache.dbCache[tName] = newTableCache(tSchema)
+	for tName := range dSchema.Tables {
+		dCache.dbCache[tName] = newTableCache(tName, dSchema)
 	}
 	return dCache
 }
 
 type tableCache struct {
 	rows       map[string]cachedRow
-	refColumns []string
+	tSchema    *libovsdb.TableSchema
+    // ref from this table columns to none root tables
+	refColumns map[string]string
 	// TODO add secondary index
 }
 
-func newTableCache(tSchema libovsdb.TableSchema) tableCache {
-	var rColumns []string
+func newTableCache(tableName string, dSchema *libovsdb.DatabaseSchema) tableCache {
+	rColumns := map[string]string{}
+	tSchema, ok := dSchema.Tables[tableName]
+	if !ok {
+		panic("cannot find table schema for " + tableName)
+	}
+
 	for cn, colSchema := range tSchema.Columns {
 		if colSchema.TypeObj != nil {
+			// the same column cannot contain references as key and as value
 			if colSchema.TypeObj.Key != nil && colSchema.TypeObj.Key.RefTable != "" {
-				rColumns = append(rColumns, cn)
+				refTable := colSchema.TypeObj.Key.RefTable
+				if !dSchema.Tables[refTable].IsRoot {
+					// we are aware about references to none root tables only
+					rColumns[cn] = refTable
+				}
 			}
 			if colSchema.TypeObj.Value != nil && colSchema.TypeObj.Value.RefTable != "" {
-				rColumns = append(rColumns, cn)
+				refTable := colSchema.TypeObj.Value.RefTable
+				if !dSchema.Tables[refTable].IsRoot {
+					// we are aware about references to none root tables only
+					rColumns[cn] = refTable
+				}
 			}
 		}
 	}
-	return tableCache{rows: map[string]cachedRow{}, refColumns: rColumns}
+	return tableCache{rows: map[string]cachedRow{}, refColumns: rColumns, tSchema: &tSchema}
 }
 
 func (tc *tableCache) newEmptyTableCache() *tableCache {
@@ -164,12 +181,149 @@ func (dc *databaseCache) storeValues(kvs []*mvccpb.KeyValue) error {
 			dc.log.Error(err, "cannot store value in the cache")
 			return err
 		}
-		// TODO update counters
 		rows[*key] = cr
 	}
 	// now actually update the cache
 	dc.updateRows(rows)
 	return nil
+}
+/*
+func (dc *databaseCache) deleteCounters(newVal interface{}, oldVal interface{}, columnType string, refTable *tableCache ) {
+	if columnType == libovsdb.TypeSet {
+		valSet, ok := newVal.(libovsdb.OvsSet)
+		if !ok {
+			// TODO
+		}
+		for _, uuid := range valSet.GoSet {
+			ovsUUID := uuid.(libovsdb.UUID)
+			cRow, ok := refTable.rows[ovsUUID.GoUUID]
+			if ok {
+				cRow.counter--
+			}
+		}
+	} else if columnType == libovsdb.TypeMap {
+		valMap, ok := newVal.(libovsdb.OvsMap)
+		if !ok {
+			// TODO
+		}
+		for _, v := range valMap.GoMap {
+			ovsUUID, _ := v.(libovsdb.UUID)
+			cRow, ok := refTable.rows[ovsUUID.GoUUID]
+			if ok {
+				cRow.counter--
+			}
+		}
+	}
+}
+*/
+
+
+func (dc *databaseCache) updateCountersSet(newVal interface{}, oldVal interface{}, refTable *tableCache ) {
+	var newValSet libovsdb.OvsSet
+	var oldValSet libovsdb.OvsSet
+	var ok bool
+	if newVal == nil {
+		newValSet = libovsdb.OvsSet{}
+	} else {
+		newValSet, ok = newVal.(libovsdb.OvsSet)
+		if !ok {
+			// TODO
+		}
+	}
+	if oldVal == nil {
+		oldValSet = libovsdb.OvsSet{}
+	} else {
+		oldValSet, ok = newVal.(libovsdb.OvsSet)
+		if !ok {
+			// TODO
+		}
+	}
+	for _, uuid := range newValSet.GoSet {
+		if !oldValSet.ContainElement(uuid) {
+			ovsUUID := uuid.(libovsdb.UUID)
+			cRow, ok := refTable.rows[ovsUUID.GoUUID]
+			if ok {
+				cRow.counter++
+			}
+		}
+	}
+	for _, uuid := range oldValSet.GoSet {
+		if !newValSet.ContainElement(uuid) {
+			ovsUUID := uuid.(libovsdb.UUID)
+			cRow, ok := refTable.rows[ovsUUID.GoUUID]
+			if ok {
+				cRow.counter--
+			}
+		}
+	}
+}
+
+func (dc *databaseCache) updateCountersMap(newVal interface{}, oldVal interface{}, refTable *tableCache ) {
+	var newValMap libovsdb.OvsMap
+	var oldValMap libovsdb.OvsMap
+	var ok bool
+	if newVal == nil {
+		newValMap = libovsdb.OvsMap{}
+	} else {
+		newValMap, ok = newVal.(libovsdb.OvsMap)
+		if !ok {
+			// TODO
+		}
+	}
+	if oldVal == nil {
+		oldValMap = libovsdb.OvsMap{}
+	} else {
+		oldValMap, ok = newVal.(libovsdb.OvsMap)
+		if !ok {
+			// TODO
+		}
+	}
+	for k, newV := range newValMap.GoMap {
+		oldV, ok := oldValMap.GoMap[k]
+		if !ok {
+			ovsUUID := newV.(libovsdb.UUID)
+			cRow, ok := refTable.rows[ovsUUID.GoUUID]
+			if ok {
+				cRow.counter++
+			}
+		} else {
+			if !reflect.DeepEqual(oldV, newV) {
+				ovsUUID := newV.(libovsdb.UUID)
+				cRow, ok := refTable.rows[ovsUUID.GoUUID]
+				if ok {
+					cRow.counter++
+				}
+				ovsUUID = oldV.(libovsdb.UUID)
+				cRow, ok = refTable.rows[ovsUUID.GoUUID]
+				if ok {
+					cRow.counter--
+				}
+			}
+		}
+	}
+	for k, oldV := range oldValMap.GoMap {
+		_, ok := newValMap.GoMap[k]
+		if !ok {
+			ovsUUID := oldV.(libovsdb.UUID)
+			cRow, ok := refTable.rows[ovsUUID.GoUUID]
+			if ok {
+				cRow.counter--
+			}
+		}
+	}
+}
+
+func (dc *databaseCache) updateCounters(newVal interface{}, oldVal interface{}, refTable *tableCache, columnType string) {
+	switch columnType {
+	case libovsdb.TypeSet:
+		dc.updateCountersSet(newVal, oldVal, refTable)
+	case libovsdb.TypeMap:
+		dc.updateCountersMap(newVal, oldVal, refTable)
+	case libovsdb.TypeUUID:
+		// TODO
+		default:
+			//TODO 
+	}
 }
 
 func (dc *databaseCache) updateRows(newRows map[common.Key]*cachedRow) {
@@ -180,10 +334,32 @@ func (dc *databaseCache) updateRows(newRows map[common.Key]*cachedRow) {
 		tb := dc.getTable(key.TableName)
 		if row == nil {
 			// delete event
-			// TODO update counters
+			oldRow, ok := tb.rows[key.UUID]
+			if !ok {
+				continue
+			}
+			for cName, destTable := range tb.refColumns {
+				val := oldRow.row.Fields[cName]
+				if val == nil {
+					continue
+				}
+				dTable := dc.getTable(destTable)
+				cSchema, _ := tb.tSchema.LookupColumn(cName)
+				dc.updateCounters(nil, val, dTable, cSchema.Type)
+			}
 			delete(tb.rows, key.UUID)
 		} else {
-			// TODO update counters
+			oldRow, ok := tb.rows[key.UUID]
+			for cName, destTable := range tb.refColumns {
+				newVal := row.row.Fields[cName]
+				dTable := dc.getTable(destTable)
+				cSchema, _ := tb.tSchema.LookupColumn(cName)
+				if ok {
+					dc.updateCounters(newVal, oldRow.row.Fields[cName], dTable, cSchema.Type)
+				} else {
+					dc.updateCounters(newVal, nil, dTable, cSchema.Type)
+				}
+			}
 			tb.rows[key.UUID] = *row
 		}
 	}

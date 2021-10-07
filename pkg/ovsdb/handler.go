@@ -276,7 +276,6 @@ func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) 
 		if !ok {
 			return nil, fmt.Errorf("there is no databaseSchema for %s", dbName)
 		}
-		ch.log.V(5).Info("MonitorCondChange 2")
 		for tableName, mcrArray := range mcrs {
 			key := common.NewTableKey(dbName, tableName)
 			_, ok := monitor.key2Updaters[key]
@@ -290,7 +289,6 @@ func (ch *Handler) MonitorCondChange(ctx context.Context, params []interface{}) 
 			if err != nil {
 				return nil, err
 			}
-			ch.log.V(5).Info("MonitorCondChange 2", "tableName", tableName)
 			for _, mcr := range mcrArray {
 				updater := mcrToUpdater(mcr, jsonValueString, tableSchema, monitorData.notificationType == ovsjson.Update, ch.log)
 				updaters = append(updaters, *updater)
