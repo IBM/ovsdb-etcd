@@ -102,13 +102,25 @@ func main() {
 	// databasePrefix and serviceName.
 	common.SetPrefix(*databasePrefix + common.KEY_DELIMITER + *serviceName)
 
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	exitCh := make(chan os.Signal, 1)
+	signal.Notify(exitCh,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT)
+	defer func() {
+		signal.Stop(exitCh)
+		cancel()
+	}()
+
 	if len(*etcdMembers) == 0 {
 		log.Info("Wrong ETCD members list", etcdMembers)
 		os.Exit(1)
 	}
 	etcdServers := strings.Split(*etcdMembers, ",")
-
-	cli, err := ovsdb.NewEtcdClient(etcdServers, *keepAliveTime, *keepAliveTimeout)
+	cli, err := ovsdb.NewEtcdClient(ctx, etcdServers, *keepAliveTime, *keepAliveTimeout)
 	if err != nil {
 		log.Error(err, "failed creating an etcd client")
 		os.Exit(1)
@@ -131,6 +143,8 @@ func main() {
 	}()
 
 	db, _ := ovsdb.NewDatabaseEtcd(cli, log)
+
+
 	err = db.AddSchema(path.Join(*schemaBasedir, "_server.ovsschema"))
 	if err != nil {
 		log.Error(err, "failed to add _server schema")

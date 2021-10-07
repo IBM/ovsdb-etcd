@@ -631,14 +631,9 @@ func (u *updater) compareSets(data, prevData interface{}, columnSchema *libovsdb
 	return &deltaSet, nil
 }
 
-func (u *updater) prepareInitialRow(value *[]byte) (*ovsjson.RowUpdate, string, error) {
+func (u *updater) prepareInitialRow(row libovsdb.Row) (*ovsjson.RowUpdate, string, error) {
 	if !libovsdb.MSIsTrue(u.mcr.Select.Initial) {
 		return nil, "", nil
-	}
-	var row libovsdb.Row
-	err := row.UnmarshalJSON(*value)
-	if err != nil {
-		return nil, "", err
 	}
 	data, uuid, err := u.prepareRow(&row)
 	if err != nil {

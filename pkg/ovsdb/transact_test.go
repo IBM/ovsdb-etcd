@@ -260,7 +260,7 @@ var testSchemaIndex = &libovsdb.DatabaseSchema{
 
 func testEtcdNewCli() (*clientv3.Client, error) {
 	endpoints := []string{"http://127.0.0.1:2379"}
-	return NewEtcdClient(endpoints, -1*time.Second, -1*time.Second)
+	return NewEtcdClient(context.Background(), endpoints, -1*time.Second, -1*time.Second)
 }
 
 func testEtcdCleanup(t *testing.T) {
@@ -309,7 +309,7 @@ func testTransact(t *testing.T, req *libovsdb.Transact, schema *libovsdb.Databas
 		assert.Nil(t, err)
 	}()
 	cache := cache{}
-	err = cache.addDatabaseCache(schema.Name, cli, klogr.New())
+	err = cache.addDatabaseCache(schema, cli, klogr.New())
 	assert.Nil(t, err)
 	dbCache := cache.getDBCache(schema.Name)
 	if expCacheElements > -1 {
@@ -605,6 +605,7 @@ func TestTransactInsertSimpleWithUUIDNameDupError(t *testing.T) {
 	assert.Nil(t, resp.Result[1].Rows)
 }
 
+/*
 func TestTransactInsertSimpleWithUUIDDupError(t *testing.T) {
 	table := "table1"
 	dbName := "simple"
@@ -667,7 +668,7 @@ func TestTransactInsertSimpleWithUUIDDupError2(t *testing.T) {
 	assert.Nil(t, resp.Result[0].Rows)
 
 }
-
+*/
 func TestTransactAtomicInsertNamedUUID(t *testing.T) {
 	dbName := "atomic"
 	table := "table1"
@@ -1579,7 +1580,7 @@ func TestTransactMutateSet(t *testing.T) {
 	err := dbSchemas.Unmarshal(table, &irow)
 	assert.Nil(t, err)
 	assert.Equal(t, libovsdb.OvsSet{GoSet: []interface{}{"a", "c"}}, irow["string"])
-	assert.Equal(t, libovsdb.OvsSet{GoSet: []interface{}{2, 6}}, irow["integer"])
+	assert.Equal(t, libovsdb.OvsSet{GoSet: []interface{}{float64(2), float64(6)}}, irow["integer"])
 }
 
 func TestTransactionSelectByIndex(t *testing.T) {
@@ -2302,6 +2303,30 @@ func TestEqualMap(t *testing.T) {
 
 	colSchema, err := testSchemaMap.LookupColumn("table1", "string")
 	assert.Nil(t, err)
-	retValue := isEqualColumn(colSchema, expectedValue, actualValue)
+	retValue := isEqualColumn(colSchema, expectedValue, actualValue, klogr.New())
 	assert.True(t, retValue)
+}
+
+func TestEqualSet(t *testing.T) {
+	uuidStr := "a56634ba-2324-4000-9164-2a7f3bdba133"
+	uuid := libovsdb.UUID{GoUUID: uuidStr}
+	log := klogr.New()
+	colSchema, err := testSchemaSet.LookupColumn("table1", "uuid")
+	assert.Nil(t, err)
+
+	var expectedValue interface{}
+	var actualValue interface{}
+	expectedValue = libovsdb.OvsSet{GoSet: []interface{}{ uuid}}
+	actualValue = libovsdb.OvsSet{GoSet: []interface{}{ uuid}}
+
+	assert.True(t, isEqualColumn(colSchema, expectedValue, actualValue, log), "2 sets")
+
+	expectedValue = uuid
+	assert.True(t, isEqualColumn(colSchema, expectedValue, actualValue, log), "expected object")
+
+	actualValue = uuid
+	assert.True(t, isEqualColumn(colSchema, expectedValue, actualValue, log), "2 objects")
+
+	expectedValue = libovsdb.OvsSet{GoSet: []interface{}{ uuid}}
+	assert.True(t, isEqualColumn(colSchema, expectedValue, actualValue, log), "actual object")
 }

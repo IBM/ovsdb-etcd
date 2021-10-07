@@ -70,9 +70,10 @@ func (l *lock) cancel() {
 
 var EtcdClientTimeout = time.Second
 
-func NewEtcdClient(endpoints []string, keepAliveTime, keepAliveTimeout time.Duration) (*clientv3.Client, error) {
+func NewEtcdClient(ctx context.Context, endpoints []string, keepAliveTime, keepAliveTimeout time.Duration) (*clientv3.Client, error) {
 	cfg := clientv3.Config{
 		Endpoints:          endpoints,
+		Context:            ctx,
 		DialTimeout:        30 * time.Second,
 		MaxCallSendMsgSize: 120 * 1024 * 1024,
 		MaxCallRecvMsgSize: 0, /* max */
@@ -112,18 +113,22 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 	if err != nil {
 		return err
 	}
+	err = con.schemas.AddFromBytes(data)
+	if err != nil {
+		return err
+	}
+
+	// we need this map[string]interface{} schema representation to correctly serve get get-schema calls.
+	// TODO check possibility to combine with the schemas objects.
 	schemaMap := map[string]interface{}{}
 	err = json.Unmarshal(data, &schemaMap)
 	if err != nil {
 		return err
 	}
-	err = con.schemas.AddFromBytes(data)
-	if err != nil {
-		return err
-	}
 	schemaName := schemaMap["name"].(string)
 	con.strSchemas[schemaName] = schemaMap
-	err = con.cache.addDatabaseCache(schemaName, con.cli, con.log)
+
+	err = con.cache.addDatabaseCache(con.schemas[schemaName], con.cli, con.log)
 	if err != nil {
 		return err
 	}
@@ -161,7 +166,7 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 		return err
 	}
 	kv := mvccpb.KeyValue{Key: []byte(key.String()), Value: val}
-	dbCache.putEtcdKV([]*mvccpb.KeyValue{&kv})
+	dbCache.storeValues([]*mvccpb.KeyValue{&kv})
 
 	return nil
 }
