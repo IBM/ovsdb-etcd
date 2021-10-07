@@ -222,8 +222,8 @@ func (s *Service) ListDbs(ctx context.Context, param interface{}) ([]string, err
 		return nil, err
 	}
 	tCache := dbCache.getTable(INT_DATABASES)
-	dbs := make([]string, 0, len(*tCache))
-	for key, _ := range *tCache {
+	dbs := make([]string, 0, len(tCache.rows))
+	for key, _ := range tCache.rows {
 		dbs = append(dbs, key)
 	}
 	klog.V(5).Infof("ListDbs returned %v", dbs)

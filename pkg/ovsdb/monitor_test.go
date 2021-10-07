@@ -290,7 +290,7 @@ func createTestTableSchema() *libovsdb.TableSchema {
 	}
 	return &tableSchema
 }
-
+/*
 func TestMonitorPrepareInitialRow(t *testing.T) {
 	tableSchema := createTestTableSchema()
 	data := map[string]interface{}{"c1": "v1", "c2": "v2"}
@@ -333,7 +333,7 @@ func testMonitorPrepareInitialRow_(t *testing.T, tableSchema *libovsdb.TableSche
 	assert.Nil(t, err)
 	assert.Equal(t, expRow, row)
 }
-
+*/
 func TestMonitorPrepareInsertRow(t *testing.T) {
 	tableSchema := createTestTableSchema()
 	expectedUUID := guuid.NewString()

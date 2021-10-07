@@ -101,6 +101,10 @@ func (o *OvsSet) Equals(target OvsSet) bool {
 	return len(o.GoSet) == len(target.GoSet) && o.IncludeSet(target)
 }
 
+func (o *OvsSet) EqualsToValue(val interface{}) bool {
+	return len(o.GoSet) == 1 && reflect.DeepEqual(o.GoSet[0], val)
+}
+
 func (o *OvsSet) containElement(expectedVal interface{}) bool {
 	for _, actualVal := range o.GoSet {
 		if reflect.DeepEqual(expectedVal, actualVal) {

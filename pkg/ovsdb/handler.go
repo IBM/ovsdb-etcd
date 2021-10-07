@@ -542,8 +542,8 @@ func (ch *Handler) getMonitoredData(dbName string, updatersMap Key2Updaters) (ov
 		return nil, err
 	}
 	returnData := ovsjson.TableUpdates{}
-	dbCache.mu.Lock()
-	defer dbCache.mu.Unlock()
+	dbCache.mu.RLock()
+	defer dbCache.mu.RUnlock()
 	for tableKey, updaters := range updatersMap {
 		if len(updaters) == 0 {
 			// nothing to update
@@ -557,8 +557,8 @@ func (ch *Handler) getMonitoredData(dbName string, updatersMap Key2Updaters) (ov
 			if !libovsdb.MSIsTrue(updater.mcr.Select.Initial) {
 				continue
 			}
-			for _, kv := range *tableCache {
-				row, uuid, err := updater.prepareInitialRow(&kv.Value)
+			for _, r := range tableCache.rows {
+				row, uuid, err := updater.prepareInitialRow(r.row)
 				if err != nil {
 					ch.log.Error(err, "prepareInitialRow returned")
 					return nil, err
