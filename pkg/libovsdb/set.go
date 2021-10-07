@@ -105,7 +105,7 @@ func (o *OvsSet) EqualsToValue(val interface{}) bool {
 	return len(o.GoSet) == 1 && reflect.DeepEqual(o.GoSet[0], val)
 }
 
-func (o *OvsSet) containElement(expectedVal interface{}) bool {
+func (o *OvsSet) ContainElement(expectedVal interface{}) bool {
 	for _, actualVal := range o.GoSet {
 		if reflect.DeepEqual(expectedVal, actualVal) {
 			return true
@@ -116,7 +116,7 @@ func (o *OvsSet) containElement(expectedVal interface{}) bool {
 
 func (o *OvsSet) IncludeSet(target OvsSet) bool {
 	for _, targetElement := range target.GoSet {
-		if !o.containElement(targetElement) {
+		if !o.ContainElement(targetElement) {
 			return false
 		}
 	}
@@ -125,7 +125,7 @@ func (o *OvsSet) IncludeSet(target OvsSet) bool {
 
 func (o *OvsSet) ExcludeSet(target OvsSet) bool {
 	for _, targetElement := range target.GoSet {
-		if o.containElement(targetElement) {
+		if o.ContainElement(targetElement) {
 			return false
 		}
 	}
