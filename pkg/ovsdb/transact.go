@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"sort"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -594,56 +593,6 @@ func (txn *Transaction) isSpecificRowSelected(ovsOp *libovsdb.Operation) (bool, 
 		}
 	}
 	return false, nil
-}
-
-func (txn *Transaction) lockTables() error {
-	var tables []string
-	tMap := make(map[string]bool)
-	for _, op := range txn.request.Operations {
-		switch op.Op {
-		case libovsdb.OperationDelete, libovsdb.OperationUpdate, libovsdb.OperationMutate:
-			ok, err := txn.isSpecificRowSelected(&op)
-			if err != nil {
-				return err
-			}
-			if ok {
-				// uuid selected, we don't need to lock tables
-				continue
-			}
-			if _, value := tMap[*op.Table]; !value {
-				tMap[*op.Table] = true
-				tables = append(tables, *op.Table)
-			}
-		default:
-			// do nothing
-		}
-	}
-	if len(tables) > 0 {
-		// we have to sort to prevent deadlocks
-		sort.Strings(tables)
-		session, err := concurrency.NewSession(txn.etcdTrx.cli, concurrency.WithContext(txn.etcdTrx.ctx))
-		if err != nil {
-			return err
-		}
-		txn.session = session
-		for _, table := range tables {
-			key := common.NewLockKey("__" + table)
-			mutex := concurrency.NewMutex(session, key.String())
-			err = mutex.Lock(txn.etcdTrx.ctx)
-			if err != nil {
-				// TODO unmute locks
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (txn *Transaction) unLockTables() error {
-	if txn.session != nil {
-		return txn.session.Close()
-	}
-	return nil
 }
 
 // XXX: move to db
