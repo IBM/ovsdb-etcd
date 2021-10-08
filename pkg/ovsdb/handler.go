@@ -83,25 +83,16 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	ch.mu.RLock()
 	monitor, thereIsMonitor := ch.monitors[txn.request.DBName]
 	ch.mu.RUnlock()
-	err = txn.lockTables()
-	if err != nil {
-		return nil, err
-	}
 	if thereIsMonitor {
 		monitor.tQueue.startTransaction()
 	}
 	rev, errC := txn.Commit()
-	err = txn.unLockTables()
-	if errC != nil || err != nil {
+	if errC != nil {
 		if thereIsMonitor {
 			monitor.tQueue.abortTransaction()
 		}
-		if errC != nil {
-			txn.log.Error(errC, "commit returned")
-			return nil, errC
-		}
-		txn.log.Error(err, "unlock returned")
-		return nil, err
+		txn.log.Error(errC, "commit returned")
+		return nil, errC
 	}
 	if thereIsMonitor {
 		// we have to guarantee that a new monitor call if it runs concurrently with the transaction, returns first
