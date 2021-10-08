@@ -174,6 +174,9 @@ func (mapUUID *namedUUIDResolver) ResolveRow(row *map[string]interface{}, log lo
 	return nil
 }
 
+// table->uuid->count
+type refCounter map[string]map[string]int
+
 type etcdTransaction struct {
 	cli  *clientv3.Client
 	ctx  context.Context
@@ -281,7 +284,7 @@ type Transaction struct {
 	// per transaction cache [tableName]->[key]->value
 	localCache *localCache
 	mapUUID    namedUUIDResolver
-
+	refCounter refCounter
 	/* etcdTrx */
 	etcdTrx *etcdTransaction
 
@@ -295,6 +298,7 @@ func NewTransaction(ctx context.Context, cli *clientv3.Client, request *libovsdb
 	txn.log.V(5).Info("new transaction", "size", len(request.Operations), "request", request)
 	txn.cache = cache
 	txn.mapUUID = namedUUIDResolver{}
+	txn.refCounter = refCounter{}
 	txn.schema = schema
 	txn.request = *request
 	txn.localCache = &localCache{}
@@ -1018,6 +1022,20 @@ func (txn *Transaction) doSelectDelete(ovsOp *libovsdb.Operation, ovsResult *lib
 		if ovsOp.Op == libovsdb.OperationDelete {
 			etcdOp := clientv3.OpDelete(string(cRow.key))
 			txn.etcdTrx.appendThen(etcdOp)
+			tableSchema, e := txn.schema.LookupTable(*ovsOp.Table)
+			if e != nil {
+				err = errors.New(E_INTERNAL_ERROR)
+				return
+			}
+			for cName, destTable := range tCache.refColumns {
+				val := cRow.row.Fields[cName]
+				if val == nil {
+					continue
+				}
+				dTable := txn.cache.getTable(destTable)
+				cSchema, _ := tableSchema.LookupColumn(cName)
+
+			}
 			ovsResult.IncrementCount()
 		} else if ovsOp.Op == libovsdb.OperationSelect {
 			resultRow, e := reduceRowByColumns(&cRow.row.Fields, ovsOp.Columns)
