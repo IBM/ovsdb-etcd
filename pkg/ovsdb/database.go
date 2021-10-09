@@ -26,6 +26,7 @@ type Databaser interface {
 	GetSchema(dbName string) map[string]interface{}
 	GetDBSchema(dbName string) (*libovsdb.DatabaseSchema, bool)
 	GetDBCache(dbName string) (*databaseCache, error)
+	GetServerID() string
 }
 
 type DatabaseEtcd struct {
@@ -35,6 +36,7 @@ type DatabaseEtcd struct {
 	cache      cache
 	schemas    libovsdb.Schemas // dataBaseName -> schema
 	strSchemas map[string]map[string]interface{}
+	serverID   string
 }
 
 type Locker interface {
@@ -90,7 +92,7 @@ func NewEtcdClient(endpoints []string, keepAliveTime, keepAliveTimeout time.Dura
 
 func NewDatabaseEtcd(cli *clientv3.Client, log logr.Logger) (Databaser, error) {
 	return &DatabaseEtcd{cli: cli, log: log, cache: cache{},
-		schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}}, nil
+		schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}, serverID: uuid.NewString()}, nil
 }
 
 func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error) {
@@ -129,8 +131,29 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 	if err != nil {
 		return err
 	}
-	srv := _Server.Database{Model: "standalone", Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
-		Connected: true, Leader: true, Schema: *schemaSet, Version: libovsdb.UUID{GoUUID: uuid.NewString()}}
+	var srv _Server.Database
+	if schemaName == INT_SERVER {
+		srv = _Server.Database{Model: "standalone", Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
+			Connected: true, Leader: true, Schema: *schemaSet, Version: libovsdb.UUID{GoUUID: uuid.NewString()},
+		}
+	} else {
+		sidSet, err := libovsdb.NewOvsSet(libovsdb.UUID{GoUUID: con.GetServerID()})
+		if err != nil {
+			return err
+		}
+		cid, err := con.getClusterID()
+		if err != nil {
+			return err
+		}
+		cidSet, err := libovsdb.NewOvsSet(libovsdb.UUID{GoUUID: cid})
+		if err != nil {
+			return err
+		}
+		srv = _Server.Database{Model: "clustered", Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
+			Connected: true, Leader: true, Schema: *schemaSet, Version: libovsdb.UUID{GoUUID: uuid.NewString()},
+			Sid: *sidSet, Cid: *cidSet}
+	}
+
 	key := common.NewDataKey(INT_SERVER, INT_DATABASES, schemaName)
 	dbCache := con.cache.getDBCache(INT_SERVER)
 	val, err := json.Marshal(srv)
@@ -141,6 +164,20 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 	dbCache.putEtcdKV([]*mvccpb.KeyValue{&kv})
 
 	return nil
+}
+
+func (con *DatabaseEtcd) getClusterID() (string, error) {
+	cidKey := common.NewTableKey(INT_SERVER, INT_ClusterIDs).String()
+	cidTmpValue := uuid.NewString()
+	resp, err := con.cli.Txn(context.Background()).If(clientv3.Compare(clientv3.CreateRevision(cidKey), "=", 0)).Then(clientv3.OpPut(cidKey, cidTmpValue)).Else(clientv3.OpGet(cidKey)).Commit()
+	if err != nil {
+		return "", err
+	}
+	if resp.Succeeded {
+		return cidTmpValue, nil
+	} else {
+		return string(resp.Responses[0].GetResponseRange().Kvs[0].Value), nil
+	}
 }
 
 func (con *DatabaseEtcd) GetDBSchema(dbName string) (*libovsdb.DatabaseSchema, bool) {
@@ -209,6 +246,10 @@ func (con *DatabaseEtcd) CreateMonitor(dbName string, handler *Handler, log logr
 	return m
 }
 
+func (con *DatabaseEtcd) GetServerID() string {
+	return con.serverID
+}
+
 type EventKeyValue struct {
 	Key            string `json:"key"`
 	CreateRevision int64  `json:"create_revision"`
@@ -243,6 +284,7 @@ type DatabaseMock struct {
 	Error    error
 	Ok       bool
 	mu       sync.Mutex
+	ServerID string
 }
 
 type LockerMock struct {
@@ -269,7 +311,7 @@ func (l *LockerMock) cancel() {
 }
 
 func NewDatabaseMock() (Databaser, error) {
-	return &DatabaseMock{}, nil
+	return &DatabaseMock{ServerID: uuid.NewString()}, nil
 }
 
 func (con *DatabaseMock) GetLock(ctx context.Context, id string) (Locker, error) {
@@ -311,4 +353,8 @@ func (con *DatabaseMock) CreateMonitor(dbName string, handler *Handler, log logr
 func (con *DatabaseMock) GetDBCache(dbName string) (*databaseCache, error) {
 	// TODO
 	return nil, nil
+}
+
+func (con *DatabaseMock) GetServerID() string {
+	return con.ServerID
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/google/uuid"
 	"k8s.io/klog/v2"
 
 	"github.com/ibm/ovsdb-etcd/pkg/ovsjson"
@@ -206,8 +205,9 @@ type Servicer interface {
 }
 
 const (
-	INT_SERVER    = "_Server"
-	INT_DATABASES = "Database"
+	INT_SERVER     = "_Server"
+	INT_DATABASES  = "Database"
+	INT_ClusterIDs = "CID"
 )
 
 type Service struct {
@@ -254,7 +254,7 @@ func (s *Service) GetSchema(ctx context.Context, param interface{}) (interface{}
 
 func (s *Service) GetServerId(ctx context.Context) string {
 	klog.V(5).Infof("GetServerId request")
-	return s.uuid
+	return s.db.GetServerID()
 }
 
 func (s *Service) Convert(ctx context.Context, param interface{}) (interface{}, error) {
@@ -264,7 +264,6 @@ func (s *Service) Convert(ctx context.Context, param interface{}) (interface{}, 
 
 func NewService(db Databaser) *Service {
 	return &Service{
-		db:   db,
-		uuid: uuid.NewString(),
+		db: db,
 	}
 }
