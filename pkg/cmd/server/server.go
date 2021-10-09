@@ -115,19 +115,6 @@ func main() {
 		err := cli.Close()
 		log.Error(err, "cli close")
 	}()
-
-	db, _ := ovsdb.NewDatabaseEtcd(cli, log)
-	err = db.AddSchema(path.Join(*schemaBasedir, "_server.ovsschema"))
-	if err != nil {
-		log.Error(err, "failed to add _server schema")
-		os.Exit(1)
-	}
-	err = db.AddSchema(path.Join(*schemaBasedir, *schemaFile))
-	if err != nil {
-		log.Error(err, "failed to add schema", "schema file", *schemaFile)
-		os.Exit(1)
-	}
-
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	exitCh := make(chan os.Signal, 1)
@@ -140,6 +127,20 @@ func main() {
 		signal.Stop(exitCh)
 		cancel()
 	}()
+
+	db, _ := ovsdb.NewDatabaseEtcd(cli, log)
+	err = db.AddSchema(path.Join(*schemaBasedir, "_server.ovsschema"))
+	if err != nil {
+		log.Error(err, "failed to add _server schema")
+		os.Exit(1)
+	}
+
+	err = db.AddSchema(path.Join(*schemaBasedir, *schemaFile))
+	if err != nil {
+		log.Error(err, "failed to add schema", "schema file", *schemaFile)
+		os.Exit(1)
+	}
+
 	servOptions := &jrpc2.ServerOptions{
 		Concurrency: *maxTasks,
 		Metrics:     metrics.New(),
