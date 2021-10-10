@@ -542,8 +542,8 @@ func (ch *Handler) getMonitoredData(dbName string, updatersMap Key2Updaters) (ov
 		return nil, err
 	}
 	returnData := ovsjson.TableUpdates{}
-	dbCache.mu.Lock()
-	defer dbCache.mu.Unlock()
+	dbCache.mu.RLock()
+	defer dbCache.mu.RUnlock()
 	for tableKey, updaters := range updatersMap {
 		if len(updaters) == 0 {
 			// nothing to update

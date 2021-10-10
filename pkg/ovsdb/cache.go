@@ -15,7 +15,7 @@ import (
 type cache map[string]*databaseCache
 
 type databaseCache struct {
-	mu      sync.Mutex
+	mu      sync.RWMutex
 	dbCache map[string]tableCache
 	// cancel function to close the etcdTrx watcher
 	cancel context.CancelFunc

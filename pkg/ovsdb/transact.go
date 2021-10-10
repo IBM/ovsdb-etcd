@@ -358,8 +358,8 @@ Loop:
 	}
 
 	processOperations := func() error {
-		txn.cache.mu.Lock()
-		defer txn.cache.mu.Unlock()
+		txn.cache.mu.RLock()
+		defer txn.cache.mu.RUnlock()
 		// insert name-uuid preprocessing
 		for i, ovsOp := range txn.request.Operations {
 			if ovsOp.Op == libovsdb.OperationInsert {
