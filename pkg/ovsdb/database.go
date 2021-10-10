@@ -128,20 +128,24 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 	schemaName := schemaMap["name"].(string)
 	con.strSchemas[schemaName] = schemaMap
 
-	err = con.cache.addDatabaseCache(con.schemas[schemaName], con.cli, con.log)
-	if err != nil {
-		return err
-	}
 	schemaSet, err := libovsdb.NewOvsSet(string(data))
 	if err != nil {
 		return err
 	}
 	var srv _Server.Database
 	if schemaName == INT_SERVER {
+		err = con.cache.addDatabaseCache(con.schemas[schemaName], nil, con.log)
+		if err != nil {
+			return err
+		}
 		srv = _Server.Database{Model: "standalone", Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
 			Connected: true, Leader: true, Schema: *schemaSet, Version: libovsdb.UUID{GoUUID: uuid.NewString()},
 		}
 	} else {
+		err = con.cache.addDatabaseCache(con.schemas[schemaName], con.cli, con.log)
+		if err != nil {
+			return err
+		}
 		sidSet, err := libovsdb.NewOvsSet(libovsdb.UUID{GoUUID: con.GetServerID()})
 		if err != nil {
 			return err

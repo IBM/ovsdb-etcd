@@ -177,6 +177,25 @@ func (mapUUID *namedUUIDResolver) ResolveRow(row *map[string]interface{}, log lo
 // table->uuid->count
 type refCounter map[string]map[string]int
 
+func (rc refCounter) updateCounters (tableName string, newCounters map[string]int) {
+	if len(newCounters) == 0 {
+		return
+	}
+	table, ok := rc[tableName]
+	if !ok {
+		rc[tableName] = newCounters
+		return
+	}
+	for uuid, count := range newCounters {
+		oldCounter, ok := table[uuid]
+		if !ok {
+			table[uuid] = count
+		} else {
+			table[uuid] = oldCounter + count
+		}
+	}
+}
+
 type etcdTransaction struct {
 	cli  *clientv3.Client
 	ctx  context.Context
@@ -311,6 +330,45 @@ func NewTransaction(ctx context.Context, cli *clientv3.Client, request *libovsdb
 	return txn, nil
 }
 
+func (txn *Transaction) reset() {
+	txn.etcdTrx.clear()
+	txn.response.Result = make([]libovsdb.OperationResult, len(txn.request.Operations))
+	txn.localCache = &localCache{}
+	txn.refCounter = refCounter{}
+}
+
+func (txn *Transaction) gc() {
+	rc := txn.refCounter
+	txn.refCounter = refCounter{}
+	for table, val := range rc {
+		tCache := txn.cache.getTable(table)
+		for uuid, count := range val {
+			cRow, ok := tCache.rows[uuid]
+			if !ok {
+				txn.log.V(1).Info("reference to non existing row", "table", table, "uuid", uuid)
+			} else{
+				if cRow.counter + count == 0 {
+					// TODO check and remove references from this value
+					etcdOp := clientv3.OpDelete(string(cRow.key))
+					txn.etcdTrx.appendThen(etcdOp)
+					for cName, destTable := range tCache.refColumns {
+						val := cRow.row.Fields[cName]
+						if val == nil {
+							continue
+						}
+						cSchema, _ := txn.schema.LookupColumn(table, cName)
+						txn.refCounter.updateCounters(destTable, tCache.checkCounters(nil, val, cSchema.Type))
+					}
+
+				}
+			}
+		}
+	}
+	if len(txn.refCounter) > 0 {
+		txn.gc()
+	}
+}
+
 func (txn *Transaction) getGenerateUUID(ovsOp *libovsdb.Operation) (string, error) {
 	var uuid string
 	if ovsOp.UUID != nil {
@@ -410,9 +468,7 @@ Loop:
 		}
 		txn.log.V(5).Info(E_CONCURRENCY_ERROR, "trx", txn.etcdTrx.String())
 		// let's try again
-		txn.etcdTrx.clear()
-		txn.response.Result = make([]libovsdb.OperationResult, len(txn.request.Operations))
-		txn.localCache = &localCache{}
+		txn.reset()
 		time.Sleep(time.Duration(i*5) * time.Millisecond)
 	}
 	if !trResponse.Succeeded {
@@ -878,6 +934,15 @@ func (txn *Transaction) doInsert(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 	txn.etcdTrx.appendIf(cmp)
 	etcdOp := clientv3.OpPut(k, val)
 	txn.etcdTrx.appendThen(etcdOp)
+	tCache := txn.cache.getTable(*ovsOp.Table)
+	for cName, destTable := range tCache.refColumns {
+		cVal := (*row)[cName]
+		if cVal == nil {
+			continue
+		}
+		cSchema, _ := tableSchema.LookupColumn(cName)
+		txn.refCounter.updateCounters(destTable, tCache.checkCounters(cVal, nil, cSchema.Type))
+	}
 	return
 }
 
@@ -922,6 +987,12 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 		if err != nil {
 			return
 		}
+		for cName, destTable := range tCache.refColumns {
+			newVal := (*newRow)[cName]
+			oldVal := row[cName]
+			cSchema, _ := tableSchema.LookupColumn(cName)
+			txn.refCounter.updateCounters(destTable, tCache.checkCounters(newVal, oldVal, cSchema.Type))
+		}
 		ovsResult.IncrementCount()
 	}
 
@@ -965,12 +1036,6 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 			// the row was modified by this transaction, we handled it above
 			continue
 		}
-		/*row := map[string]interface{}{}
-		err = json.Unmarshal(kv.Value, &row)
-		if err != nil {
-			txn.log.Error(err, "failed to unmarshal row", "kv.Key", string(kv.Key), "kv.Value", string(kv.Value))
-			return
-		}*/
 		if uuid == "" || len(conditions) > 1 {
 			// there are other conditions in addition or instead of _uuid
 			ok, err = conditions.isRowSelected(&cRow.row.Fields)
@@ -1032,9 +1097,8 @@ func (txn *Transaction) doSelectDelete(ovsOp *libovsdb.Operation, ovsResult *lib
 				if val == nil {
 					continue
 				}
-				dTable := txn.cache.getTable(destTable)
 				cSchema, _ := tableSchema.LookupColumn(cName)
-
+				txn.refCounter.updateCounters(destTable, tCache.checkCounters(nil, val, cSchema.Type))
 			}
 			ovsResult.IncrementCount()
 		} else if ovsOp.Op == libovsdb.OperationSelect {
