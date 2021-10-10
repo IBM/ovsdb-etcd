@@ -17,8 +17,10 @@ import (
 
 type cachedRow struct {
 	row     libovsdb.Row
+	// etcd version of the row data
 	version int64
 	key     string
+	// number of references to the row, relevant to rows in none root tables.
 	counter int
 }
 
@@ -38,6 +40,7 @@ func newDatabaseCache(dSchema *libovsdb.DatabaseSchema, log logr.Logger) databas
 	return dCache
 }
 
+// stores row indexed by uuid, except _Server.Database entries, which are indexed by database name.
 type tableCache struct {
 	rows       map[string]cachedRow
 	tSchema    *libovsdb.TableSchema
@@ -90,7 +93,8 @@ func (c *cache) addDatabaseCache(dbSchema *libovsdb.DatabaseSchema, etcdClient *
 	}
 	dbCache := newDatabaseCache(dbSchema, log)
 	(*c)[dbName] = &dbCache
-	if dbName == INT_SERVER {
+	// we don't need etcd watcher
+	if etcdClient == nil {
 		return nil
 	}
 	ctxt := context.Background()
@@ -258,7 +262,7 @@ func (dc *databaseCache) updateCountersSet(newVal interface{}, oldVal interface{
 	}
 }
 
-func (dc *databaseCache) checkCountersSet(newVal interface{}, oldVal interface{}, refTable *tableCache ) {
+func (tc *tableCache) checkCountersSet(newVal interface{}, oldVal interface{} ) map[string]int {
 	var newValSet libovsdb.OvsSet
 	var oldValSet libovsdb.OvsSet
 	var ok bool
@@ -278,16 +282,20 @@ func (dc *databaseCache) checkCountersSet(newVal interface{}, oldVal interface{}
 			// TODO
 		}
 	}
-	gcValues := map[string]string{}
+	counters := map[string]int{}
+	for _, uuid := range newValSet.GoSet {
+		if !oldValSet.ContainElement(uuid) {
+			ovsUUID := uuid.(libovsdb.UUID)
+			counters[ovsUUID.GoUUID]++
+		}
+	}
 	for _, uuid := range oldValSet.GoSet {
 		if !newValSet.ContainElement(uuid) {
 			ovsUUID := uuid.(libovsdb.UUID)
-			cRow, ok := refTable.rows[ovsUUID.GoUUID]
-			if ok {
-				cRow.counter
-			}
+			counters[ovsUUID.GoUUID]--
 		}
 	}
+	return counters
 }
 
 func (dc *databaseCache) updateCountersMap(newVal interface{}, oldVal interface{}, refTable *tableCache ) {
@@ -345,6 +353,52 @@ func (dc *databaseCache) updateCountersMap(newVal interface{}, oldVal interface{
 	}
 }
 
+func (tc *tableCache) checkCountersMap(newVal interface{}, oldVal interface{}) map[string]int {
+	var newValMap libovsdb.OvsMap
+	var oldValMap libovsdb.OvsMap
+	var ok bool
+	if newVal == nil {
+		newValMap = libovsdb.OvsMap{}
+	} else {
+		newValMap, ok = newVal.(libovsdb.OvsMap)
+		if !ok {
+			// TODO
+		}
+	}
+	if oldVal == nil {
+		oldValMap = libovsdb.OvsMap{}
+	} else {
+		oldValMap, ok = newVal.(libovsdb.OvsMap)
+		if !ok {
+			// TODO
+		}
+	}
+	counters := map[string]int{}
+	for k, newV := range newValMap.GoMap {
+		oldV, ok := oldValMap.GoMap[k]
+		if !ok {
+			ovsUUID := newV.(libovsdb.UUID)
+			counters[ovsUUID.GoUUID]++
+		} else {
+			if !reflect.DeepEqual(oldV, newV) {
+				ovsUUID := newV.(libovsdb.UUID)
+				counters[ovsUUID.GoUUID]++
+				ovsUUID = oldV.(libovsdb.UUID)
+				counters[ovsUUID.GoUUID]--
+			}
+		}
+	}
+	for k, oldV := range oldValMap.GoMap {
+		_, ok := newValMap.GoMap[k]
+		if !ok {
+			ovsUUID := oldV.(libovsdb.UUID)
+			ovsUUID = oldV.(libovsdb.UUID)
+			counters[ovsUUID.GoUUID]--
+		}
+	}
+	return counters
+}
+
 func (dc *databaseCache) updateCounters(newVal interface{}, oldVal interface{}, refTable *tableCache, columnType string) {
 	switch columnType {
 	case libovsdb.TypeSet:
@@ -358,12 +412,12 @@ func (dc *databaseCache) updateCounters(newVal interface{}, oldVal interface{}, 
 	}
 }
 
-func (dc *databaseCache) checkCounters(newVal interface{}, oldVal interface{}, refTable *tableCache, columnType string) map[string]string {
+func (tc *tableCache) checkCounters(newVal interface{}, oldVal interface{}, columnType string) map[string]int {
 	switch columnType {
 	case libovsdb.TypeSet:
-		dc.updateCountersSet(newVal, oldVal, refTable)
+		return tc.checkCountersSet(newVal, oldVal)
 	case libovsdb.TypeMap:
-		dc.updateCountersMap(newVal, oldVal, refTable)
+		return tc.checkCountersMap(newVal, oldVal)
 	case libovsdb.TypeUUID:
 	// TODO
 	default:

@@ -127,18 +127,6 @@ func main() {
 		err := cli.Close()
 		log.Error(err, "cli close")
 	}()
-	ctx := context.Background()
-	ctx, cancel := context.WithCancel(ctx)
-	exitCh := make(chan os.Signal, 1)
-	signal.Notify(exitCh,
-		syscall.SIGHUP,
-		syscall.SIGINT,
-		syscall.SIGTERM,
-		syscall.SIGQUIT)
-	defer func() {
-		signal.Stop(exitCh)
-		cancel()
-	}()
 
 	db, _ := ovsdb.NewDatabaseEtcd(cli, log)
 
