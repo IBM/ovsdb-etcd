@@ -32,12 +32,12 @@ type databaseCache struct {
 	log     logr.Logger
 }
 
-func newDatabaseCache(dSchema *libovsdb.DatabaseSchema, log logr.Logger) databaseCache {
+func newDatabaseCache(dSchema *libovsdb.DatabaseSchema, log logr.Logger) *databaseCache {
 	dCache := databaseCache{dbCache: map[string]tableCache{}, log: log}
 	for tName := range dSchema.Tables {
 		dCache.dbCache[tName] = newTableCache(tName, dSchema)
 	}
-	return dCache
+	return &dCache
 }
 
 // stores row indexed by uuid, except _Server.Database entries, which are indexed by database name.
@@ -92,7 +92,7 @@ func (c *cache) addDatabaseCache(dbSchema *libovsdb.DatabaseSchema, etcdClient *
 		return errors.New("Duplicate DatabaseCache: " + dbName)
 	}
 	dbCache := newDatabaseCache(dbSchema, log)
-	(*c)[dbName] = &dbCache
+	(*c)[dbName] = dbCache
 	// we don't need etcd watcher
 	if etcdClient == nil {
 		return nil
@@ -556,7 +556,7 @@ func (c *cache) getDBCache(dbname string) *databaseCache {
 	return db
 }
 
-func interfaceToSet (val interface{}) libovsdb.OvsSet {
+func interfaceToSet(val interface{}) libovsdb.OvsSet {
 	if val == nil {
 		return libovsdb.OvsSet{}
 	}

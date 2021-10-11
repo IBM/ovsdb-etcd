@@ -290,6 +290,7 @@ func createTestTableSchema() *libovsdb.TableSchema {
 	}
 	return &tableSchema
 }
+
 /*
 func TestMonitorPrepareInitialRow(t *testing.T) {
 	tableSchema := createTestTableSchema()

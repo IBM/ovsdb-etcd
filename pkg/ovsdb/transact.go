@@ -61,19 +61,19 @@ func isEqualColumn(columnSchema *libovsdb.ColumnSchema, expected, actual interfa
 	case libovsdb.TypeMap:
 		expectedMap := expected.(libovsdb.OvsMap)
 		actualMap := actual.(libovsdb.OvsMap)
-		ok =  libovsdb.IsEqualMaps(expectedMap, actualMap)
+		ok = libovsdb.IsEqualMaps(expectedMap, actualMap)
 	default:
 		ok = reflect.DeepEqual(expected, actual)
 	}
 	if !ok {
 		log.V(5).Info("isEqualColumn return false", "column type", columnSchema.Type,
 			"expected", fmt.Sprintf("%T %v", expected, expected),
-			"actual",  fmt.Sprintf("%T %v",  actual, actual))
+			"actual", fmt.Sprintf("%T %v", actual, actual))
 	}
 	return ok
 }
 
-func (txn *Transaction)isEqualRow(tableSchema *libovsdb.TableSchema, expectedRow, actualRow *map[string]interface{}) (bool, error) {
+func (txn *Transaction) isEqualRow(tableSchema *libovsdb.TableSchema, expectedRow, actualRow *map[string]interface{}) (bool, error) {
 	for column, expected := range *expectedRow {
 		columnSchema, err := tableSchema.LookupColumn(column)
 		if err != nil {
@@ -82,7 +82,7 @@ func (txn *Transaction)isEqualRow(tableSchema *libovsdb.TableSchema, expectedRow
 			return false, err
 		}
 		actual := (*actualRow)[column]
-		if !isEqualColumn(columnSchema, expected, actual, txn.log ) {
+		if !isEqualColumn(columnSchema, expected, actual, txn.log) {
 			return false, nil
 		}
 	}
@@ -177,7 +177,7 @@ func (mapUUID *namedUUIDResolver) ResolveRow(row *map[string]interface{}, log lo
 // table->uuid->count
 type refCounter map[string]map[string]int
 
-func (rc refCounter) updateCounters (tableName string, newCounters map[string]int) {
+func (rc refCounter) updateCounters(tableName string, newCounters map[string]int) {
 	if newCounters == nil || len(newCounters) == 0 {
 		return
 	}
@@ -338,7 +338,7 @@ func (txn *Transaction) reset() {
 }
 
 func (txn *Transaction) gc() {
-	txn.log.V(5).Info("gc", "refCounter", txn.refCounter )
+	txn.log.V(5).Info("gc", "refCounter", txn.refCounter)
 	rc := txn.refCounter
 	txn.refCounter = refCounter{}
 	for table, val := range rc {
@@ -347,8 +347,8 @@ func (txn *Transaction) gc() {
 			cRow, ok := tCache.rows[uuid]
 			if !ok {
 				txn.log.V(1).Info("reference to non existing row", "table", table, "uuid", uuid)
-			} else{
-				if cRow.counter + count == 0 {
+			} else {
+				if cRow.counter+count == 0 {
 					// TODO check and remove references from this value
 					etcdOp := clientv3.OpDelete(string(cRow.key))
 					txn.etcdTrx.appendThen(etcdOp)
