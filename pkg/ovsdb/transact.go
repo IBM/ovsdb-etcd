@@ -178,7 +178,7 @@ func (mapUUID *namedUUIDResolver) ResolveRow(row *map[string]interface{}, log lo
 type refCounter map[string]map[string]int
 
 func (rc refCounter) updateCounters (tableName string, newCounters map[string]int) {
-	if len(newCounters) == 0 {
+	if newCounters == nil || len(newCounters) == 0 {
 		return
 	}
 	table, ok := rc[tableName]
@@ -357,7 +357,7 @@ func (txn *Transaction) gc() {
 							continue
 						}
 						cSchema, _ := txn.schema.LookupColumn(table, cName)
-						txn.refCounter.updateCounters(destTable, tCache.checkCounters(nil, val, cSchema.Type))
+						txn.refCounter.updateCounters(destTable, checkCounters(nil, val, cSchema.Type))
 					}
 
 				}
@@ -941,7 +941,7 @@ func (txn *Transaction) doInsert(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 			continue
 		}
 		cSchema, _ := tableSchema.LookupColumn(cName)
-		txn.refCounter.updateCounters(destTable, tCache.checkCounters(cVal, nil, cSchema.Type))
+		txn.refCounter.updateCounters(destTable, checkCounters(cVal, nil, cSchema.Type))
 	}
 	return
 }
@@ -991,7 +991,7 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 			newVal := (*newRow)[cName]
 			oldVal := row[cName]
 			cSchema, _ := tableSchema.LookupColumn(cName)
-			txn.refCounter.updateCounters(destTable, tCache.checkCounters(newVal, oldVal, cSchema.Type))
+			txn.refCounter.updateCounters(destTable, checkCounters(newVal, oldVal, cSchema.Type))
 		}
 		ovsResult.IncrementCount()
 	}
@@ -1098,7 +1098,7 @@ func (txn *Transaction) doSelectDelete(ovsOp *libovsdb.Operation, ovsResult *lib
 					continue
 				}
 				cSchema, _ := tableSchema.LookupColumn(cName)
-				txn.refCounter.updateCounters(destTable, tCache.checkCounters(nil, val, cSchema.Type))
+				txn.refCounter.updateCounters(destTable, checkCounters(nil, val, cSchema.Type))
 			}
 			ovsResult.IncrementCount()
 		} else if ovsOp.Op == libovsdb.OperationSelect {
