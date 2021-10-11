@@ -2316,8 +2316,8 @@ func TestEqualSet(t *testing.T) {
 
 	var expectedValue interface{}
 	var actualValue interface{}
-	expectedValue = libovsdb.OvsSet{GoSet: []interface{}{ uuid}}
-	actualValue = libovsdb.OvsSet{GoSet: []interface{}{ uuid}}
+	expectedValue = libovsdb.OvsSet{GoSet: []interface{}{uuid}}
+	actualValue = libovsdb.OvsSet{GoSet: []interface{}{uuid}}
 
 	assert.True(t, isEqualColumn(colSchema, expectedValue, actualValue, log), "2 sets")
 
@@ -2327,6 +2327,6 @@ func TestEqualSet(t *testing.T) {
 	actualValue = uuid
 	assert.True(t, isEqualColumn(colSchema, expectedValue, actualValue, log), "2 objects")
 
-	expectedValue = libovsdb.OvsSet{GoSet: []interface{}{ uuid}}
+	expectedValue = libovsdb.OvsSet{GoSet: []interface{}{uuid}}
 	assert.True(t, isEqualColumn(colSchema, expectedValue, actualValue, log), "actual object")
 }

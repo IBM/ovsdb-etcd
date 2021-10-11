@@ -96,14 +96,14 @@ func TestCacheUpdateUUID(t *testing.T) {
 	kv_r := mvccpb.KeyValue{Key: []byte(keyR.String()), Value: bufR}
 
 	tCache := cache{}
-	err = tCache.addDatabaseCache(testSchemaGC, nil,  klogr.New())
+	err = tCache.addDatabaseCache(testSchemaGC, nil, klogr.New())
 	assert.Nil(t, err)
 	dbCache := tCache.getDBCache("gc")
 
 	// store values in the cache and check counters
 	ePR := clientv3.Event{Type: clientv3.EventTypePut, Kv: &kv_r}
 	ePT2 := clientv3.Event{Type: clientv3.EventTypePut, Kv: &kv_t1}
-	dbCache.updateCache([]*clientv3.Event{ &ePR, &ePT2})
+	dbCache.updateCache([]*clientv3.Event{&ePR, &ePT2})
 	r, ok := dbCache.getRow(keyR)
 	assert.True(t, ok)
 	assert.Equal(t, 0, r.counter)
@@ -113,10 +113,10 @@ func TestCacheUpdateUUID(t *testing.T) {
 
 	// reset the cache and store values in a different order
 	tCache = cache{}
-	err = tCache.addDatabaseCache(testSchemaGC, nil,  klogr.New())
+	err = tCache.addDatabaseCache(testSchemaGC, nil, klogr.New())
 	assert.Nil(t, err)
 	dbCache = tCache.getDBCache("gc")
-	dbCache.updateCache([]*clientv3.Event{ &ePT2, &ePR})
+	dbCache.updateCache([]*clientv3.Event{&ePT2, &ePR})
 	r, ok = dbCache.getRow(keyR)
 	assert.True(t, ok)
 	assert.Equal(t, 0, r.counter)
@@ -174,21 +174,21 @@ func TestCacheUpdateMap(t *testing.T) {
 	rootOvsUUID := libovsdb.UUID{GoUUID: rootUUID}
 	val[libovsdb.COL_UUID] = rootOvsUUID
 	val["name"] = "rootRow"
-	val["refMap"] = libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"t2" : t1ovsUUID, "a" : libovsdb.UUID{GoUUID: uuid.NewString()}}}
+	val["refMap"] = libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"t2": t1ovsUUID, "a": libovsdb.UUID{GoUUID: uuid.NewString()}}}
 	keyR := common.NewDataKey("gc", "rootTable", rootUUID)
 	bufR, err := json.Marshal(val)
 	assert.Nil(t, err)
 	kv_r := mvccpb.KeyValue{Key: []byte(keyR.String()), Value: bufR}
 
 	tCache := cache{}
-	err = tCache.addDatabaseCache(testSchemaGC, nil,  klogr.New())
+	err = tCache.addDatabaseCache(testSchemaGC, nil, klogr.New())
 	assert.Nil(t, err)
 	dbCache := tCache.getDBCache("gc")
 
 	// store values in the cache and check counters
 	ePR := clientv3.Event{Type: clientv3.EventTypePut, Kv: &kv_r}
 	ePT2 := clientv3.Event{Type: clientv3.EventTypePut, Kv: &kv_t1}
-	dbCache.updateCache([]*clientv3.Event{ &ePR, &ePT2})
+	dbCache.updateCache([]*clientv3.Event{&ePR, &ePT2})
 	r, ok := dbCache.getRow(keyR)
 	assert.True(t, ok)
 	assert.Equal(t, 0, r.counter)
@@ -198,10 +198,10 @@ func TestCacheUpdateMap(t *testing.T) {
 
 	// reset the cache and store values in a different order
 	tCache = cache{}
-	err = tCache.addDatabaseCache(testSchemaGC, nil,  klogr.New())
+	err = tCache.addDatabaseCache(testSchemaGC, nil, klogr.New())
 	assert.Nil(t, err)
 	dbCache = tCache.getDBCache("gc")
-	dbCache.updateCache([]*clientv3.Event{ &ePT2, &ePR})
+	dbCache.updateCache([]*clientv3.Event{&ePT2, &ePR})
 	r, ok = dbCache.getRow(keyR)
 	assert.True(t, ok)
 	assert.Equal(t, 0, r.counter)
@@ -227,7 +227,7 @@ func TestCacheUpdateMap(t *testing.T) {
 	assert.Equal(t, 1, r.counter)
 
 	// update root row
-	val["refMap"] = libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"t1" : t1ovsUUID, "t2" : libovsdb.UUID{GoUUID: uuid.NewString()}}}
+	val["refMap"] = libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"t1": t1ovsUUID, "t2": libovsdb.UUID{GoUUID: uuid.NewString()}}}
 	bufR, err = json.Marshal(val)
 	assert.Nil(t, err)
 	kv_r = mvccpb.KeyValue{Key: []byte(keyR.String()), Value: bufR}
@@ -368,20 +368,20 @@ func TestCacheCheckMap(t *testing.T) {
 	val2UUID := libovsdb.UUID{GoUUID: uuid.NewString()}
 	val3UUID := libovsdb.UUID{GoUUID: uuid.NewString()}
 	val4UUID := libovsdb.UUID{GoUUID: uuid.NewString()}
-	map1 := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"a": val1UUID, "b" : val2UUID}}
+	map1 := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"a": val1UUID, "b": val2UUID}}
 	counts := checkCounters(nil, map1, libovsdb.TypeMap)
 	assert.Equal(t, -1, counts[val1UUID.GoUUID])
 	assert.Equal(t, -1, counts[val2UUID.GoUUID])
 	counts = checkCounters(map1, nil, libovsdb.TypeMap)
 	assert.Equal(t, 1, counts[val1UUID.GoUUID])
 	assert.Equal(t, 1, counts[val2UUID.GoUUID])
-	map2 := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"a": val3UUID, "b" : val4UUID}}
+	map2 := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"a": val3UUID, "b": val4UUID}}
 	counts = checkCounters(map1, map2, libovsdb.TypeMap)
 	assert.Equal(t, 1, counts[val1UUID.GoUUID])
 	assert.Equal(t, 1, counts[val2UUID.GoUUID])
 	assert.Equal(t, -1, counts[val3UUID.GoUUID])
 	assert.Equal(t, -1, counts[val4UUID.GoUUID])
-	map11 := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"c": val1UUID, "d" : val2UUID}}
+	map11 := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"c": val1UUID, "d": val2UUID}}
 	counts = checkCounters(map1, map11, libovsdb.TypeMap)
 	assert.Equal(t, 0, counts[val1UUID.GoUUID])
 	assert.Equal(t, 0, counts[val2UUID.GoUUID])

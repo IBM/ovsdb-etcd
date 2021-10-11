@@ -130,7 +130,6 @@ func main() {
 
 	db, _ := ovsdb.NewDatabaseEtcd(cli, log)
 
-
 	err = db.AddSchema(path.Join(*schemaBasedir, "_server.ovsschema"))
 	if err != nil {
 		log.Error(err, "failed to add _server schema")
