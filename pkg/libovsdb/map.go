@@ -46,7 +46,13 @@ func (o *OvsMap) UnmarshalJSON(b []byte) (err error) {
 			if !ok {
 				return fmt.Errorf("innerSlice type is not []interface{}, it's %T", val)
 			}
-			o.GoMap[f[0]] = f[1]
+			goVal, err := ovsSliceToGoNotation(f[1])
+			if err == nil {
+				o.GoMap[f[0]] = goVal
+			} else {
+				return err
+			}
+
 		}
 	}
 	return err
