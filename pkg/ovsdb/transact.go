@@ -338,6 +338,7 @@ func (txn *Transaction) reset() {
 }
 
 func (txn *Transaction) gc() {
+	txn.log.V(5).Info("gc", "refCounter", txn.refCounter )
 	rc := txn.refCounter
 	txn.refCounter = refCounter{}
 	for table, val := range rc {
@@ -446,6 +447,7 @@ Loop:
 				return err
 			}
 		}
+		txn.gc()
 		return nil
 	}
 	var trResponse *clientv3.TxnResponse
