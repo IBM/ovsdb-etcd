@@ -230,18 +230,6 @@ func (dc *databaseCache) deleteCounters(newVal interface{}, oldVal interface{}, 
 */
 
 func (dc *databaseCache) updateCountersSet(newVal interface{}, oldVal interface{}, refTable *tableCache, tableKey *common.Key, newRows map[common.Key]*cachedRow) {
-	interfaceToSet := func(val interface{}) libovsdb.OvsSet {
-		if val == nil {
-			return libovsdb.OvsSet{}
-		}
-		switch val.(type) {
-		case libovsdb.OvsSet:
-			return val.(libovsdb.OvsSet)
-		case libovsdb.UUID:
-			return libovsdb.OvsSet{GoSet: []interface{}{val.(libovsdb.UUID)}}
-		}
-		panic(fmt.Errorf("wrong conversation type %T", val))
-	}
 	newValSet := interfaceToSet(newVal)
 	oldValSet := interfaceToSet(oldVal)
 	for _, uuid := range newValSet.GoSet {
@@ -273,26 +261,32 @@ func (dc *databaseCache) updateCountersSet(newVal interface{}, oldVal interface{
 	}
 }
 
-func (tc *tableCache) checkCountersSet(newVal interface{}, oldVal interface{}) map[string]int {
-	var newValSet libovsdb.OvsSet
-	var oldValSet libovsdb.OvsSet
-	var ok bool
+func checkCountersUUID(newVal interface{}, oldVal interface{}) map[string]int {
+	counters := map[string]int{}
 	if newVal == nil {
-		newValSet = libovsdb.OvsSet{}
-	} else {
-		newValSet, ok = newVal.(libovsdb.OvsSet)
-		if !ok {
-			// TODO
-		}
+		// oldValue and newValue cannot be both nil, we checked it before
+		ovsUUID := oldVal.(libovsdb.UUID)
+		counters[ovsUUID.GoUUID]--
+		return counters
 	}
 	if oldVal == nil {
-		oldValSet = libovsdb.OvsSet{}
-	} else {
-		oldValSet, ok = newVal.(libovsdb.OvsSet)
-		if !ok {
-			// TODO
-		}
+		ovsUUID := newVal.(libovsdb.UUID)
+		counters[ovsUUID.GoUUID]++
+		return counters
 	}
+	newUUID := newVal.(libovsdb.UUID)
+	oldUUID := oldVal.(libovsdb.UUID)
+	if newUUID.GoUUID == oldUUID.GoUUID {
+		return nil
+	}
+	counters[newUUID.GoUUID]++
+	counters[oldUUID.GoUUID]--
+	return counters
+}
+
+func checkCountersSet(newVal interface{}, oldVal interface{}) map[string]int {
+	newValSet := interfaceToSet(newVal)
+	oldValSet := interfaceToSet(oldVal)
 	counters := map[string]int{}
 	for _, uuid := range newValSet.GoSet {
 		if !oldValSet.ContainElement(uuid) {
@@ -402,7 +396,7 @@ func (dc *databaseCache) updateCountersMap(newVal interface{}, oldVal interface{
 	}
 }
 
-func (tc *tableCache) checkCountersMap(newVal interface{}, oldVal interface{}) map[string]int {
+func checkCountersMap(newVal interface{}, oldVal interface{}) map[string]int {
 	var newValMap libovsdb.OvsMap
 	var oldValMap libovsdb.OvsMap
 	var ok bool
@@ -417,7 +411,7 @@ func (tc *tableCache) checkCountersMap(newVal interface{}, oldVal interface{}) m
 	if oldVal == nil {
 		oldValMap = libovsdb.OvsMap{}
 	} else {
-		oldValMap, ok = newVal.(libovsdb.OvsMap)
+		oldValMap, ok = oldVal.(libovsdb.OvsMap)
 		if !ok {
 			// TODO
 		}
@@ -460,23 +454,23 @@ func (dc *databaseCache) updateCounters(newVal, oldVal interface{}, refTable *ta
 	case libovsdb.TypeUUID:
 		dc.updateCountersUUID(newVal, oldVal, refTable, tableKey, newRows)
 	default:
-		//TODO
+		//TODO we cannot be here add error
 	}
 }
 
-func (tc *tableCache) checkCounters(newVal interface{}, oldVal interface{}, columnType string) map[string]int {
+func checkCounters(newVal interface{}, oldVal interface{}, columnType string) map[string]int {
 	if newVal == nil && oldVal == nil {
-		return map[string]int{}
+		return nil
 	}
 	switch columnType {
 	case libovsdb.TypeSet:
-		return tc.checkCountersSet(newVal, oldVal)
+		return checkCountersSet(newVal, oldVal)
 	case libovsdb.TypeMap:
-		return tc.checkCountersMap(newVal, oldVal)
+		return checkCountersMap(newVal, oldVal)
 	case libovsdb.TypeUUID:
-	// TODO
+		return checkCountersUUID(newVal, oldVal)
 	default:
-		//TODO
+		//TODO we cannot be here add error
 	}
 	return nil
 }
@@ -560,4 +554,17 @@ func (c *cache) getDBCache(dbname string) *databaseCache {
 		(*c)[dbname] = db
 	}
 	return db
+}
+
+func interfaceToSet (val interface{}) libovsdb.OvsSet {
+	if val == nil {
+		return libovsdb.OvsSet{}
+	}
+	switch val.(type) {
+	case libovsdb.OvsSet:
+		return val.(libovsdb.OvsSet)
+	case libovsdb.UUID:
+		return libovsdb.OvsSet{GoSet: []interface{}{val.(libovsdb.UUID)}}
+	}
+	panic(fmt.Errorf("wrong conversation type %T", val))
 }
