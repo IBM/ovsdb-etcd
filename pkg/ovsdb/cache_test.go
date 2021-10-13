@@ -23,9 +23,6 @@ var testSchemaGC = &libovsdb.DatabaseSchema{
 				"name": {
 					Type: libovsdb.TypeString,
 				},
-				"_uuid": {
-					Type: libovsdb.TypeUUID,
-				},
 				"refSet": {
 					Type: libovsdb.TypeSet,
 					TypeObj: &libovsdb.ColumnType{
@@ -61,8 +58,22 @@ var testSchemaGC = &libovsdb.DatabaseSchema{
 				"name": {
 					Type: libovsdb.TypeString,
 				},
-				"_uuid": {
-					Type: libovsdb.TypeUUID,
+				"refSet": {
+					Type: libovsdb.TypeSet,
+					TypeObj: &libovsdb.ColumnType{
+						Key: &libovsdb.BaseType{
+							Type:     libovsdb.TypeUUID,
+							RefTable: "table2",
+						},
+					},
+				},
+			},
+			IsRoot: false,
+		},
+		"table2": {
+			Columns: map[string]*libovsdb.ColumnSchema{
+				"name": {
+					Type: libovsdb.TypeString,
 				},
 			},
 			IsRoot: false,

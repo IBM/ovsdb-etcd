@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"github.com/google/uuid"
 	"os"
 	"testing"
 	"time"
@@ -34,6 +35,7 @@ func TestMain(m *testing.M) {
 	testSchemaAtomic.AddInternalsColumns()
 	testSchemaEnum.AddInternalsColumns()
 	testSchemaIndex.AddInternalsColumns()
+	testSchemaGC.AddInternalsColumns()
 	common.SetPrefix("ovsdb/nb")
 	os.Exit(m.Run())
 }
@@ -522,7 +524,13 @@ func validateInsertResult(t *testing.T, resp *libovsdb.TransactResponse, results
 	assert.Equal(t, results, len(resp.Result))
 	assert.Nil(t, resp.Result[checkedOperation].Count)
 	assert.Nil(t, resp.Result[checkedOperation].Error)
+	if resp.Result[checkedOperation].Error != nil {
+		log.Info("validateInsertResult", "error", resp.Result[checkedOperation].Error)
+	}
 	assert.Nil(t, resp.Result[checkedOperation].Details)
+	if resp.Result[checkedOperation].Details != nil {
+		log.Info("validateInsertResult", "details", resp.Result[checkedOperation].Details)
+	}
 	assert.Nil(t, resp.Result[checkedOperation].Rows)
 	if resp.Result[checkedOperation].Error == nil {
 		assert.NotNil(t, resp.Result[checkedOperation].UUID)
@@ -2329,4 +2337,135 @@ func TestEqualSet(t *testing.T) {
 
 	expectedValue = libovsdb.OvsSet{GoSet: []interface{}{uuid}}
 	assert.True(t, isEqualColumn(colSchema, expectedValue, actualValue, log), "actual object")
+}
+
+func prepareValues4GC(t *testing.T, rootTable, table1, table2, dbName string) (uuidR, uuid1, uuid2 *libovsdb.UUID) {
+	table1UUIDNamed := "named-uuid1"
+	table2UUIDNamed := "named-uuid2"
+	table1RowUUID := libovsdb.UUID{GoUUID: table1UUIDNamed}
+	table2RowUUID := libovsdb.UUID{GoUUID: table2UUIDNamed}
+
+	rootRow := map[string]interface{}{
+		"name":   "root",
+		"refSet": libovsdb.OvsSet{GoSet: []interface{}{table1RowUUID}},
+	}
+	table1Row := map[string]interface{}{
+		"name":   "t1",
+		"refSet": libovsdb.OvsSet{GoSet: []interface{}{table2RowUUID}},
+	}
+
+	table2Row := map[string]interface{}{
+		"name":  "t2",
+		"_uuid": table2RowUUID,
+	}
+
+	req := &libovsdb.Transact{
+		DBName: dbName,
+		Operations: []libovsdb.Operation{
+			{
+				Op:    libovsdb.OperationInsert,
+				Table: &rootTable,
+				Row:   &rootRow,
+			},
+			{
+				Op:       libovsdb.OperationInsert,
+				Table:    &table1,
+				Row:      &table1Row,
+				UUIDName: &table1UUIDNamed,
+			},
+			{
+				Op:       libovsdb.OperationInsert,
+				Table:    &table2,
+				Row:      &table2Row,
+				UUIDName: &table2UUIDNamed,
+			},
+		},
+	}
+	testEtcdCleanup(t)
+	resp := testTransact(t, req, testSchemaGC, 0)
+	validateInsertResult(t, resp, 3, 0, "")
+	uuidR = resp.Result[0].UUID
+	validateInsertResult(t, resp, 3, 1, "")
+	uuid1 = resp.Result[1].UUID
+	validateInsertResult(t, resp, 3, 2, "")
+	uuid1 = resp.Result[2].UUID
+	return
+}
+
+func TestTransactGCUpdate(t *testing.T) {
+	rootTable := "rootTable"
+	table1 := "table1"
+	table2 := "table2"
+	dbName := "gc"
+	uuidR, uuid1, _ := prepareValues4GC(t, rootTable, table1, table2, dbName)
+
+	newRootRow := map[string]interface{}{"name": "root", "refSet": libovsdb.OvsSet{GoSet: []interface{}{libovsdb.UUID{GoUUID: uuid.NewString()}}}}
+	req := &libovsdb.Transact{
+		DBName: dbName,
+		Operations: []libovsdb.Operation{
+			{
+				Op:    libovsdb.OperationUpdate,
+				Table: &rootTable,
+				Row:   &newRootRow,
+				Where: &[]interface{}{[]interface{}{libovsdb.COL_UUID, FN_EQ, *uuidR}},
+			},
+		},
+	}
+	resp := testTransact(t, req, testSchemaGC, 3)
+	validateUpdateResult(t, resp, 1, 0, 1)
+	req = &libovsdb.Transact{
+		DBName: dbName,
+		Operations: []libovsdb.Operation{
+			{
+				Op:    libovsdb.OperationSelect,
+				Table: &table1,
+				Where: &[]interface{}{[]interface{}{libovsdb.COL_UUID, FN_EQ, *uuid1}},
+			},
+			{
+				Op:    libovsdb.OperationSelect,
+				Table: &table2,
+			},
+		},
+	}
+	resp = testTransact(t, req, testSchemaGC, 1)
+	validateSelectResult(t, resp, 2, 0, 0)
+	validateSelectResult(t, resp, 2, 1, 0)
+}
+
+func TestTransactGCDelete(t *testing.T) {
+	rootTable := "rootTable"
+	table1 := "table1"
+	table2 := "table2"
+	dbName := "gc"
+	uuidR, uuid1, _ := prepareValues4GC(t, rootTable, table1, table2, dbName)
+
+	req := &libovsdb.Transact{
+		DBName: dbName,
+		Operations: []libovsdb.Operation{
+			{
+				Op:    libovsdb.OperationDelete,
+				Table: &rootTable,
+				Where: &[]interface{}{[]interface{}{libovsdb.COL_UUID, FN_EQ, *uuidR}},
+			},
+		},
+	}
+	resp := testTransact(t, req, testSchemaGC, 3)
+	validateUpdateResult(t, resp, 1, 0, 1)
+	req = &libovsdb.Transact{
+		DBName: dbName,
+		Operations: []libovsdb.Operation{
+			{
+				Op:    libovsdb.OperationSelect,
+				Table: &table1,
+				Where: &[]interface{}{[]interface{}{libovsdb.COL_UUID, FN_EQ, *uuid1}},
+			},
+			{
+				Op:    libovsdb.OperationSelect,
+				Table: &table2,
+			},
+		},
+	}
+	resp = testTransact(t, req, testSchemaGC, 0)
+	validateSelectResult(t, resp, 2, 0, 0)
+	validateSelectResult(t, resp, 2, 1, 0)
 }

@@ -294,21 +294,17 @@ type Transaction struct {
 	log logr.Logger
 
 	/* ovs */
-	schema   *libovsdb.DatabaseSchema
-	request  libovsdb.Transact
-	response libovsdb.TransactResponse
-
-	/* cache */
-	cache *databaseCache
-	// per transaction cache [tableName]->[key]->value
-	localCache *localCache
+	schema     *libovsdb.DatabaseSchema
+	request    libovsdb.Transact
+	response   libovsdb.TransactResponse
 	mapUUID    namedUUIDResolver
 	refCounter refCounter
-	/* etcdTrx */
-	etcdTrx *etcdTransaction
+	etcdTrx    *etcdTransaction
+	session    *concurrency.Session // session for tables locks
 
-	/* session for tables locks */
-	session *concurrency.Session
+	/* cache */
+	cache      *databaseCache // per transaction cache [tableName]->[key]->value
+	localCache *localCache
 }
 
 func NewTransaction(ctx context.Context, cli *clientv3.Client, request *libovsdb.Transact, cache *databaseCache, schema *libovsdb.DatabaseSchema, log logr.Logger) (*Transaction, error) {
@@ -345,11 +341,10 @@ func (txn *Transaction) gc() {
 		tCache := txn.cache.getTable(table)
 		for uuid, count := range val {
 			cRow, ok := tCache.rows[uuid]
-			if !ok {
-				txn.log.V(1).Info("reference to non existing row", "table", table, "uuid", uuid)
-			} else {
+			// ok false, means that the referenced row is in the local cache.
+			if ok {
 				if cRow.counter+count == 0 {
-					// TODO check and remove references from this value
+					txn.log.V(5).Info("GC: remove unreferenced row", "key", string(cRow.key), "table", table)
 					etcdOp := clientv3.OpDelete(string(cRow.key))
 					txn.etcdTrx.appendThen(etcdOp)
 					for cName, destTable := range tCache.refColumns {
@@ -484,32 +479,23 @@ func (txn *Transaction) doOperation(ovsOp *libovsdb.Operation, ovsResult *libovs
 	defer txn.log.V(6).Info("end operation", "result", ovsResult, "e", err)
 	var details string
 	switch ovsOp.Op {
-	case libovsdb.OperationInsert:
+	case libovsdb.OperationInsert, libovsdb.OperationSelect, libovsdb.OperationUpdate, libovsdb.OperationMutate, libovsdb.OperationDelete, libovsdb.OperationWait:
 		err, details = txn.validateOpsTableName(ovsOp.Table)
 		if err == nil {
-			err, details = txn.doInsert(ovsOp, ovsResult)
-		}
-	case libovsdb.OperationSelect:
-		err, details = txn.validateOpsTableName(ovsOp.Table)
-		if err == nil {
-			ovsResult.InitRows()
-			err, details = txn.doSelectDelete(ovsOp, ovsResult)
-		}
-	case libovsdb.OperationUpdate, libovsdb.OperationMutate:
-		err, details = txn.validateOpsTableName(ovsOp.Table)
-		if err == nil {
-			err, details = txn.doModify(ovsOp, ovsResult)
-		}
-	case libovsdb.OperationDelete:
-		err, details = txn.validateOpsTableName(ovsOp.Table)
-		if err == nil {
-			ovsResult.InitCount()
-			err, details = txn.doSelectDelete(ovsOp, ovsResult)
-		}
-	case libovsdb.OperationWait:
-		err, details = txn.validateOpsTableName(ovsOp.Table)
-		if err == nil {
-			err, details = txn.doWait(ovsOp, ovsResult)
+			switch ovsOp.Op {
+			case libovsdb.OperationInsert:
+				err, details = txn.doInsert(ovsOp, ovsResult)
+			case libovsdb.OperationSelect:
+				ovsResult.InitRows()
+				err, details = txn.doSelectDelete(ovsOp, ovsResult)
+			case libovsdb.OperationUpdate, libovsdb.OperationMutate:
+				err, details = txn.doModify(ovsOp, ovsResult)
+			case libovsdb.OperationDelete:
+				ovsResult.InitCount()
+				err, details = txn.doSelectDelete(ovsOp, ovsResult)
+			case libovsdb.OperationWait:
+				err, details = txn.doWait(ovsOp, ovsResult)
+			}
 		}
 	case libovsdb.OperationCommit:
 		err, details = txn.doCommit(ovsOp, ovsResult)
@@ -871,7 +857,7 @@ func (txn *Transaction) rowPrepare(tableSchema *libovsdb.TableSchema, mapUUID na
 
 	err = tableSchema.Validate(row)
 	if err != nil {
-		txn.log.Error(err, "failed schema validation of row", "row")
+		txn.log.Error(err, "failed schema validation of row", "row", row)
 		err = errors.New(E_CONSTRAINT_VIOLATION)
 		return err
 	}
@@ -1072,7 +1058,8 @@ func (txn *Transaction) doSelectDelete(ovsOp *libovsdb.Operation, ovsResult *lib
 		if !ok {
 			return
 		}
-		tCache = &tableCache{rows: map[string]cachedRow{uuid: kv}}
+		tCache = tCache.newEmptyTableCache()
+		tCache.rows[uuid] = kv
 	}
 	for _, cRow := range tCache.rows {
 		if uuid == "" || len(conditions) > 1 {
