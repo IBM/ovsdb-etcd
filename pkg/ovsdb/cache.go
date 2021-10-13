@@ -266,13 +266,20 @@ func checkCountersUUID(newVal interface{}, oldVal interface{}) map[string]int {
 	if newVal == nil {
 		// oldValue and newValue cannot be both nil, we checked it before
 		ovsUUID := oldVal.(libovsdb.UUID)
-		counters[ovsUUID.GoUUID]--
-		return counters
+		if ovsUUID.GoUUID != libovsdb.DefaultUUID.GoUUID {
+			counters[ovsUUID.GoUUID]--
+			return counters
+		}
+		return nil
+
 	}
 	if oldVal == nil {
 		ovsUUID := newVal.(libovsdb.UUID)
-		counters[ovsUUID.GoUUID]++
-		return counters
+		if ovsUUID.GoUUID != libovsdb.DefaultUUID.GoUUID {
+			counters[ovsUUID.GoUUID]++
+			return counters
+		}
+		return nil
 	}
 	newUUID := newVal.(libovsdb.UUID)
 	oldUUID := oldVal.(libovsdb.UUID)

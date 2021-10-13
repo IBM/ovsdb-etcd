@@ -14,6 +14,8 @@ const (
 	COL_VERSION = "_version"
 )
 
+var DefaultUUID = UUID{"00000000-0000-0000-0000-000000000000"}
+
 type Schemas map[string]*DatabaseSchema
 
 func (schemas *Schemas) AddFromFile(path string) error {
@@ -470,7 +472,7 @@ func (columnSchema *ColumnSchema) Default() interface{} {
 	case TypeString:
 		return ""
 	case TypeUUID:
-		return UUID{"00000000-0000-0000-0000-000000000000"}
+		return DefaultUUID
 	case TypeEnum:
 		switch columnSchema.TypeObj.Key.Type {
 		case TypeString:
@@ -910,7 +912,7 @@ func (columnSchema *ColumnSchema) ValidateSet(value interface{}) error {
 	if l < columnSchema.TypeObj.Min {
 		return fmt.Errorf("set breaks min limit: %+v", value)
 	}
-	if columnSchema.TypeObj.Max != Unlimited && columnSchema.TypeObj.Max < l {
+	if columnSchema.TypeObj.Max != Unlimited && columnSchema.TypeObj.Max != 0 && columnSchema.TypeObj.Max < l {
 		return fmt.Errorf("set breaks max limit: %+v", value)
 	}
 	for _, val := range setval.GoSet {
