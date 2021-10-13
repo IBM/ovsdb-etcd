@@ -4,17 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
-	"github.com/ibm/ovsdb-etcd/pkg/common"
-	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
-	"github.com/ibm/ovsdb-etcd/pkg/types/_Server"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
+
+	"github.com/ibm/ovsdb-etcd/pkg/common"
+	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
+	"github.com/ibm/ovsdb-etcd/pkg/types/_Server"
 )
 
 type Databaser interface {
@@ -27,7 +29,13 @@ type Databaser interface {
 	GetDBSchema(dbName string) (*libovsdb.DatabaseSchema, bool)
 	GetDBCache(dbName string) (*databaseCache, error)
 	GetServerID() string
+	StartLeaderElection()
 }
+
+const (
+	Clustered  = "clustered"
+	Standalone = "standalone"
+)
 
 type DatabaseEtcd struct {
 	cli *clientv3.Client
@@ -37,6 +45,9 @@ type DatabaseEtcd struct {
 	schemas    libovsdb.Schemas // dataBaseName -> schema
 	strSchemas map[string]map[string]interface{}
 	serverID   string
+	model      string
+	dbName     string
+	ctx        context.Context
 }
 
 type Locker interface {
@@ -91,8 +102,11 @@ func NewEtcdClient(ctx context.Context, endpoints []string, keepAliveTime, keepA
 	return cli, nil
 }
 
-func NewDatabaseEtcd(cli *clientv3.Client, log logr.Logger) (Databaser, error) {
-	return &DatabaseEtcd{cli: cli, log: log, cache: cache{},
+func NewDatabaseEtcd(ctx context.Context, cli *clientv3.Client, model string, log logr.Logger) (Databaser, error) {
+	if model != Clustered && model != Standalone {
+		return nil, errors.New(fmt.Sprintf("wrong deployment model %s", model))
+	}
+	return &DatabaseEtcd{cli: cli, log: log, cache: cache{}, model: model, ctx: ctx,
 		schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}, serverID: uuid.NewString()}, nil
 }
 
@@ -134,15 +148,16 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 	}
 	var srv _Server.Database
 	if schemaName == IntServer {
-		err = con.cache.addDatabaseCache(con.schemas[schemaName], nil, con.log)
+		err = con.cache.addDatabaseCache(con.ctx, con.schemas[schemaName], nil, con.log)
 		if err != nil {
 			return err
 		}
-		srv = _Server.Database{Model: "standalone", Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
+		srv = _Server.Database{Model: string(con.model), Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
 			Connected: true, Leader: true, Schema: *schemaSet, Version: libovsdb.UUID{GoUUID: uuid.NewString()},
 		}
 	} else {
-		err = con.cache.addDatabaseCache(con.schemas[schemaName], con.cli, con.log)
+		con.dbName = schemaName
+		err = con.cache.addDatabaseCache(con.ctx, con.schemas[schemaName], con.cli, con.log)
 		if err != nil {
 			return err
 		}
@@ -159,7 +174,7 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 			return err
 		}
 		srv = _Server.Database{Model: "clustered", Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
-			Connected: true, Leader: true, Schema: *schemaSet, Version: libovsdb.UUID{GoUUID: uuid.NewString()},
+			Connected: true, Leader: false, Schema: *schemaSet, Version: libovsdb.UUID{GoUUID: uuid.NewString()},
 			Sid: *sidSet, Cid: *cidSet}
 	}
 
@@ -173,6 +188,42 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 	dbCache.storeValues([]*mvccpb.KeyValue{&kv})
 
 	return nil
+}
+
+func (con *DatabaseEtcd) StartLeaderElection() {
+	if con.model == Standalone {
+		// do nothing
+		return
+	}
+	// create a sessions to elect a Leader
+	s, err := concurrency.NewSession(con.cli)
+	if err != nil {
+		con.log.Error(err, "new session returned")
+	}
+	//defer s.Close()
+	election := concurrency.NewElection(s, common.NewTableKey(IntServer, IntLeaderElection).String())
+	// TODO set context
+	go func() {
+		// Elect a leader (or wait that the leader resign)
+		for {
+			err := election.Campaign(con.ctx, "e")
+			if err != nil {
+				con.log.Error(err, "Leader Election error", "serverId", con.serverID)
+			} else {
+				con.log.V(1).Info("err is nil")
+				break
+			}
+		}
+		servData := con.cache.getDBCache(IntServer)
+		tCache := (*servData).getTable(IntDatabase)
+		cRow, ok := tCache.rows[con.dbName]
+		if !ok {
+			panic(fmt.Sprintf("db entry %s doesn't exsist in _Server/Database", con.dbName))
+		}
+		cRow.row.Fields["leader"] = true
+		tCache.rows[con.dbName] = cRow
+		con.log.V(1).Info("I'm the leader", "serverId", con.serverID)
+	}()
 }
 
 func (con *DatabaseEtcd) getClusterID() (string, error) {
@@ -325,6 +376,10 @@ func NewDatabaseMock() (Databaser, error) {
 
 func (con *DatabaseMock) GetLock(ctx context.Context, id string) (Locker, error) {
 	return &LockerMock{}, nil
+}
+
+func (con *DatabaseMock) StartLeaderElection() {
+	return
 }
 
 func (con *DatabaseMock) AddSchema(schemaFile string) error {

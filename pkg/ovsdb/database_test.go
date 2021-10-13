@@ -2,7 +2,12 @@ package ovsdb
 
 import (
 	"context"
+	"fmt"
+	"path"
 	"testing"
+	"time"
+
+	"k8s.io/klog/v2/klogr"
 
 	"github.com/stretchr/testify/assert"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -42,4 +47,99 @@ func TestMockGetData(t *testing.T) {
 	actualResponse, actualError := mock.GetKeyData(common.GenerateDataKey("dbName", "tableName"), true)
 	assert.Equal(t, expectedError, actualError)
 	assert.Equal(t, expectedResponse, actualResponse)
+}
+
+func TestDatabaseEtcdLeaderElection(t *testing.T) {
+	size := 3
+	ctx := context.Background()
+	dbs := make([]*DatabaseEtcd, size, size)
+	cli := make([]*clientv3.Client, size, size)
+	var err error
+	for i := 0; i < size; i++ {
+		cli[i], err = testEtcdNewCli()
+		assert.Nil(t, err)
+	}
+	defer func() {
+		for i := 0; i < size; i++ {
+			if cli[i] != nil {
+				err = cli[i].Close()
+				assert.Nil(t, err)
+			}
+		}
+	}()
+	log := klogr.New()
+	for i := 0; i < size; i++ {
+		db, err := NewDatabaseEtcd(ctx, cli[i], Clustered, log)
+		assert.Nil(t, err)
+		dbs[i] = db.(*DatabaseEtcd)
+		err = db.AddSchema(path.Join("../../schemas", "_server.ovsschema"))
+		assert.Nil(t, err)
+		err = db.AddSchema(path.Join("../../schemas", "ovn-nb.ovsschema"))
+		assert.Nil(t, err)
+	}
+	for i := 0; i < size; i++ {
+		assert.False(t, isLeader(t, dbs[i]))
+	}
+	start := time.Now()
+	for i := 0; i < size; i++ {
+		dbs[i].StartLeaderElection()
+	}
+	log.Info("Leader election is done")
+	leader := -1
+	for j := 0; j < 10; j++ {
+		for i := 0; i < size; i++ {
+			l := isLeader(t, dbs[i])
+			if l {
+				assert.Equal(t, leader, -1)
+				leader = i
+			}
+		}
+		if leader != -1 {
+			log.Info(fmt.Sprintf("leader is %d, time %v", leader, time.Now().Sub(start)))
+			break
+		} else {
+			time.Sleep(time.Duration(10*j) * time.Millisecond)
+		}
+	}
+	assert.NotEqual(t, leader, -1)
+	/*  uncomment to validate leader election over a server failure.
+	start = time.Now()
+	cli[leader].Close()
+	cli[leader] = nil
+	oldLeader := leader
+	leader = -1
+	log.Info("start reelection loop")
+	for j := 0; j < 100; j++ {
+		for i := 0; i < size; i++ {
+			if i == oldLeader {
+				continue
+			}
+			l := isLeader(t, dbs[i])
+			if l {
+				assert.NotEqual(t, oldLeader, i)
+				assert.NotEqual(t, -1, i)
+				leader = i
+			}
+		}
+		if leader != -1 {
+			log.Info(fmt.Sprintf("New leader %d %v\n", leader, time.Now().Sub(start)))
+			break
+		} else {
+			time.Sleep(time.Duration(1*j) * time.Second)
+		}
+	}
+	*/
+}
+
+func isLeader(t *testing.T, db *DatabaseEtcd) bool {
+	dbCache, err := db.GetDBCache(IntServer)
+	assert.Nil(t, err)
+	tCache := dbCache.getTable(IntDatabase)
+	cRow, ok := tCache.rows[db.dbName]
+	assert.True(t, ok)
+	leader, ok := cRow.row.Fields["leader"]
+	if !ok {
+		return false
+	}
+	return leader.(bool)
 }
