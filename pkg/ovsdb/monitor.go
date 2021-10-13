@@ -21,10 +21,10 @@ import (
 )
 
 const (
-	MONITOR_CANCELED = "monitor_canceled"
-	UPDATE           = "update"
-	UPDATE2          = "update2"
-	UPDATE3          = "update3"
+	MonitorCanceled = "monitor_canceled"
+	Update          = "update"
+	Update2         = "update2"
+	Update3         = "update3"
 )
 
 type updater struct {
@@ -292,11 +292,11 @@ func (hm *handlerMonitorData) notifier(ch *Handler) {
 				var err error
 				switch hm.notificationType {
 				case ovsjson.Update:
-					err = ch.jrpcServer.Notify(ch.handlerContext, UPDATE, []interface{}{hm.jsonValue, notificationEvent.updates})
+					err = ch.jrpcServer.Notify(ch.handlerContext, Update, []interface{}{hm.jsonValue, notificationEvent.updates})
 				case ovsjson.Update2:
-					err = ch.jrpcServer.Notify(ch.handlerContext, UPDATE2, []interface{}{hm.jsonValue, notificationEvent.updates})
+					err = ch.jrpcServer.Notify(ch.handlerContext, Update2, []interface{}{hm.jsonValue, notificationEvent.updates})
 				case ovsjson.Update3:
-					err = ch.jrpcServer.Notify(ch.handlerContext, UPDATE3, []interface{}{hm.jsonValue, ovsjson.ZERO_UUID, notificationEvent.updates})
+					err = ch.jrpcServer.Notify(ch.handlerContext, Update3, []interface{}{hm.jsonValue, ovsjson.ZERO_UUID, notificationEvent.updates})
 				}
 				if err != nil {
 					// TODO should we do something else
@@ -737,7 +737,7 @@ func (u *updater) prepareRow(row *libovsdb.Row) (map[string]interface{}, string,
 		return nil, "", err
 	}
 	data = u.copySelectedColumns(data)
-	delete(data, libovsdb.COL_UUID)
+	delete(data, libovsdb.ColUuid)
 	return data, uuid.GoUUID, nil
 }
 

@@ -67,7 +67,7 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	}
 	schema, ok := ch.db.GetDBSchema(ovsReq.DBName)
 	if !ok {
-		err := errors.New(E_INTERNAL_ERROR)
+		err := errors.New(ErrInternalError)
 		log.V(1).Info("Unknown schema", "dbName", ovsReq.DBName)
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	}
 	txn, err := NewTransaction(ctx, ch.etcdClient, ovsReq, dbCache, schema, log)
 	if err != nil {
-		return nil, errors.New(E_INTERNAL_ERROR)
+		return nil, errors.New(ErrInternalError)
 	}
 	ch.mu.RLock()
 	monitor, thereIsMonitor := ch.monitors[txn.request.DBName]
@@ -400,7 +400,7 @@ func (ch *Handler) notifyAll(revision int64) {
 func (ch *Handler) monitorCanceledNotification(jsonValue interface{}) {
 	if ch.closed {
 		ch.log.V(5).Info("monitorCanceledNotification", "jsonValue", jsonValue)
-		err := ch.jrpcServer.Notify(ch.handlerContext, MONITOR_CANCELED, jsonValue)
+		err := ch.jrpcServer.Notify(ch.handlerContext, MonitorCanceled, jsonValue)
 		if err != nil {
 			// Usually we get this error because a client closed his connection, so we don't need to inform it as an error
 			ch.log.V(6).Info("monitorCanceledNotification failed", "error", err.Error())
@@ -476,7 +476,7 @@ func (ch *Handler) addMonitor(params []interface{}, notificationType ovsjson.Upd
 		updatersKeys = append(updatersKeys, key)
 	}
 	log := ch.log.WithValues("jsonValue", cmpr.JsonValue)
-	if cmpr.DatabaseName != INT_SERVER {
+	if cmpr.DatabaseName != IntServer {
 		monitor, ok := ch.monitors[cmpr.DatabaseName]
 		if !ok {
 			monitor = ch.db.CreateMonitor(cmpr.DatabaseName, ch, log)

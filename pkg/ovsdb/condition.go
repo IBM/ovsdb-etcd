@@ -10,14 +10,14 @@ import (
 )
 
 const (
-	FN_LT = "<"
-	FN_LE = "<="
-	FN_EQ = "=="
-	FN_NE = "!="
-	FN_GE = ">="
-	FN_GT = ">"
-	FN_IN = "includes"
-	FN_EX = "excludes"
+	FuncLT = "<"
+	FuncLE = "<="
+	FuncEQ = "=="
+	FuncNE = "!="
+	FuncGE = ">="
+	FuncGT = ">"
+	FuncIN = "includes"
+	FuncEX = "excludes"
 )
 
 type Condition struct {
@@ -33,28 +33,28 @@ type Conditions []Condition
 func NewCondition(tableSchema *libovsdb.TableSchema, condition []interface{}, log logr.Logger) (*Condition, error) {
 	var err error
 	if len(condition) != 3 {
-		err = errors.New(E_INTERNAL_ERROR)
+		err = errors.New(ErrInternalError)
 		log.Error(err, "expected 3 elements in condition", "condition", condition)
 		return nil, err
 	}
 
 	column, ok := condition[0].(string)
 	if !ok {
-		err = errors.New(E_INTERNAL_ERROR)
+		err = errors.New(ErrInternalError)
 		log.Error(err, "failed to convert column to string", "condition", condition)
 		return nil, err
 	}
 
 	columnSchema, err := tableSchema.LookupColumn(column)
 	if err != nil {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
+		err = errors.New(ErrConstraintViolation)
 		log.Error(err, "failed schema lookup", "column", column)
 		return nil, err
 	}
 
 	fn, ok := condition[1].(string)
 	if !ok {
-		err = errors.New(E_INTERNAL_ERROR)
+		err = errors.New(ErrInternalError)
 		log.Error(err, "failed to convert function to string", "condition", condition)
 		return nil, err
 	}
@@ -62,15 +62,15 @@ func NewCondition(tableSchema *libovsdb.TableSchema, condition []interface{}, lo
 	if columnSchema != nil {
 		tmp, err := columnSchema.Unmarshal(value)
 		if err != nil {
-			err = errors.New(E_INTERNAL_ERROR)
+			err = errors.New(ErrInternalError)
 			log.Error(err, "failed to unmarshal condition", "column", column, "type", columnSchema.Type, "value", value)
 			return nil, err
 		}
 		value = tmp
-	} else if column == libovsdb.COL_UUID { // TODO add libovsdb.COL_VERSION
+	} else if column == libovsdb.ColUuid { // TODO add libovsdb.COL_VERSION
 		tmp, err := libovsdb.UnmarshalUUID(value)
 		if err != nil {
-			err = errors.New(E_INTERNAL_ERROR)
+			err = errors.New(ErrInternalError)
 			log.Error(err, "failed to unmarshal condition", "column", column, "type", libovsdb.TypeUUID, "value", value)
 			return nil, err
 		}
@@ -93,7 +93,7 @@ func NewCondition(tableSchema *libovsdb.TableSchema, condition []interface{}, lo
 func (c *Condition) updateNamedUUID(mapUUID namedUUIDResolver, log logr.Logger) error {
 	tmp, err := mapUUID.Resolve(c.Value, log)
 	if err != nil {
-		err := errors.New(E_INTERNAL_ERROR)
+		err := errors.New(ErrInternalError)
 		log.Error(err, "failed to resolve named-uuid condition", "column", c.Column, "value", c.Value)
 		return err
 	}
@@ -129,18 +129,18 @@ func (c Conditions) isRowSelected(row *map[string]interface{}) (bool, error) {
 
 func (c *Condition) validateCompareFunction() error {
 	switch c.Function {
-	case FN_EQ, FN_NE, FN_EX, FN_IN:
+	case FuncEQ, FuncNE, FuncEX, FuncIN:
 		// these functions are acceptable for all types
 		return nil
-	case FN_GE, FN_GT, FN_LE, FN_LT:
+	case FuncGE, FuncGT, FuncLE, FuncLT:
 		if c.ColumnSchema.Type != libovsdb.TypeInteger && c.ColumnSchema.Type != libovsdb.TypeReal {
-			err := errors.New(E_CONSTRAINT_VIOLATION)
+			err := errors.New(ErrConstraintViolation)
 			c.Log.Error(err, "incompatible compare function", "compare function", c.Function, "column type", c.ColumnSchema.Type)
 			return err
 		}
 		return nil
 	default:
-		err := errors.New(E_CONSTRAINT_VIOLATION)
+		err := errors.New(ErrConstraintViolation)
 		c.Log.Error(err, "unsupported compare function", "compare function", c.Function)
 		return err
 	}
@@ -152,7 +152,7 @@ func (c *Condition) CompareInteger(row *map[string]interface{}) (bool, error) {
 	// We will convert it to int before the comparison.
 	val, ok := (*row)[c.Column].(float64)
 	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
+		err = errors.New(ErrConstraintViolation)
 		c.Log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
 		return false, err
 	}
@@ -165,26 +165,26 @@ func (c *Condition) CompareInteger(row *map[string]interface{}) (bool, error) {
 	fn := c.Function
 	expected, ok := c.Value.(int)
 	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
+		err = errors.New(ErrConstraintViolation)
 		c.Log.Error(err, "failed to convert condition value", "value", c.Value)
 		return false, err
 	}
-	if (fn == FN_EQ || fn == FN_IN) && actual == expected {
+	if (fn == FuncEQ || fn == FuncIN) && actual == expected {
 		return true, nil
 	}
-	if (fn == FN_NE || fn == FN_EX) && actual != expected {
+	if (fn == FuncNE || fn == FuncEX) && actual != expected {
 		return true, nil
 	}
-	if fn == FN_GT && actual > expected {
+	if fn == FuncGT && actual > expected {
 		return true, nil
 	}
-	if fn == FN_GE && actual >= expected {
+	if fn == FuncGE && actual >= expected {
 		return true, nil
 	}
-	if fn == FN_LT && actual < expected {
+	if fn == FuncLT && actual < expected {
 		return true, nil
 	}
-	if fn == FN_LE && actual <= expected {
+	if fn == FuncLE && actual <= expected {
 		return true, nil
 	}
 	return false, nil
@@ -194,30 +194,30 @@ func (c *Condition) CompareReal(row *map[string]interface{}) (bool, error) {
 	var err error
 	actual, ok := (*row)[c.Column].(float64)
 	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
+		err = errors.New(ErrConstraintViolation)
 		c.Log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
 		return false, err
 	}
 	fn := c.Function
 	expected, ok := c.Value.(float64)
 	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
+		err = errors.New(ErrConstraintViolation)
 		c.Log.Error(err, "failed to convert condition value", "value", c.Value)
 		return false, err
 	}
 
 	switch fn {
-	case FN_EQ, FN_IN:
+	case FuncEQ, FuncIN:
 		return actual == expected, nil
-	case FN_NE, FN_EX:
+	case FuncNE, FuncEX:
 		return actual != expected, nil
-	case FN_GT:
+	case FuncGT:
 		return actual > expected, nil
-	case FN_GE:
+	case FuncGE:
 		return actual >= expected, nil
-	case FN_LT:
+	case FuncLT:
 		return actual < expected, nil
-	case FN_LE:
+	case FuncLE:
 		return actual <= expected, nil
 	default:
 		return false, nil
@@ -228,21 +228,21 @@ func (c *Condition) CompareBoolean(row *map[string]interface{}) (bool, error) {
 	var err error
 	actual, ok := (*row)[c.Column].(bool)
 	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
+		err = errors.New(ErrConstraintViolation)
 		c.Log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
 		return false, err
 	}
 	fn := c.Function
 	expected, ok := c.Value.(bool)
 	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
+		err = errors.New(ErrConstraintViolation)
 		c.Log.Error(err, "failed to convert condition value", "value", c.Value)
 		return false, err
 	}
 	switch fn {
-	case FN_EQ, FN_IN:
+	case FuncEQ, FuncIN:
 		return actual == expected, nil
-	case FN_NE, FN_EX:
+	case FuncNE, FuncEX:
 		return actual != expected, nil
 	default:
 		return false, nil
@@ -253,21 +253,21 @@ func (c *Condition) CompareString(row *map[string]interface{}) (bool, error) {
 	var err error
 	actual, ok := (*row)[c.Column].(string)
 	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
+		err = errors.New(ErrConstraintViolation)
 		c.Log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
 		return false, err
 	}
 	fn := c.Function
 	expected, ok := c.Value.(string)
 	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
+		err = errors.New(ErrConstraintViolation)
 		c.Log.Error(err, "failed to convert condition value", "value", c.Value)
 		return false, err
 	}
 	switch fn {
-	case FN_EQ, FN_IN:
+	case FuncEQ, FuncIN:
 		return actual == expected, nil
-	case FN_NE, FN_EX:
+	case FuncNE, FuncEX:
 		return actual != expected, nil
 	default:
 		return false, nil
@@ -283,7 +283,7 @@ func (c *Condition) CompareUUID(row *map[string]interface{}) (bool, error) {
 	} else {
 		actual, ok = (*row)[c.Column].(libovsdb.UUID)
 		if !ok {
-			err = errors.New(E_CONSTRAINT_VIOLATION)
+			err = errors.New(ErrConstraintViolation)
 			c.Log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
 			return false, err
 		}
@@ -291,14 +291,14 @@ func (c *Condition) CompareUUID(row *map[string]interface{}) (bool, error) {
 	fn := c.Function
 	expected, ok := c.Value.(libovsdb.UUID)
 	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
+		err = errors.New(ErrConstraintViolation)
 		c.Log.Error(err, "failed to convert condition value", "value", c.Value)
 		return false, err
 	}
 	switch fn {
-	case FN_EQ, FN_IN:
+	case FuncEQ, FuncIN:
 		return actual.GoUUID == expected.GoUUID, nil
-	case FN_NE, FN_EX:
+	case FuncNE, FuncEX:
 		return actual.GoUUID != expected.GoUUID, nil
 	default:
 		return false, nil
@@ -311,7 +311,7 @@ func (c *Condition) CompareEnum(row *map[string]interface{}) (bool, error) {
 	case libovsdb.TypeString:
 		return c.CompareString(row)
 	default:
-		err = errors.New(E_CONSTRAINT_VIOLATION)
+		err = errors.New(ErrConstraintViolation)
 		c.Log.Error(err, "does not support type as enum key", "type", c.ColumnSchema.TypeObj.Key.Type)
 		return false, err
 	}
@@ -326,26 +326,26 @@ func (c *Condition) CompareSet(row *map[string]interface{}) (bool, error) {
 	case int, float64, bool, string, libovsdb.UUID, libovsdb.OvsMap:
 		actual = libovsdb.OvsSet{GoSet: []interface{}{data}}
 	default:
-		err = errors.New(E_CONSTRAINT_VIOLATION)
+		err = errors.New(ErrConstraintViolation)
 		c.Log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
 		return false, err
 	}
 	fn := c.Function
 	expected, ok := c.Value.(libovsdb.OvsSet)
 	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
+		err = errors.New(ErrConstraintViolation)
 		c.Log.Error(err, "failed to convert condition value", "value", c.Value)
 		return false, err
 	}
 
 	switch fn {
-	case FN_IN:
+	case FuncIN:
 		return actual.IncludeSet(expected), nil
-	case FN_EX:
+	case FuncEX:
 		return actual.ExcludeSet(expected), nil
-	case FN_EQ:
+	case FuncEQ:
 		return actual.Equals(expected), nil
-	case FN_NE:
+	case FuncNE:
 		return !actual.Equals(expected), nil
 	default:
 		return false, nil
@@ -356,26 +356,26 @@ func (c *Condition) CompareMap(row *map[string]interface{}) (bool, error) {
 	var err error
 	actual, ok := (*row)[c.Column].(libovsdb.OvsMap)
 	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
+		err = errors.New(ErrConstraintViolation)
 		c.Log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
 		return false, err
 	}
 	fn := c.Function
 	expected, ok := c.Value.(libovsdb.OvsMap)
 	if !ok {
-		err = errors.New(E_CONSTRAINT_VIOLATION)
+		err = errors.New(ErrConstraintViolation)
 		c.Log.Error(err, "failed to convert condition value", "value", c.Value)
 		return false, err
 	}
 
 	switch fn {
-	case FN_IN:
+	case FuncIN:
 		return actual.IncludeMap(expected), nil
-	case FN_EX:
+	case FuncEX:
 		return actual.ExcludeMap(expected), nil
-	case FN_EQ:
+	case FuncEQ:
 		return actual.Equals(expected), nil
-	case FN_NE:
+	case FuncNE:
 		return !actual.Equals(expected), nil
 	default:
 		return false, nil
@@ -384,10 +384,10 @@ func (c *Condition) CompareMap(row *map[string]interface{}) (bool, error) {
 
 // a short cat for a most usual condition requests, when condition is uuid.
 func (c *Condition) getUUIDIfExists() (string, error) {
-	if c.Column != libovsdb.COL_UUID {
+	if c.Column != libovsdb.ColUuid {
 		return "", nil
 	}
-	if c.Function != FN_EQ && c.Function != FN_IN {
+	if c.Function != FuncEQ && c.Function != FuncIN {
 		return "", nil
 	}
 	ovsUUID, ok := c.Value.(libovsdb.UUID)
@@ -418,7 +418,7 @@ func (c *Condition) Compare(row *map[string]interface{}) (bool, error) {
 	case libovsdb.TypeMap:
 		return c.CompareMap(row)
 	default:
-		err := errors.New(E_CONSTRAINT_VIOLATION)
+		err := errors.New(ErrConstraintViolation)
 		c.Log.Error(err, "unsupported type comparison", "type", c.ColumnSchema.Type)
 		return false, err
 	}

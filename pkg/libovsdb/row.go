@@ -26,9 +26,9 @@ func (r *Row) UnmarshalJSON(b []byte) (err error) {
 }
 
 func (r *Row) GetUUID() (*UUID, error) {
-	uuidInt, ok := r.Fields[COL_UUID]
+	uuidInt, ok := r.Fields[ColUuid]
 	if !ok {
-		return nil, fmt.Errorf("row doesn't contain %s", COL_UUID)
+		return nil, fmt.Errorf("row doesn't contain %s", ColUuid)
 	}
 	uuid, ok := uuidInt.(UUID)
 	if !ok {
@@ -38,7 +38,7 @@ func (r *Row) GetUUID() (*UUID, error) {
 }
 
 func (r *Row) deleteUUID() {
-	delete(r.Fields, COL_UUID)
+	delete(r.Fields, ColUuid)
 }
 
 // ResultRow is an properly unmarshalled row returned by Transact
