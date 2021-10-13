@@ -42,6 +42,7 @@ var (
 	cpuProfile       = flag.String("cpu-profile", "", "write cpu profile to file")
 	keepAliveTime    = flag.Duration("keepalive-time", -1*time.Second, "keepalive time for the etcd client connection")
 	keepAliveTimeout = flag.Duration("keepalive-timeout", -1*time.Second, "keepalive timeout for the etcd client connection")
+	deploymentModel  = flag.String("model", "clustered", "deployment model, possible values: clustered, standalone")
 	// returned back for backward compatability with executable scripts, wil be removed later
 	loadServerDataFlag = flag.Bool("load-server-data", false, "load-server-data")
 )
@@ -130,7 +131,7 @@ func main() {
 		log.Error(err, "cli close")
 	}()
 
-	db, _ := ovsdb.NewDatabaseEtcd(cli, log)
+	db, _ := ovsdb.NewDatabaseEtcd(ctx, cli, *deploymentModel, log)
 
 	err = db.AddSchema(path.Join(*schemaBasedir, "_server.ovsschema"))
 	if err != nil {
@@ -143,6 +144,7 @@ func main() {
 		log.Error(err, "failed to add schema", "schema file", *schemaFile)
 		os.Exit(1)
 	}
+	db.StartLeaderElection()
 
 	servOptions := &jrpc2.ServerOptions{
 		Concurrency: *maxTasks,

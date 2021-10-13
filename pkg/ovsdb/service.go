@@ -205,9 +205,10 @@ type Servicer interface {
 }
 
 const (
-	IntServer    = "_Server"
-	IntDatabase  = "Database"
-	IntClusterID = "CID"
+	IntServer         = "_Server"
+	IntDatabase       = "Database"
+	IntClusterID      = "CID"
+	IntLeaderElection = "leader-election"
 )
 
 type Service struct {

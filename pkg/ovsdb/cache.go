@@ -86,7 +86,7 @@ func (tc *tableCache) size() int {
 	return len(tc.rows)
 }
 
-func (c *cache) addDatabaseCache(dbSchema *libovsdb.DatabaseSchema, etcdClient *clientv3.Client, log logr.Logger) error {
+func (c *cache) addDatabaseCache(ctx context.Context, dbSchema *libovsdb.DatabaseSchema, etcdClient *clientv3.Client, log logr.Logger) error {
 	dbName := dbSchema.Name
 	if _, ok := (*c)[dbName]; ok {
 		return errors.New("Duplicate DatabaseCache: " + dbName)
@@ -97,15 +97,14 @@ func (c *cache) addDatabaseCache(dbSchema *libovsdb.DatabaseSchema, etcdClient *
 	if etcdClient == nil {
 		return nil
 	}
-	ctxt := context.Background()
 	key := common.NewDBPrefixKey(dbName)
-	resp, err := etcdClient.Get(ctxt, key.String(), clientv3.WithPrefix())
+	resp, err := etcdClient.Get(ctx, key.String(), clientv3.WithPrefix())
 	if err != nil {
 		log.Error(err, "get KeyData")
 		return err
 	}
 	err = dbCache.storeValues(resp.Kvs)
-	wch := etcdClient.Watch(clientv3.WithRequireLeader(ctxt), key.String(),
+	wch := etcdClient.Watch(clientv3.WithRequireLeader(ctx), key.String(),
 		clientv3.WithPrefix(),
 		clientv3.WithCreatedNotify(),
 		clientv3.WithRev(resp.Header.Revision))

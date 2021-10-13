@@ -67,7 +67,7 @@ func NewCondition(tableSchema *libovsdb.TableSchema, condition []interface{}, lo
 			return nil, err
 		}
 		value = tmp
-	} else if column == libovsdb.ColUuid { // TODO add libovsdb.COL_VERSION
+	} else if column == libovsdb.ColUuid { // TODO add libovsdb.ColVersion
 		tmp, err := libovsdb.UnmarshalUUID(value)
 		if err != nil {
 			err = errors.New(ErrInternalError)
