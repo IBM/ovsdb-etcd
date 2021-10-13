@@ -16,7 +16,7 @@ func TestConditionUUID(t *testing.T) {
 	uuid := common.GenerateUUID()
 	goUUID := libovsdb.UUID{GoUUID: uuid}
 
-	cond := []interface{}{libovsdb.COL_UUID, FN_EQ, goUUID}
+	cond := []interface{}{libovsdb.ColUuid, FuncEQ, goUUID}
 	tableSchema, ok := testSchemaSimple.Tables[table]
 	assert.True(t, ok)
 	pCondition, err := NewCondition(&tableSchema, cond, klogr.New())

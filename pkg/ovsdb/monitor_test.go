@@ -37,20 +37,20 @@ func init() {
 }
 
 const (
-	DB_NAME    = "dbName"
-	TABLE_NAME = "T1"
-	ROW_UUID   = "43f24179-432d-435b-a8dc-e7134cf39e32"
-	LAST_TNX   = "00000000-0000-0000-0000-000000000000"
-	SET_COLUMN = "set"
-	MAP_COLUMN = "map"
-	KEY_PREFIX = "ovsdb/nb"
+	dbName    = "dbName"
+	tableName = "T1"
+	rowUUID   = "43f24179-432d-435b-a8dc-e7134cf39e32"
+	lastTNX   = "00000000-0000-0000-0000-000000000000"
+	setColumn = "set"
+	mapColumn = "map"
+	keyPrefix = "ovsdb/nb"
 )
 
 func TestMonitorPrepareRowCheckColumns(t *testing.T) {
 	tableSchema := createTestTableSchema()
 	data := map[string]interface{}{"c1": "v1", "c2": "v2"}
 	expectedUUID := guuid.NewString()
-	data[libovsdb.COL_UUID] = libovsdb.UUID{GoUUID: expectedUUID}
+	data[libovsdb.ColUuid] = libovsdb.UUID{GoUUID: expectedUUID}
 	row := &libovsdb.Row{Fields: data}
 
 	// Columns are nil or all columns
@@ -71,11 +71,11 @@ func TestMonitorPrepareRowCheckColumns(t *testing.T) {
 
 func TestMonitorPrepareRowCheckWhere(t *testing.T) {
 	const (
-		SET_COLUMN_0 = SET_COLUMN + "0"
-		SET_COLUMN_1 = SET_COLUMN + "1"
-		SET_COLUMN_2 = SET_COLUMN + "2"
-		MAP_COLUMN_0 = MAP_COLUMN + "0"
-		MAP_COLUMN_1 = MAP_COLUMN + "1"
+		setColumn0 = setColumn + "0"
+		setColumn1 = setColumn + "1"
+		setColumn2 = setColumn + "2"
+		mapColumn0 = mapColumn + "0"
+		mapColumn1 = mapColumn + "1"
 	)
 	tableSchema := createTestTableSchema()
 	set0 := libovsdb.OvsSet{GoSet: nil}
@@ -83,10 +83,10 @@ func TestMonitorPrepareRowCheckWhere(t *testing.T) {
 	set2 := libovsdb.OvsSet{GoSet: []interface{}{"a", "b"}}
 	map0 := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}
 	map1 := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}
-	dataRow := map[string]interface{}{"c1": "v1", "c2": "v2", "r1": 1.5, "i1": 3, "b1": true, SET_COLUMN_0: set0, SET_COLUMN_1: set1, SET_COLUMN_2: set2, MAP_COLUMN_0: map0, MAP_COLUMN_1: map1}
-	data := map[string]interface{}{"c1": "v1", "c2": "v2", "r1": 1.5, "i1": 3, "b1": true, SET_COLUMN_0: set0, SET_COLUMN_1: set1, SET_COLUMN_2: set2, MAP_COLUMN_0: map0, MAP_COLUMN_1: map1}
-	expectedUUID := ROW_UUID
-	data[libovsdb.COL_UUID] = libovsdb.UUID{GoUUID: expectedUUID}
+	dataRow := map[string]interface{}{"c1": "v1", "c2": "v2", "r1": 1.5, "i1": 3, "b1": true, setColumn0: set0, setColumn1: set1, setColumn2: set2, mapColumn0: map0, mapColumn1: map1}
+	data := map[string]interface{}{"c1": "v1", "c2": "v2", "r1": 1.5, "i1": 3, "b1": true, setColumn0: set0, setColumn1: set1, setColumn2: set2, mapColumn0: map0, mapColumn1: map1}
+	expectedUUID := rowUUID
+	data[libovsdb.ColUuid] = libovsdb.UUID{GoUUID: expectedUUID}
 	// we need marshal and unmarshal to transfer integers to float64
 	buf, err := json.Marshal(data)
 	assert.Nil(t, err)
@@ -172,87 +172,87 @@ func TestMonitorPrepareRowCheckWhere(t *testing.T) {
 	checkWhere(&[]interface{}{[]interface{}{"b1", "excludes", true}}, emptyRow)
 
 	// Type UUID
-	checkWhere(&[]interface{}{[]interface{}{libovsdb.COL_UUID, "==", libovsdb.UUID{GoUUID: expectedUUID}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{libovsdb.COL_UUID, "includes", libovsdb.UUID{GoUUID: expectedUUID}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{libovsdb.COL_UUID, "!=", libovsdb.UUID{GoUUID: LAST_TNX}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{libovsdb.COL_UUID, "excludes", libovsdb.UUID{GoUUID: LAST_TNX}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{libovsdb.ColUuid, "==", libovsdb.UUID{GoUUID: expectedUUID}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{libovsdb.ColUuid, "includes", libovsdb.UUID{GoUUID: expectedUUID}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{libovsdb.ColUuid, "!=", libovsdb.UUID{GoUUID: lastTNX}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{libovsdb.ColUuid, "excludes", libovsdb.UUID{GoUUID: lastTNX}}}, dataRow)
 
-	checkWhere(&[]interface{}{[]interface{}{libovsdb.COL_UUID, "==", libovsdb.UUID{GoUUID: LAST_TNX}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{libovsdb.COL_UUID, "includes", libovsdb.UUID{GoUUID: LAST_TNX}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{libovsdb.COL_UUID, "!=", libovsdb.UUID{GoUUID: expectedUUID}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{libovsdb.COL_UUID, "excludes", libovsdb.UUID{GoUUID: expectedUUID}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{libovsdb.ColUuid, "==", libovsdb.UUID{GoUUID: lastTNX}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{libovsdb.ColUuid, "includes", libovsdb.UUID{GoUUID: lastTNX}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{libovsdb.ColUuid, "!=", libovsdb.UUID{GoUUID: expectedUUID}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{libovsdb.ColUuid, "excludes", libovsdb.UUID{GoUUID: expectedUUID}}}, emptyRow)
 
 	// Type Set with Zero elements
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_0, "==", libovsdb.OvsSet{GoSet: []interface{}{}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_0, "includes", libovsdb.OvsSet{GoSet: nil}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_0, "!=", libovsdb.OvsSet{GoSet: nil}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn0, "==", libovsdb.OvsSet{GoSet: []interface{}{}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn0, "includes", libovsdb.OvsSet{GoSet: nil}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn0, "!=", libovsdb.OvsSet{GoSet: nil}}}, emptyRow)
 
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_0, "==", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_0, "includes", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_0, "!=", libovsdb.OvsSet{GoSet: nil}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn0, "==", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn0, "includes", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn0, "!=", libovsdb.OvsSet{GoSet: nil}}}, emptyRow)
 
 	// Type Set with one element
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_1, "==", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_1, "includes", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_1, "!=", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_1, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn1, "==", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn1, "includes", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn1, "!=", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn1, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, dataRow)
 
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_1, "==", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_1, "includes", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_1, "!=", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_1, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn1, "==", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn1, "includes", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn1, "!=", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn1, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, emptyRow)
 
 	// Type Set with 2 elements
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "==", libovsdb.OvsSet{GoSet: []interface{}{"a", "b"}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "==", libovsdb.OvsSet{GoSet: []interface{}{"b", "a"}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "!=", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"a", "b"}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"b", "a"}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"c"}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"c", "d"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn2, "==", libovsdb.OvsSet{GoSet: []interface{}{"a", "b"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn2, "==", libovsdb.OvsSet{GoSet: []interface{}{"b", "a"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn2, "!=", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"a", "b"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"b", "a"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn2, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"c"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn2, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"c", "d"}}}}, dataRow)
 
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "==", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "!=", libovsdb.OvsSet{GoSet: []interface{}{"a", "b"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "!=", libovsdb.OvsSet{GoSet: []interface{}{"b", "a"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"a", "b"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"b", "a"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"c"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"a", "b", "c"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{SET_COLUMN_2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"c", "d"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn2, "==", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn2, "!=", libovsdb.OvsSet{GoSet: []interface{}{"a", "b"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn2, "!=", libovsdb.OvsSet{GoSet: []interface{}{"b", "a"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn2, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"a", "b"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn2, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"b", "a"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn2, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"a"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn2, "excludes", libovsdb.OvsSet{GoSet: []interface{}{"b"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"c"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"a", "b", "c"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{setColumn2, "includes", libovsdb.OvsSet{GoSet: []interface{}{"c", "d"}}}}, emptyRow)
 
 	// Type Map
 
 	// Type Map without any elements
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_0, "==", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_0, "includes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_0, "!=", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_0, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn0, "==", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn0, "includes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn0, "!=", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn0, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, dataRow)
 
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_0, "!=", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_0, "==", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_0, "includes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn0, "!=", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn0, "==", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn0, "includes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, emptyRow)
 
 	// Type Map with 2 tuples
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "==", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "!=", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "includes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "includes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1"}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "includes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key2": "val2"}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key3": "val1"}}}}, dataRow)
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val3"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn1, "==", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn1, "!=", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn1, "includes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn1, "includes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn1, "includes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key2": "val2"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key3": "val1"}}}}, dataRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val3"}}}}, dataRow)
 
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "!=", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "==", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "includes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2", "key3": "val3"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key2": "val2"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key3": "val1", "key2": "val2"}}}}, emptyRow)
-	checkWhere(&[]interface{}{[]interface{}{MAP_COLUMN_1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val3", "key2": "val2"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn1, "!=", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn1, "==", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn1, "includes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2", "key3": "val3"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1", "key2": "val2"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val1"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key2": "val2"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key3": "val1", "key2": "val2"}}}}, emptyRow)
+	checkWhere(&[]interface{}{[]interface{}{mapColumn1, "excludes", libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"key1": "val3", "key2": "val2"}}}}, emptyRow)
 }
 
 func checkPrepareRow(t *testing.T, tableSchema *libovsdb.TableSchema, row *libovsdb.Row, isV1 bool, mcr ovsjson.MonitorCondRequest, expRow map[string]interface{}) {
@@ -274,19 +274,19 @@ func createTestTableSchema() *libovsdb.TableSchema {
 	mapColumnType := libovsdb.ColumnType{Key: &libovsdb.BaseType{Type: "string"}, Value: &libovsdb.BaseType{Type: "string"}}
 	mColumnSchema := libovsdb.ColumnSchema{Type: libovsdb.TypeMap, TypeObj: &mapColumnType}
 	tableSchema.Columns = map[string]*libovsdb.ColumnSchema{
-		"c1":              &columnSchemaString,
-		"c2":              &columnSchemaString,
-		"c3":              &columnSchemaString,
-		"c4":              &columnSchemaString,
-		"r1":              &columnSchemaReal,
-		"i1":              &columnSchemaInt,
-		"b1":              &columnSchemaBool,
-		SET_COLUMN + "0":  &sColumnSchema,
-		SET_COLUMN + "1":  &sColumnSchema,
-		SET_COLUMN + "2":  &sColumnSchema,
-		libovsdb.COL_UUID: &columnSchemaUUID,
-		MAP_COLUMN + "0":  &mColumnSchema,
-		MAP_COLUMN + "1":  &mColumnSchema,
+		"c1":             &columnSchemaString,
+		"c2":             &columnSchemaString,
+		"c3":             &columnSchemaString,
+		"c4":             &columnSchemaString,
+		"r1":             &columnSchemaReal,
+		"i1":             &columnSchemaInt,
+		"b1":             &columnSchemaBool,
+		setColumn + "0":  &sColumnSchema,
+		setColumn + "1":  &sColumnSchema,
+		setColumn + "2":  &sColumnSchema,
+		libovsdb.ColUuid: &columnSchemaUUID,
+		mapColumn + "0":  &mColumnSchema,
+		mapColumn + "1":  &mColumnSchema,
 	}
 	return &tableSchema
 }
@@ -296,7 +296,7 @@ func TestMonitorPrepareInitialRow(t *testing.T) {
 	tableSchema := createTestTableSchema()
 	data := map[string]interface{}{"c1": "v1", "c2": "v2"}
 	expectedUUID := guuid.NewString()
-	data[libovsdb.COL_UUID] = libovsdb.UUID{GoUUID: expectedUUID}
+	data[libovsdb.ColUuid] = libovsdb.UUID{GoUUID: expectedUUID}
 	data1Json, err := json.Marshal(data)
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
 	testMonitorPrepareInitialRow_(t, tableSchema, &data1Json, expectedUUID, true)
@@ -339,11 +339,11 @@ func TestMonitorPrepareInsertRow(t *testing.T) {
 	tableSchema := createTestTableSchema()
 	expectedUUID := guuid.NewString()
 	data := map[string]interface{}{"c1": "v1", "c2": "v2"}
-	data[libovsdb.COL_UUID] = libovsdb.UUID{GoUUID: expectedUUID}
+	data[libovsdb.ColUuid] = libovsdb.UUID{GoUUID: expectedUUID}
 	dataJson, err := json.Marshal(data)
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
 
-	event := &clientv3.Event{Type: mvccpb.PUT, Kv: &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/" + expectedUUID),
+	event := &clientv3.Event{Type: mvccpb.PUT, Kv: &mvccpb.KeyValue{Key: []byte(keyPrefix + "/db/table/" + expectedUUID),
 		Value: dataJson, CreateRevision: 1, ModRevision: 1}}
 	testMonitorPrepareInsertRow_(t, tableSchema, event, expectedUUID, true)
 	testMonitorPrepareInsertRow_(t, tableSchema, event, expectedUUID, false)
@@ -376,13 +376,13 @@ func TestMonitorPrepareDeleteRow(t *testing.T) {
 	tableSchema := createTestTableSchema()
 	expectedUUID := guuid.NewString()
 	data := map[string]interface{}{"c1": "v1", "c2": "v2"}
-	data[libovsdb.COL_UUID] = libovsdb.UUID{GoUUID: expectedUUID}
+	data[libovsdb.ColUuid] = libovsdb.UUID{GoUUID: expectedUUID}
 	dataJson, err := json.Marshal(data)
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
 
 	event := &clientv3.Event{Type: mvccpb.DELETE,
-		PrevKv: &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/" + expectedUUID), Value: dataJson},
-		Kv:     &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/" + expectedUUID)}}
+		PrevKv: &mvccpb.KeyValue{Key: []byte(keyPrefix + "/db/table/" + expectedUUID), Value: dataJson},
+		Kv:     &mvccpb.KeyValue{Key: []byte(keyPrefix + "/db/table/" + expectedUUID)}}
 
 	testMonitorPrepareDeleteRow_(t, tableSchema, event, expectedUUID, true)
 	testMonitorPrepareDeleteRow_(t, tableSchema, event, expectedUUID, false)
@@ -414,7 +414,7 @@ func TestMonitorPrepareModifyRow(t *testing.T) {
 	tableSchema := createTestTableSchema()
 	expectedUUID := guuid.NewString()
 	data := map[string]interface{}{"c1": "v1", "c2": "v2", "c3": "v3"}
-	data[libovsdb.COL_UUID] = libovsdb.UUID{GoUUID: expectedUUID}
+	data[libovsdb.ColUuid] = libovsdb.UUID{GoUUID: expectedUUID}
 	data1Json, err := json.Marshal(data)
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
 
@@ -425,8 +425,8 @@ func TestMonitorPrepareModifyRow(t *testing.T) {
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
 
 	event := &clientv3.Event{Type: mvccpb.PUT,
-		PrevKv: &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/" + expectedUUID), Value: data1Json},
-		Kv:     &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/" + expectedUUID), Value: data2Json, CreateRevision: 1, ModRevision: 2}}
+		PrevKv: &mvccpb.KeyValue{Key: []byte(keyPrefix + "/db/table/" + expectedUUID), Value: data1Json},
+		Kv:     &mvccpb.KeyValue{Key: []byte(keyPrefix + "/db/table/" + expectedUUID), Value: data2Json, CreateRevision: 1, ModRevision: 2}}
 
 	testMonitorPrepareModifyRow_(t, tableSchema, event, expectedUUID, true)
 	testMonitorPrepareModifyRow_(t, tableSchema, event, expectedUUID, false)
@@ -460,8 +460,8 @@ func TestMonitorPrepareModifyMapRow(t *testing.T) {
 	tableSchema := createTestTableSchema()
 	expectedUUID := guuid.NewString()
 	colMap := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"k1": "v1", "k2": "v2", "k3": "v3"}}
-	data := map[string]interface{}{"c1": "v1", MAP_COLUMN: colMap}
-	data[libovsdb.COL_UUID] = libovsdb.UUID{GoUUID: expectedUUID}
+	data := map[string]interface{}{"c1": "v1", mapColumn: colMap}
+	data[libovsdb.ColUuid] = libovsdb.UUID{GoUUID: expectedUUID}
 	data1Json, err := json.Marshal(data)
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
 
@@ -472,17 +472,17 @@ func TestMonitorPrepareModifyMapRow(t *testing.T) {
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
 
 	event := &clientv3.Event{Type: mvccpb.PUT,
-		PrevKv: &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/" + expectedUUID), Value: data1Json},
-		Kv:     &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/" + expectedUUID), Value: data2Json, CreateRevision: 1, ModRevision: 2}}
+		PrevKv: &mvccpb.KeyValue{Key: []byte(keyPrefix + "/db/table/" + expectedUUID), Value: data1Json},
+		Kv:     &mvccpb.KeyValue{Key: []byte(keyPrefix + "/db/table/" + expectedUUID), Value: data2Json, CreateRevision: 1, ModRevision: 2}}
 
 	testMapRows := func(isV1 bool) {
 		var expRow *ovsjson.RowUpdate
 
 		if isV1 {
-			expRow = &ovsjson.RowUpdate{Old: &map[string]interface{}{MAP_COLUMN: libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"k1": "v1", "k2": "v2", "k3": "v3"}}},
-				New: &map[string]interface{}{"c1": "v1", MAP_COLUMN: libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"k1": "v1", "k2": "v3", "k4": "v4"}}}}
+			expRow = &ovsjson.RowUpdate{Old: &map[string]interface{}{mapColumn: libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"k1": "v1", "k2": "v2", "k3": "v3"}}},
+				New: &map[string]interface{}{"c1": "v1", mapColumn: libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"k1": "v1", "k2": "v3", "k4": "v4"}}}}
 		} else {
-			expRow = &ovsjson.RowUpdate{Modify: &map[string]interface{}{MAP_COLUMN: libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"k2": "v3", "k3": "v3", "k4": "v4"}}}}
+			expRow = &ovsjson.RowUpdate{Modify: &map[string]interface{}{mapColumn: libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"k2": "v3", "k3": "v3", "k4": "v4"}}}}
 		}
 		updater := mcrToUpdater(ovsjson.MonitorCondRequest{}, "", tableSchema, isV1, log)
 		validateRowNotification(t, updater, event, expectedUUID, expRow, tableSchema)
@@ -495,28 +495,28 @@ func TestMonitorPrepareModifySetRow(t *testing.T) {
 	tableSchema := createTestTableSchema()
 	expectedUUID := guuid.NewString()
 	colSet := libovsdb.OvsSet{GoSet: []interface{}{"e1", "e2"}}
-	data := map[string]interface{}{"c1": "v1", SET_COLUMN: colSet}
-	data[libovsdb.COL_UUID] = libovsdb.UUID{GoUUID: expectedUUID}
+	data := map[string]interface{}{"c1": "v1", setColumn: colSet}
+	data[libovsdb.ColUuid] = libovsdb.UUID{GoUUID: expectedUUID}
 	data1Json, err := json.Marshal(data)
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
 
 	colSet = libovsdb.OvsSet{GoSet: []interface{}{"e4", "e2"}}
-	data[SET_COLUMN] = colSet
+	data[setColumn] = colSet
 	data2Json, err := json.Marshal(data)
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
 
 	event := &clientv3.Event{Type: mvccpb.PUT,
-		PrevKv: &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/" + expectedUUID), Value: data1Json},
-		Kv:     &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/" + expectedUUID), Value: data2Json, CreateRevision: 1, ModRevision: 2}}
+		PrevKv: &mvccpb.KeyValue{Key: []byte(keyPrefix + "/db/table/" + expectedUUID), Value: data1Json},
+		Kv:     &mvccpb.KeyValue{Key: []byte(keyPrefix + "/db/table/" + expectedUUID), Value: data2Json, CreateRevision: 1, ModRevision: 2}}
 
 	testSetRows := func(isV1 bool) {
 		var expRow *ovsjson.RowUpdate
 
 		if isV1 {
-			expRow = &ovsjson.RowUpdate{Old: &map[string]interface{}{SET_COLUMN: libovsdb.OvsSet{GoSet: []interface{}{"e1", "e2"}}},
-				New: &map[string]interface{}{"c1": "v1", SET_COLUMN: libovsdb.OvsSet{GoSet: []interface{}{"e2", "e4"}}}}
+			expRow = &ovsjson.RowUpdate{Old: &map[string]interface{}{setColumn: libovsdb.OvsSet{GoSet: []interface{}{"e1", "e2"}}},
+				New: &map[string]interface{}{"c1": "v1", setColumn: libovsdb.OvsSet{GoSet: []interface{}{"e2", "e4"}}}}
 		} else {
-			expRow = &ovsjson.RowUpdate{Modify: &map[string]interface{}{SET_COLUMN: libovsdb.OvsSet{GoSet: []interface{}{"e1", "e4"}}}}
+			expRow = &ovsjson.RowUpdate{Modify: &map[string]interface{}{setColumn: libovsdb.OvsSet{GoSet: []interface{}{"e1", "e4"}}}}
 		}
 		updater := mcrToUpdater(ovsjson.MonitorCondRequest{}, "", tableSchema, isV1, log)
 		validateRowNotification(t, updater, event, expectedUUID, expRow, tableSchema)
@@ -536,7 +536,7 @@ func validateRowNotification(t *testing.T, updater *updater, event *clientv3.Eve
 
 func TestMonitorModifyRowMap(t *testing.T) {
 
-	const MODIFY = "modify"
+	const modify = "modify"
 
 	type operation map[string]struct {
 		event        clientv3.Event
@@ -545,7 +545,7 @@ func TestMonitorModifyRowMap(t *testing.T) {
 	}
 
 	data := map[string]interface{}{}
-	data[libovsdb.COL_UUID] = libovsdb.UUID{GoUUID: guuid.NewString()}
+	data[libovsdb.ColUuid] = libovsdb.UUID{GoUUID: guuid.NewString()}
 	goMap := map[string]interface{}{}
 	goMap["theSame"] = "v1"
 	goMap["newKey"] = "v1"
@@ -584,17 +584,17 @@ func TestMonitorModifyRowMap(t *testing.T) {
 		updater updater
 		op      operation
 	}{"allColumns-v1": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{}, "", &tableSchema, true, log),
-		op: operation{MODIFY: {event: clientv3.Event{Type: mvccpb.PUT,
-			PrevKv: &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "table/000"), Value: oldData},
-			Kv: &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/uuid"),
+		op: operation{modify: {event: clientv3.Event{Type: mvccpb.PUT,
+			PrevKv: &mvccpb.KeyValue{Key: []byte(keyPrefix + "table/000"), Value: oldData},
+			Kv: &mvccpb.KeyValue{Key: []byte(keyPrefix + "/db/table/uuid"),
 				Value: newData, CreateRevision: 1, ModRevision: 2}},
 			expRowUpdate: &ovsjson.RowUpdate{
 				Old: &map[string]interface{}{"map": deltaMap},
 				New: &map[string]interface{}{"map": newColMap}}}}},
 		"allColumns-v2": {updater: *mcrToUpdater(ovsjson.MonitorCondRequest{}, "", &tableSchema, false, log),
-			op: operation{MODIFY: {event: clientv3.Event{Type: mvccpb.PUT,
-				PrevKv: &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/000"), Value: oldData},
-				Kv:     &mvccpb.KeyValue{Key: []byte(KEY_PREFIX + "/db/table/000"), Value: newData, CreateRevision: 1, ModRevision: 2}},
+			op: operation{modify: {event: clientv3.Event{Type: mvccpb.PUT,
+				PrevKv: &mvccpb.KeyValue{Key: []byte(keyPrefix + "/db/table/000"), Value: oldData},
+				Kv:     &mvccpb.KeyValue{Key: []byte(keyPrefix + "/db/table/000"), Value: newData, CreateRevision: 1, ModRevision: 2}},
 				expRowUpdate: &ovsjson.RowUpdate{
 					Modify: &map[string]interface{}{"map": deltaMap}}}}},
 	}
@@ -631,12 +631,12 @@ func TestMonitorModifyRowMap(t *testing.T) {
 
 func TestMonitorAddRemoveMonitor(t *testing.T) {
 	const (
-		databaseSchemaName           = "OVN_Northbound"
-		databaseSchemaVer            = "5.31.0"
-		logicalRouterTableSchemaName = "Logical_Router"
-		NB_GlobalTableSchemaName     = "NB_Global"
-		ACL_TableSchemaName          = "ACL"
-		monid                        = "monid"
+		databaseSchemaName       = "OVN_Northbound"
+		databaseSchemaVer        = "5.31.0"
+		schemaLogicalRouterTable = "Logical_Router"
+		schemaNBGlobalTable      = "NB_Global"
+		schemaACLTable           = "ACL"
+		monid                    = "monid"
 	)
 	var (
 		columnsNameKey = map[string]*libovsdb.ColumnSchema{
@@ -657,13 +657,13 @@ func TestMonitorAddRemoveMonitor(t *testing.T) {
 		Name:    databaseSchemaName,
 		Version: databaseSchemaVer,
 		Tables: map[string]libovsdb.TableSchema{
-			logicalRouterTableSchemaName: {
+			schemaLogicalRouterTable: {
 				Columns: columnsNameKey,
 			},
-			NB_GlobalTableSchemaName: {
+			schemaNBGlobalTable: {
 				Columns: columnsNameKey,
 			},
-			ACL_TableSchemaName: {
+			schemaACLTable: {
 				Columns: columnsPriority,
 			},
 		},
@@ -685,13 +685,13 @@ func TestMonitorAddRemoveMonitor(t *testing.T) {
 	}
 
 	jrpcServerMock := jrpcServerMock{
-		expMethod:  MONITOR_CANCELED,
+		expMethod:  MonitorCanceled,
 		expMessage: expMsg,
 		t:          t,
 	}
 	handler.SetConnection(&jrpcServerMock, nil)
 	// add First monitor
-	msg := fmt.Sprintf(`["%s",null,{"%s":[{"columns":[%s]}],"%s":[{"columns":[%s]}]}]`, databaseSchemaName, logicalRouterTableSchemaName, "\"name\"", NB_GlobalTableSchemaName, "")
+	msg := fmt.Sprintf(`["%s",null,{"%s":[{"columns":[%s]}],"%s":[{"columns":[%s]}]}]`, databaseSchemaName, schemaLogicalRouterTable, "\"name\"", schemaNBGlobalTable, "")
 	var params []interface{}
 	err = json.Unmarshal([]byte(msg), &params)
 	assert.Nil(t, err)
@@ -701,18 +701,18 @@ func TestMonitorAddRemoveMonitor(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, handler, monitor.handler)
 	assert.Equal(t, databaseSchemaName, monitor.dataBaseName)
-	updateExpected(databaseSchemaName, logicalRouterTableSchemaName, &[]string{"name"}, nil, true)
-	updateExpected(databaseSchemaName, NB_GlobalTableSchemaName, &[]string{}, nil, true)
+	updateExpected(databaseSchemaName, schemaLogicalRouterTable, &[]string{"name"}, nil, true)
+	updateExpected(databaseSchemaName, schemaNBGlobalTable, &[]string{}, nil, true)
 	assert.Equal(t, expKey2Updaters, monitor.key2Updaters)
 	cloned := cloneKey2Updaters(monitor.key2Updaters)
 
 	// add second monitor
-	msg = fmt.Sprintf(`["%s",["%s","%s"],{"%s":[{"columns":[%s]}]}]`, databaseSchemaName, monid, databaseSchemaName, ACL_TableSchemaName, "\"priority\"")
+	msg = fmt.Sprintf(`["%s",["%s","%s"],{"%s":[{"columns":[%s]}]}]`, databaseSchemaName, monid, databaseSchemaName, schemaACLTable, "\"priority\"")
 	err = json.Unmarshal([]byte(msg), &params)
 	assert.Nil(t, err)
 	_, err = handler.addMonitor(params, ovsjson.Update2)
 	assert.Nil(t, err)
-	updateExpected(databaseSchemaName, ACL_TableSchemaName, &[]string{"priority"}, []interface{}{monid, databaseSchemaName}, false)
+	updateExpected(databaseSchemaName, schemaACLTable, &[]string{"priority"}, []interface{}{monid, databaseSchemaName}, false)
 	assert.Equal(t, expKey2Updaters, monitor.key2Updaters)
 
 	// remove the second monitor
@@ -768,13 +768,13 @@ func TestMonitorNotifications1(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	jrpcServerMock := jrpcServerMock{
-		expMethod: UPDATE,
+		expMethod: Update,
 		t:         t,
 		wg:        &wg,
 	}
 	handler.SetConnection(&jrpcServerMock, nil)
 	handler.startNotifier(jsonValueToString(nil))
-	monitor := handler.monitors[DB_NAME]
+	monitor := handler.monitors[dbName]
 	monitor.notify(events, 1)
 	wg.Wait()
 }
@@ -784,13 +784,13 @@ func TestMonitorNotifications2(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	jrpcServerMock := jrpcServerMock{
-		expMethod: UPDATE2,
+		expMethod: Update2,
 		t:         t,
 		wg:        &wg,
 	}
 	handler.SetConnection(&jrpcServerMock, nil)
 	handler.startNotifier(jsonValueToString(nil))
-	monitor := handler.monitors[DB_NAME]
+	monitor := handler.monitors[dbName]
 	monitor.notify(events, 1)
 	wg.Wait()
 }
@@ -800,13 +800,13 @@ func TestMonitorNotifications3(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	jrpcServerMock := jrpcServerMock{
-		expMethod: UPDATE3,
+		expMethod: Update3,
 		t:         t,
 		wg:        &wg,
 	}
 	handler.SetConnection(&jrpcServerMock, nil)
 	handler.startNotifier(jsonValueToString(nil))
-	monitor := handler.monitors[DB_NAME]
+	monitor := handler.monitors[dbName]
 	monitor.notify(events, 1)
 	wg.Wait()
 }
@@ -854,18 +854,18 @@ func initHandler(t *testing.T, jsonValue string, notificationType ovsjson.Update
 
 	columnSchema := libovsdb.ColumnSchema{Type: libovsdb.TypeString}
 	var testSchemaSimple = &libovsdb.DatabaseSchema{
-		Name: DB_NAME,
+		Name: dbName,
 		Tables: map[string]libovsdb.TableSchema{
-			TABLE_NAME: {Columns: map[string]*libovsdb.ColumnSchema{"c1": &columnSchema, "c2": &columnSchema}},
+			tableName: {Columns: map[string]*libovsdb.ColumnSchema{"c1": &columnSchema, "c2": &columnSchema}},
 		},
 	}
 	schemas := libovsdb.Schemas{}
-	schemas[DB_NAME] = testSchemaSimple
+	schemas[dbName] = testSchemaSimple
 	msg := `["dbName",` + jsonValue + `,{"T1":[{"columns":["c1","c2"]}]}]`
 	row := map[string]interface{}{"c1": "v1", "c2": "v2"}
 	dataJson := prepareData(t, row, true)
-	common.SetPrefix(KEY_PREFIX)
-	keyStr := fmt.Sprintf("%s/%s/%s/000", KEY_PREFIX, DB_NAME, TABLE_NAME)
+	common.SetPrefix(keyPrefix)
+	keyStr := fmt.Sprintf("%s/%s/%s/000", keyPrefix, dbName, tableName)
 	events := []*clientv3.Event{
 		{Type: mvccpb.PUT, Kv: &mvccpb.KeyValue{Key: []byte(keyStr), Value: dataJson, CreateRevision: 1, ModRevision: 1}}}
 
@@ -880,14 +880,14 @@ func initHandler(t *testing.T, jsonValue string, notificationType ovsjson.Update
 	_, err = handler.addMonitor(params, notificationType)
 	assert.Nil(t, err)
 
-	_, ok := handler.monitors[DB_NAME]
+	_, ok := handler.monitors[dbName]
 	assert.True(t, ok)
 	return handler, events
 }
 
 func prepareData(t *testing.T, data map[string]interface{}, withUUID bool) []byte {
 	if withUUID {
-		data[libovsdb.COL_UUID] = libovsdb.UUID{GoUUID: ROW_UUID}
+		data[libovsdb.ColUuid] = libovsdb.UUID{GoUUID: rowUUID}
 	}
 	dataJson, err := json.Marshal(data)
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
@@ -983,8 +983,8 @@ func TestMonitorCondChange(t *testing.T) {
 		assert.Nil(t, err)
 	}
 	addUuidToRow := func(rowIn map[string]interface{}) (rowOut map[string]interface{}) {
-		expectedUUID := ROW_UUID
-		rowIn[libovsdb.COL_UUID] = libovsdb.UUID{GoUUID: expectedUUID}
+		expectedUUID := rowUUID
+		rowIn[libovsdb.ColUuid] = libovsdb.UUID{GoUUID: expectedUUID}
 		return rowIn
 	}
 	handlerCallToPrepareRow := func(rowInWithoutUUID map[string]interface{}) map[string]interface{} {

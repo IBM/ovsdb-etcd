@@ -86,7 +86,7 @@ func TestCacheUpdateUUID(t *testing.T) {
 	// table1
 	t1UUID := uuid.NewString()
 	t1ovsUUID := libovsdb.UUID{GoUUID: t1UUID}
-	val[libovsdb.COL_UUID] = t1ovsUUID
+	val[libovsdb.ColUuid] = t1ovsUUID
 	val["name"] = "t1Row"
 	key1 := common.NewDataKey("gc", "table1", t1UUID)
 	buf1, err := json.Marshal(val)
@@ -98,7 +98,7 @@ func TestCacheUpdateUUID(t *testing.T) {
 	// root table
 	rootUUID := uuid.NewString()
 	rootOvsUUID := libovsdb.UUID{GoUUID: rootUUID}
-	val[libovsdb.COL_UUID] = rootOvsUUID
+	val[libovsdb.ColUuid] = rootOvsUUID
 	val["name"] = "rootRow"
 	val["refUUID"] = t1ovsUUID
 	keyR := common.NewDataKey("gc", "rootTable", rootUUID)
@@ -171,7 +171,7 @@ func TestCacheUpdateMap(t *testing.T) {
 	// table1
 	t1UUID := uuid.NewString()
 	t1ovsUUID := libovsdb.UUID{GoUUID: t1UUID}
-	val[libovsdb.COL_UUID] = t1ovsUUID
+	val[libovsdb.ColUuid] = t1ovsUUID
 	val["name"] = "t1Row"
 	key1 := common.NewDataKey("gc", "table1", t1UUID)
 	buf1, err := json.Marshal(val)
@@ -183,7 +183,7 @@ func TestCacheUpdateMap(t *testing.T) {
 	// root table
 	rootUUID := uuid.NewString()
 	rootOvsUUID := libovsdb.UUID{GoUUID: rootUUID}
-	val[libovsdb.COL_UUID] = rootOvsUUID
+	val[libovsdb.ColUuid] = rootOvsUUID
 	val["name"] = "rootRow"
 	val["refMap"] = libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"t2": t1ovsUUID, "a": libovsdb.UUID{GoUUID: uuid.NewString()}}}
 	keyR := common.NewDataKey("gc", "rootTable", rootUUID)
@@ -257,7 +257,7 @@ func TestCacheUpdateSet(t *testing.T) {
 	// table1
 	t1UUID := uuid.NewString()
 	T1ovsUUID := libovsdb.UUID{GoUUID: t1UUID}
-	val[libovsdb.COL_UUID] = T1ovsUUID
+	val[libovsdb.ColUuid] = T1ovsUUID
 	val["name"] = "t1Row"
 	key1 := common.NewDataKey("gc", "table1", t1UUID)
 	buf1, err := json.Marshal(val)
@@ -269,7 +269,7 @@ func TestCacheUpdateSet(t *testing.T) {
 	// root table
 	rootUUID := uuid.NewString()
 	rootOvsUUID := libovsdb.UUID{GoUUID: rootUUID}
-	val[libovsdb.COL_UUID] = rootOvsUUID
+	val[libovsdb.ColUuid] = rootOvsUUID
 	val["name"] = "rootRow"
 	val["refSet"] = libovsdb.OvsSet{GoSet: []interface{}{T1ovsUUID, libovsdb.UUID{GoUUID: uuid.NewString()}}}
 	keyR := common.NewDataKey("gc", "rootTable", rootUUID)

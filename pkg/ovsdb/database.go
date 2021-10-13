@@ -133,7 +133,7 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 		return err
 	}
 	var srv _Server.Database
-	if schemaName == INT_SERVER {
+	if schemaName == IntServer {
 		err = con.cache.addDatabaseCache(con.schemas[schemaName], nil, con.log)
 		if err != nil {
 			return err
@@ -163,8 +163,8 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 			Sid: *sidSet, Cid: *cidSet}
 	}
 
-	key := common.NewDataKey(INT_SERVER, INT_DATABASES, schemaName)
-	dbCache := con.cache.getDBCache(INT_SERVER)
+	key := common.NewDataKey(IntServer, IntDatabase, schemaName)
+	dbCache := con.cache.getDBCache(IntServer)
 	val, err := json.Marshal(srv)
 	if err != nil {
 		return err
@@ -176,7 +176,7 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 }
 
 func (con *DatabaseEtcd) getClusterID() (string, error) {
-	cidKey := common.NewTableKey(INT_SERVER, INT_ClusterIDs).String()
+	cidKey := common.NewTableKey(IntServer, IntClusterID).String()
 	cidTmpValue := uuid.NewString()
 	resp, err := con.cli.Txn(context.Background()).If(clientv3.Compare(clientv3.CreateRevision(cidKey), "=", 0)).Then(clientv3.OpPut(cidKey, cidTmpValue)).Else(clientv3.OpGet(cidKey)).Commit()
 	if err != nil {
@@ -196,13 +196,13 @@ func (con *DatabaseEtcd) GetDBSchema(dbName string) (*libovsdb.DatabaseSchema, b
 
 func (con *DatabaseEtcd) GetDBCache(dbName string) (*databaseCache, error) {
 	if con.cache == nil {
-		err := errors.New(E_INTERNAL_ERROR)
+		err := errors.New(ErrInternalError)
 		con.log.V(1).Info("Cache is not created")
 		return nil, err
 	}
 	dbCache, ok := con.cache[dbName]
 	if !ok {
-		err := errors.New(E_INTERNAL_ERROR)
+		err := errors.New(ErrInternalError)
 		con.log.V(1).Info("Database cache is not created", "dbName", dbName)
 		return nil, err
 	}
