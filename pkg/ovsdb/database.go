@@ -16,7 +16,6 @@ import (
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
 	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
-	"github.com/ibm/ovsdb-etcd/pkg/types/_Server"
 )
 
 type Databaser interface {
@@ -33,8 +32,17 @@ type Databaser interface {
 }
 
 const (
-	Clustered  = "clustered"
-	Standalone = "standalone"
+	ModClustered  = "clustered"
+	ModStandalone = "standalone"
+
+	DBColName      = "name"
+	DBColModel     = "model"
+	DBColConnected = "connected"
+	DBColLeader    = "leader"
+	DBColSchema    = "schema"
+	DBColCID       = "cid"
+	DBColSID       = "sid"
+	DBColIndex     = "index"
 )
 
 type DatabaseEtcd struct {
@@ -103,7 +111,7 @@ func NewEtcdClient(ctx context.Context, endpoints []string, keepAliveTime, keepA
 }
 
 func NewDatabaseEtcd(ctx context.Context, cli *clientv3.Client, model string, log logr.Logger) (Databaser, error) {
-	if model != Clustered && model != Standalone {
+	if model != ModClustered && model != ModStandalone {
 		return nil, errors.New(fmt.Sprintf("wrong deployment model %s", model))
 	}
 	return &DatabaseEtcd{cli: cli, log: log, cache: cache{}, model: model, ctx: ctx,
@@ -146,41 +154,55 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 	if err != nil {
 		return err
 	}
-	var srv _Server.Database
+	dbsSchema, err := con.schemas.LookupTable(IntServer, IntDatabase)
+	if err != nil {
+		return err
+	}
+	row := make(map[string]interface{})
+	dbsSchema.Default(&row)
+	row[DBColName] = schemaName
+	row[DBColConnected] = true
+	row[DBColSchema] = *schemaSet
+	row[libovsdb.ColVersion] = libovsdb.UUID{GoUUID: uuid.NewString()}
+	row[libovsdb.ColUuid] = libovsdb.UUID{GoUUID: uuid.NewString()}
 	if schemaName == IntServer {
 		err = con.cache.addDatabaseCache(con.ctx, con.schemas[schemaName], nil, con.log)
 		if err != nil {
 			return err
 		}
-		srv = _Server.Database{Model: string(con.model), Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
-			Connected: true, Leader: true, Schema: *schemaSet, Version: libovsdb.UUID{GoUUID: uuid.NewString()},
-		}
+		row[DBColModel] = ModStandalone
+		row[DBColLeader] = true
 	} else {
 		con.dbName = schemaName
 		err = con.cache.addDatabaseCache(con.ctx, con.schemas[schemaName], con.cli, con.log)
 		if err != nil {
 			return err
 		}
-		sidSet, err := libovsdb.NewOvsSet(libovsdb.UUID{GoUUID: con.GetServerID()})
-		if err != nil {
-			return err
+		row[DBColModel] = con.model
+		if con.model == ModStandalone {
+			row[DBColLeader] = true
+		} else {
+			sidSet, err := libovsdb.NewOvsSet(libovsdb.UUID{GoUUID: con.GetServerID()})
+			if err != nil {
+				return err
+			}
+			cid, err := con.getClusterID()
+			if err != nil {
+				return err
+			}
+			cidSet, err := libovsdb.NewOvsSet(libovsdb.UUID{GoUUID: cid})
+			if err != nil {
+				return err
+			}
+			row[DBColLeader] = false
+			row[DBColCID] = cidSet
+			row[DBColSID] = sidSet
 		}
-		cid, err := con.getClusterID()
-		if err != nil {
-			return err
-		}
-		cidSet, err := libovsdb.NewOvsSet(libovsdb.UUID{GoUUID: cid})
-		if err != nil {
-			return err
-		}
-		srv = _Server.Database{Model: "clustered", Name: schemaName, Uuid: libovsdb.UUID{GoUUID: uuid.NewString()},
-			Connected: true, Leader: false, Schema: *schemaSet, Version: libovsdb.UUID{GoUUID: uuid.NewString()},
-			Sid: *sidSet, Cid: *cidSet}
 	}
 
 	key := common.NewDataKey(IntServer, IntDatabase, schemaName)
 	dbCache := con.cache.getDBCache(IntServer)
-	val, err := json.Marshal(srv)
+	val, err := json.Marshal(row)
 	if err != nil {
 		return err
 	}
@@ -191,7 +213,7 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 }
 
 func (con *DatabaseEtcd) StartLeaderElection() {
-	if con.model == Standalone {
+	if con.model == ModStandalone {
 		// do nothing
 		return
 	}
@@ -220,7 +242,7 @@ func (con *DatabaseEtcd) StartLeaderElection() {
 		if !ok {
 			panic(fmt.Sprintf("db entry %s doesn't exsist in _Server/Database", con.dbName))
 		}
-		cRow.row.Fields["leader"] = true
+		cRow.row.Fields[DBColLeader] = true
 		tCache.rows[con.dbName] = cRow
 		con.log.V(1).Info("I'm the leader", "serverId", con.serverID)
 	}()

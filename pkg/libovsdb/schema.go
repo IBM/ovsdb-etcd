@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	ColUuid     = "_uuid"
-	COL_VERSION = "_version"
+	ColUuid    = "_uuid"
+	ColVersion = "_version"
 )
 
 var DefaultUUID = UUID{"00000000-0000-0000-0000-000000000000"}
@@ -145,7 +145,7 @@ type TableSchema struct {
 }
 
 func (tableSchema *TableSchema) AddInternalColumns() {
-	tableSchema.Columns[COL_VERSION] = &ColumnSchema{
+	tableSchema.Columns[ColVersion] = &ColumnSchema{
 		Type: TypeUUID,
 	}
 	tableSchema.Columns[ColUuid] = &ColumnSchema{
@@ -703,7 +703,7 @@ func (tableSchema *TableSchema) Unmarshal(row *map[string]interface{}) error {
 			var to interface{}
 			var err error
 			switch column {
-			case ColUuid, COL_VERSION:
+			case ColUuid, ColVersion:
 				to, err = UnmarshalUUID(value)
 			default:
 				to, err = columnSchema.Unmarshal(value)

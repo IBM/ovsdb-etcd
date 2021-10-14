@@ -652,7 +652,7 @@ func setRowUUID(row *map[string]interface{}, uuid string) {
 
 func setRowVersion(row *map[string]interface{}) {
 	version := common.GenerateUUID()
-	(*row)[libovsdb.COL_VERSION] = libovsdb.UUID{GoUUID: version}
+	(*row)[libovsdb.ColVersion] = libovsdb.UUID{GoUUID: version}
 }
 
 /*func (txn *Transaction) getUUIDIfExists(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, cond1 interface{}) (string, error) {
@@ -798,7 +798,7 @@ func (txn *Transaction) rowUpdate(tableSchema *libovsdb.TableSchema, mapUUID nam
 			return nil, err
 		}
 		switch column {
-		case libovsdb.ColUuid, libovsdb.COL_VERSION:
+		case libovsdb.ColUuid, libovsdb.ColVersion:
 			err = errors.New(ErrConstraintViolation)
 			txn.log.Error(err, "failed update of column", "column", column)
 			return nil, err
