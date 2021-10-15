@@ -331,6 +331,7 @@ func (txn *Transaction) reset() {
 	txn.response.Result = make([]libovsdb.OperationResult, len(txn.request.Operations))
 	txn.localCache = &localCache{}
 	txn.refCounter = refCounter{}
+	txn.mapUUID = namedUUIDResolver{}
 }
 
 func (txn *Transaction) gc() {
@@ -418,7 +419,7 @@ Loop:
 				if ovsOp.UUIDName != nil {
 					if _, ok := txn.mapUUID[*ovsOp.UUIDName]; ok {
 						err = errors.New(ErrDuplicateUUIDName)
-						txn.log.Error(err, "", "uuid-name", *ovsOp.UUIDName)
+						txn.log.Error(err, "", "uuid-name", *ovsOp.UUIDName, "transaction request", txn.request.String())
 						txn.response.Result[i].SetError(ErrDuplicateUUIDName)
 						// we will return error for the operation processing
 						break
