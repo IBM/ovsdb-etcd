@@ -131,7 +131,7 @@ func main() {
 		log.Error(err, "cli close")
 	}()
 
-	db, _ := ovsdb.NewDatabaseEtcd(ctx, cli, *deploymentModel, log)
+	db, _ := ovsdb.NewDatabaseEtcd(cli, *deploymentModel, log)
 
 	err = db.AddSchema(path.Join(*schemaBasedir, "_server.ovsschema"))
 	if err != nil {

@@ -311,8 +311,7 @@ func testTransact(t *testing.T, req *libovsdb.Transact, schema *libovsdb.Databas
 		assert.Nil(t, err)
 	}()
 	cache := cache{}
-	ctx := context.Background()
-	err = cache.addDatabaseCache(ctx, schema, cli, klogr.New())
+	err = cache.addDatabaseCache(schema, cli, klogr.New())
 	assert.Nil(t, err)
 	dbCache := cache.getDBCache(schema.Name)
 	if expCacheElements > -1 {
@@ -326,7 +325,7 @@ func testTransact(t *testing.T, req *libovsdb.Transact, schema *libovsdb.Databas
 		}
 		assert.Equal(t, expCacheElements, elements)
 	}
-	txn, err := NewTransaction(ctx, cli, req, dbCache, schema, klogr.New())
+	txn, err := NewTransaction(context.Background(), cli, req, dbCache, schema, klogr.New())
 	assert.Nil(t, err)
 	// TODO check error
 	txn.Commit()

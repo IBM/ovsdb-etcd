@@ -111,10 +111,9 @@ func TestDatabaseSetDatabase(t *testing.T) {
 	cli, err := testEtcdNewCli()
 	assert.Nil(t, err)
 	defer cli.Close()
-	ctx := context.Background()
 
 	checkDBModels := func(t *testing.T, model string) {
-		dbs, err := NewDatabaseEtcd(ctx, cli, model, log)
+		dbs, err := NewDatabaseEtcd(cli, model, log)
 		assert.Nil(t, err)
 		db := dbs.(*DatabaseEtcd)
 		err = db.AddSchema(path.Join("../../schemas", "_server.ovsschema"))
@@ -138,7 +137,6 @@ func TestDatabaseSetDatabase(t *testing.T) {
 
 func TestDatabaseEtcdLeaderElection(t *testing.T) {
 	size := 3
-	ctx := context.Background()
 	dbs := make([]*DatabaseEtcd, size, size)
 	cli := make([]*etcdClient.Client, size, size)
 	var err error
@@ -155,7 +153,7 @@ func TestDatabaseEtcdLeaderElection(t *testing.T) {
 		}
 	}()
 	for i := 0; i < size; i++ {
-		db, err := NewDatabaseEtcd(ctx, cli[i], ModClustered, log)
+		db, err := NewDatabaseEtcd(cli[i], ModClustered, log)
 		assert.Nil(t, err)
 		dbs[i] = db.(*DatabaseEtcd)
 		err = db.AddSchema(path.Join("../../schemas", "_server.ovsschema"))

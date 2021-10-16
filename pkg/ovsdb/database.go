@@ -55,7 +55,6 @@ type DatabaseEtcd struct {
 	serverID   string
 	model      string
 	dbName     string
-	ctx        context.Context
 }
 
 type Locker interface {
@@ -110,11 +109,11 @@ func NewEtcdClient(ctx context.Context, endpoints []string, keepAliveTime, keepA
 	return cli, nil
 }
 
-func NewDatabaseEtcd(ctx context.Context, cli *clientv3.Client, model string, log logr.Logger) (Databaser, error) {
+func NewDatabaseEtcd(cli *clientv3.Client, model string, log logr.Logger) (Databaser, error) {
 	if model != ModClustered && model != ModStandalone {
 		return nil, errors.New(fmt.Sprintf("wrong deployment model %s", model))
 	}
-	return &DatabaseEtcd{cli: cli, log: log, cache: cache{}, model: model, ctx: ctx,
+	return &DatabaseEtcd{cli: cli, log: log, cache: cache{}, model: model,
 		schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}, serverID: uuid.NewString()}, nil
 }
 
@@ -166,7 +165,7 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 	row[libovsdb.ColVersion] = libovsdb.UUID{GoUUID: uuid.NewString()}
 	row[libovsdb.ColUuid] = libovsdb.UUID{GoUUID: uuid.NewString()}
 	if schemaName == IntServer {
-		err = con.cache.addDatabaseCache(con.ctx, con.schemas[schemaName], nil, con.log)
+		err = con.cache.addDatabaseCache(con.schemas[schemaName], nil, con.log)
 		if err != nil {
 			return err
 		}
@@ -174,7 +173,7 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 		row[DBColLeader] = true
 	} else {
 		con.dbName = schemaName
-		err = con.cache.addDatabaseCache(con.ctx, con.schemas[schemaName], con.cli, con.log)
+		err = con.cache.addDatabaseCache(con.schemas[schemaName], con.cli, con.log)
 		if err != nil {
 			return err
 		}
@@ -227,8 +226,10 @@ func (con *DatabaseEtcd) StartLeaderElection() {
 	// TODO set context
 	go func() {
 		// Elect a leader (or wait that the leader resign)
+		ctx := context.Background()
 		for {
-			err := election.Campaign(con.ctx, "e")
+
+			err := election.Campaign(ctx, "e")
 			if err != nil {
 				con.log.Error(err, "Leader Election error", "serverId", con.serverID)
 			} else {
@@ -244,7 +245,9 @@ func (con *DatabaseEtcd) StartLeaderElection() {
 		}
 		cRow.row.Fields[DBColLeader] = true
 		tCache.rows[con.dbName] = cRow
-		con.log.V(1).Info("I'm the leader", "serverId", con.serverID)
+		con.log.V(1).Info("I'm the leader", "serverID", con.serverID)
+		// print to pod log too
+		fmt.Printf("I'm the leader, serverID %s\n", con.serverID)
 	}()
 }
 

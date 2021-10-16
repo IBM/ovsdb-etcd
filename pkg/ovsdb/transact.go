@@ -331,7 +331,6 @@ func (txn *Transaction) reset() {
 	txn.response.Result = make([]libovsdb.OperationResult, len(txn.request.Operations))
 	txn.localCache = &localCache{}
 	txn.refCounter = refCounter{}
-	txn.mapUUID = namedUUIDResolver{}
 }
 
 func (txn *Transaction) gc() {
@@ -409,30 +408,30 @@ Loop:
 		txn.response.Error = &errStr
 		return -1, err
 	}
-
-	processOperations := func() error {
-		txn.cache.mu.RLock()
-		defer txn.cache.mu.RUnlock()
-		// insert name-uuid preprocessing
-		for i, ovsOp := range txn.request.Operations {
-			if ovsOp.Op == libovsdb.OperationInsert {
-				if ovsOp.UUIDName != nil {
-					if _, ok := txn.mapUUID[*ovsOp.UUIDName]; ok {
-						err = errors.New(ErrDuplicateUUIDName)
-						txn.log.Error(err, "", "uuid-name", *ovsOp.UUIDName, "transaction request", txn.request.String())
-						txn.response.Result[i].SetError(ErrDuplicateUUIDName)
-						// we will return error for the operation processing
-						break
-					} else {
-						uuid, err := txn.getGenerateUUID(&ovsOp)
-						if err != nil {
-							return err
-						}
-						txn.mapUUID.Set(*ovsOp.UUIDName, uuid, txn.log)
+	// insert name-uuid preprocessing
+	for i, ovsOp := range txn.request.Operations {
+		if ovsOp.Op == libovsdb.OperationInsert {
+			if ovsOp.UUIDName != nil {
+				if _, ok := txn.mapUUID[*ovsOp.UUIDName]; ok {
+					err = errors.New(ErrDuplicateUUIDName)
+					txn.log.Error(err, "", "uuid-name", *ovsOp.UUIDName, "transaction request", txn.request.String())
+					txn.response.Result[i].SetError(ErrDuplicateUUIDName)
+					// we will return error for the operation processing
+					break
+				} else {
+					uuid, err := txn.getGenerateUUID(&ovsOp)
+					if err != nil {
+						return -1, err
 					}
+					txn.mapUUID.Set(*ovsOp.UUIDName, uuid, txn.log)
 				}
 			}
 		}
+	}
+	processOperations := func() error {
+		// TODO try to replace Lock to RLock
+		txn.cache.mu.Lock()
+		defer txn.cache.mu.Unlock()
 
 		for i, ovsOp := range txn.request.Operations {
 			err = txn.doOperation(&ovsOp, &txn.response.Result[i])
