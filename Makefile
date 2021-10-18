@@ -148,7 +148,7 @@ KIND_FLAGS := \
 	--ovn-loglevel-nbctld '-vconsole:dbg -vfile:dbg' \
 	--ovn-loglevel-controller '-vconsole:dbg -vfile:dbg'
 
-OVNDB_ETCD_TCPDUMP ?= false
+OVSDB_ETCD_TCPDUMP ?= false
 
 .PHONY: ovnkube-deploy
 ovnkube-deploy: check-env
@@ -157,8 +157,18 @@ ovnkube-deploy: check-env
 	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh \
 		--ovn-etcd-image "${OVSDB_ETCD_REPOSITORY}/etcd:latest" \
 		--ovn-ovsdb-etcd-image "${OVSDB_ETCD_REPOSITORY}/ovsdb-etcd:latest" \
-		--ovndb-etcd-tcpdump "${OVNDB_ETCD_TCPDUMP}" \
+		--ovsdb-etcd-tcpdump "${OVSDB_ETCD_TCPDUMP}" \
 		$(KIND_FLAGS)
+
+.PHONY: ovnkube-deploy-ha
+ovnkube-deploy-ha: check-env
+	cd ${OVN_KUBERNETES_ROOT} && git checkout origin/ovsdb-etcd2
+	cd ${OVN_KUBERNETES_ROOT}/go-controller && make
+	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh \
+		--ovn-etcd-image "${OVSDB_ETCD_REPOSITORY}/etcd:latest" \
+		--ovn-ovsdb-etcd-image "${OVSDB_ETCD_REPOSITORY}/ovsdb-etcd:latest" \
+		--ovsdb-etcd-tcpdump "${OVSDB_ETCD_TCPDUMP}" \
+		$(KIND_FLAGS) -ha
 
 .PHONY: ovnkube-deploy-org
 ovnkube-deploy-org: check-env
