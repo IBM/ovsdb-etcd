@@ -44,7 +44,7 @@ var (
 	cpuProfile       = flag.String("cpu-profile", "", "write cpu profile to file")
 	keepAliveTime    = flag.Duration("keepalive-time", -1*time.Second, "keepalive time for the etcd client connection")
 	keepAliveTimeout = flag.Duration("keepalive-timeout", -1*time.Second, "keepalive timeout for the etcd client connection")
-	deploymentModel  = flag.String("model", "standalone", "deployment model, possible values: clustered, standalone")
+	deploymentModel  = flag.String("model", "clustered", "deployment model, possible values: clustered, standalone")
 	// returned back for backward compatability with executable scripts, wil be removed later
 	loadServerDataFlag = flag.Bool("load-server-data", false, "load-server-data")
 	sslPrivateKeyFile  = flag.String("ssl-privkey", "", "path to ssl private key file")
