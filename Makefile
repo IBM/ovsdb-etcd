@@ -152,7 +152,8 @@ OVSDB_ETCD_TCPDUMP ?= false
 
 .PHONY: ovnkube-deploy
 ovnkube-deploy: check-env
-	cd ${OVN_KUBERNETES_ROOT} && git checkout origin/ovsdb-etcd2
+	#cd ${OVN_KUBERNETES_ROOT} && git checkout origin/ovsdb-etcd2 WIP - uncomment when finish
+	cd ${OVN_KUBERNETES_ROOT} && git checkout working-ha-backup
 	cd ${OVN_KUBERNETES_ROOT}/go-controller && make
 	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh \
 		--ovn-etcd-image "${OVSDB_ETCD_REPOSITORY}/etcd:latest" \
@@ -161,8 +162,8 @@ ovnkube-deploy: check-env
 		$(KIND_FLAGS)
 
 .PHONY: ovnkube-deploy-ha
-ovnkube-deploy: check-env
-	cd ${OVN_KUBERNETES_ROOT} && git checkout origin/ovsdb-etcd2
+ovnkube-deploy-ha: check-env
+	cd ${OVN_KUBERNETES_ROOT} && git checkout origin/ha
 	cd ${OVN_KUBERNETES_ROOT}/go-controller && make
 	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh \
 		--ovn-etcd-image "${OVSDB_ETCD_REPOSITORY}/etcd:latest" \
