@@ -32,21 +32,21 @@ import (
 const ETCD_LOCALHOST = "localhost:2379"
 
 var (
-	tcpAddress      = flag.String("tcp-address", "", "TCP service address")
-	unixAddress     = flag.String("unix-address", "", "UNIX service address")
-	etcdMembers     = flag.String("etcd-members", ETCD_LOCALHOST, "ETCD service addresses, separated by ',' ")
-	schemaBasedir   = flag.String("schema-basedir", ".", "Schema base dir")
-	maxTasks        = flag.Int("max", 10, "Maximum concurrent tasks")
-	databasePrefix  = flag.String("database-prefix", "ovsdb", "Database prefix")
-	serviceName     = flag.String("service-name", "", "Deployment service name, e.g. 'nbdb' or 'sbdb'")
-	schemaFile      = flag.String("schema-file", "", "schema-file")
-	deploymentModel = flag.String("model", "clustered", "deployment model, possible values: clustered, standalone")
+	tcpAddress       = flag.String("tcp-address", "", "TCP service address")
+	unixAddress      = flag.String("unix-address", "", "UNIX service address")
+	etcdMembers      = flag.String("etcd-members", ETCD_LOCALHOST, "ETCD service addresses, separated by ',' ")
+	schemaBasedir    = flag.String("schema-basedir", ".", "Schema base dir")
+	maxTasks         = flag.Int("max", 10, "Maximum concurrent tasks")
+	databasePrefix   = flag.String("database-prefix", "ovsdb", "Database prefix")
+	serviceName      = flag.String("service-name", "", "Deployment service name, e.g. 'nbdb' or 'sbdb'")
+	schemaFile       = flag.String("schema-file", "", "schema-file")
+	pidFile          = flag.String("pid-file", "", "Name of file that will hold the pid")
+	cpuProfile       = flag.String("cpu-profile", "", "write cpu profile to file")
+	keepAliveTime    = flag.Duration("keepalive-time", -1*time.Second, "keepalive time for the etcd client connection")
+	keepAliveTimeout = flag.Duration("keepalive-timeout", -1*time.Second, "keepalive timeout for the etcd client connection")
+	deploymentModel  = flag.String("model", "standalone", "deployment model, possible values: clustered, standalone")
 	// returned back for backward compatability with executable scripts, wil be removed later
 	loadServerDataFlag = flag.Bool("load-server-data", false, "load-server-data")
-	pidFile            = flag.String("pid-file", "", "Name of file that will hold the pid")
-	cpuProfile         = flag.String("cpu-profile", "", "write cpu profile to file")
-	keepAliveTime      = flag.Duration("keepalive-time", -1*time.Second, "keepalive time for the etcd client connection")
-	keepAliveTimeout   = flag.Duration("keepalive-timeout", -1*time.Second, "keepalive timeout for the etcd client connection")
 	sslPrivateKeyFile  = flag.String("ssl-privkey", "", "path to ssl private key file")
 	sslCertificateFile = flag.String("ssl-cert", "", "path to ssl certificate file")
 	sslVersion         = ssl_utils.SslVersion
@@ -85,6 +85,7 @@ func main() {
 		"pid-file", pidFile, "cpu-profile", cpuProfile,
 		"keepalive-time", keepAliveTime, "keepalive-timeout", keepAliveTimeout,
 		"ssl-privkey", sslPrivateKeyFile, "ssl-cert", sslCertificateFile,
+		"model", deploymentModel,
 	)
 
 	if len(*tcpAddress) == 0 && len(*unixAddress) == 0 {
