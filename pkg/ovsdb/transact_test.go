@@ -2171,8 +2171,23 @@ func TestTransactAbort(t *testing.T) {
 func TestTransactSelect(t *testing.T) {
 	table := "table1"
 	dbName := "simple"
-	uuid := common.GenerateUUID()
-	goUUID := libovsdb.UUID{GoUUID: uuid}
+	uuid1 := common.GenerateUUID()
+	goUUID1 := libovsdb.UUID{GoUUID: uuid1}
+	var uuid2 string
+	for true {
+		uuid2 = common.GenerateUUID()
+		if uuid2 != uuid1 {
+			break
+		}
+	}
+	var uuid3 string
+	goUUID3 := libovsdb.UUID{GoUUID: uuid3}
+	for true {
+		uuid3 = common.GenerateUUID()
+		if uuid3 != uuid1 {
+			break
+		}
+	}
 
 	simpleReq := &libovsdb.Transact{
 		DBName: dbName,
@@ -2189,7 +2204,7 @@ func TestTransactSelect(t *testing.T) {
 			{
 				Op:    libovsdb.OperationSelect,
 				Table: &table,
-				Where: &[]interface{}{[]interface{}{libovsdb.ColUuid, FuncEQ, goUUID}},
+				Where: &[]interface{}{[]interface{}{libovsdb.ColUuid, FuncEQ, goUUID1}},
 			},
 		},
 	}
@@ -2199,18 +2214,28 @@ func TestTransactSelect(t *testing.T) {
 			{
 				Op:    libovsdb.OperationSelect,
 				Table: &table,
-				Where: &[]interface{}{[]interface{}{libovsdb.ColUuid, FuncEX, goUUID}},
+				Where: &[]interface{}{[]interface{}{libovsdb.ColUuid, FuncEX, goUUID1}},
+			},
+		},
+	}
+	emptyReq := &libovsdb.Transact{
+		DBName: dbName,
+		Operations: []libovsdb.Operation{
+			{
+				Op:    libovsdb.OperationSelect,
+				Table: &table,
+				Where: &[]interface{}{[]interface{}{libovsdb.ColUuid, FuncEQ, goUUID3}},
 			},
 		},
 	}
 
 	testEtcdCleanup(t)
-	testEtcdPut(t, dbName, table, "", map[string]interface{}{
+	testEtcdPut(t, dbName, table, uuid2, map[string]interface{}{
 		"key1": "val1",
 		"key2": 3,
 	})
 
-	testEtcdPut(t, dbName, table, uuid, map[string]interface{}{
+	testEtcdPut(t, dbName, table, uuid1, map[string]interface{}{
 		"key3": "val1",
 		"key4": 3,
 	})
@@ -2231,13 +2256,13 @@ func TestTransactSelect(t *testing.T) {
 		assert.Nil(t, err)
 		goUUID, ok := iUUID.(libovsdb.UUID)
 		assert.True(t, ok)
-		if goUUID.GoUUID == uuid {
+		if goUUID.GoUUID == uuid1 {
 			checkUUIDRow(row)
 		} else {
 			checkNoneUUIDRow(row)
 		}
 	}
-	// where [[_uuid == uuid]]
+	// where [[_uuid == uuid1]]
 	resp = testTransact(t, UUIDReq, testSchemaSimple, 2)
 	validateSelectResult(t, resp, 1, 0, 1)
 	row := (*resp.Result[0].Rows)[0]
@@ -2247,6 +2272,9 @@ func TestTransactSelect(t *testing.T) {
 	validateSelectResult(t, resp, 1, 0, 1)
 	row = (*resp.Result[0].Rows)[0]
 	checkNoneUUIDRow(row)
+	// where [[_uuid == uuid3]]
+	resp = testTransact(t, emptyReq, testSchemaSimple, 2)
+	validateSelectResult(t, resp, 1, 0, 0)
 }
 
 func TestTransactSelectAndComment(t *testing.T) {
