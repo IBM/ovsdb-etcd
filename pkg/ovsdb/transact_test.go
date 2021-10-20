@@ -1591,7 +1591,7 @@ func TestTransactMutateSet(t *testing.T) {
 	assert.Equal(t, libovsdb.OvsSet{GoSet: []interface{}{float64(2), float64(6)}}, irow["integer"])
 }
 
-func TestTransactionSelectByIndex(t *testing.T) {
+func TestTransactSelectRowByIndex(t *testing.T) {
 	table := "table1"
 	dbName := "index"
 
@@ -1647,7 +1647,7 @@ func TestTransactionSelectByIndex(t *testing.T) {
 	assert.True(t, ok)
 }
 
-func TestTransactionDeleteInsert(t *testing.T) {
+func TestTransactDeleteInsert(t *testing.T) {
 	table := "table1"
 	dbName := "index"
 
@@ -2308,6 +2308,70 @@ func TestTransactSelectAndComment(t *testing.T) {
 
 	validateEmptyResult(t, resp, 2, 1)
 	testEtcdGetComment(t, comment)
+}
+
+func TestTransactCombineSelect(t *testing.T) {
+	table := "table1"
+	dbName := "simple"
+	uuid := common.GenerateUUID()
+	goUUID := libovsdb.UUID{GoUUID: uuid}
+	row := map[string]interface{}{
+		"key1": "val1",
+		"key2": 1,
+	}
+	mutations := []interface{}{
+		[]interface{}{"key2", "+=", 1},
+	}
+	req := &libovsdb.Transact{
+		DBName: dbName,
+		Operations: []libovsdb.Operation{
+			{
+				Op:    libovsdb.OperationSelect,
+				Table: &table,
+				Where: &[]interface{}{[]interface{}{libovsdb.ColUuid, FuncEQ, goUUID}},
+			},
+			{
+				Op:    libovsdb.OperationInsert,
+				Table: &table,
+				UUID:  &goUUID,
+				Row:   &row,
+			},
+			{
+				Op:    libovsdb.OperationSelect,
+				Table: &table,
+				Where: &[]interface{}{[]interface{}{libovsdb.ColUuid, FuncEQ, goUUID}},
+			},
+			{
+				Op:        libovsdb.OperationMutate,
+				Table:     &table,
+				Where:     &[]interface{}{[]interface{}{libovsdb.ColUuid, FuncEQ, goUUID}},
+				Mutations: &mutations,
+			},
+			{
+				Op:    libovsdb.OperationSelect,
+				Table: &table,
+				Where: &[]interface{}{[]interface{}{libovsdb.ColUuid, FuncEQ, goUUID}},
+			},
+		},
+	}
+	testEtcdCleanup(t)
+	resp := testTransact(t, req, testSchemaSimple, 0)
+	validateSelectResult(t, resp, 5, 0, 0)
+	validateInsertResult(t, resp, 5, 1, uuid)
+	validateSelectResult(t, resp, 5, 2, 1)
+	retRow := (*resp.Result[2].Rows)[0]
+	v, ok := retRow["key1"]
+	assert.True(t, ok)
+	assert.Equal(t, v, "val1")
+	v, ok = retRow["key2"]
+	assert.True(t, ok)
+	assert.Equal(t, v, 1)
+	validateUpdateResult(t, resp, 5, 3, 1)
+	validateSelectResult(t, resp, 5, 4, 1)
+	retRow = (*resp.Result[4].Rows)[0]
+	v, ok = retRow["key2"]
+	assert.True(t, ok)
+	assert.Equal(t, v, 2)
 }
 
 func TestTransactComment(t *testing.T) {

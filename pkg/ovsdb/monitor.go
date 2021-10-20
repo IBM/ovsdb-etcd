@@ -694,7 +694,7 @@ func (u *updater) isRowAppearOnWhere(data map[string]interface{}) (bool, error) 
 		if err != nil {
 			return false, err
 		}
-		cond, err := res.Compare(&data)
+		cond, err := res.Compare(data)
 		if err != nil {
 			return false, err
 		}

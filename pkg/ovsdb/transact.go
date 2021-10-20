@@ -274,10 +274,10 @@ func (etcd *etcdTransaction) removeDupThen() {
 	etcd.then = newThen
 }
 
-// [table][uuid]row
+// [tableName]localTableCache
 type localCache map[string]localTableCache
 
-// [full key]row
+// [full common.Key.String()]row
 type localTableCache map[string]map[string]interface{}
 
 func (lc *localCache) getLocalTableCache(tableName string) localTableCache {
@@ -302,9 +302,10 @@ type Transaction struct {
 	etcdTrx    *etcdTransaction
 	session    *concurrency.Session // session for tables locks
 
-	/* cache */
-	cache      *databaseCache // per transaction cache [tableName]->[key]->value
-	localCache *localCache
+	/* the server cache */
+	cache *databaseCache // dbCache -> map[tableName]tableCache -> rows -> map[uuid]->cachedRow
+	/* the current transaction cache with results from the previous operations */
+	localCache *localCache //  [tableName]localTableCache -> map[full common.Key.String()]map[ColumnName]interface{}
 }
 
 func NewTransaction(ctx context.Context, cli *clientv3.Client, request *libovsdb.Transact, cache *databaseCache, schema *libovsdb.DatabaseSchema, log logr.Logger) (*Transaction, error) {
@@ -380,34 +381,6 @@ func (txn *Transaction) Commit() (int64, error) {
 	txn.log.V(5).Info("commit transaction")
 	var err error
 
-	/* verify that "select" is not intermixed with write operations */
-	hasSelect := false
-	hasWrite := false
-Loop:
-	for _, ovsOp := range txn.request.Operations {
-		switch ovsOp.Op {
-		case libovsdb.OperationSelect:
-			hasSelect = true
-			if hasWrite {
-				break Loop
-			}
-		case libovsdb.OperationDelete, libovsdb.OperationMutate, libovsdb.OperationUpdate, libovsdb.OperationInsert:
-			hasWrite = true
-			if hasSelect {
-				break Loop
-			}
-		default:
-			// do nothing, operations like OP_WAIT, OP_COMMIT, OP_ABORT, OP_COMMENT, and OP_ASSERT are compatible
-			// with OP_SELECT, despite that there is no sense to combine them together (e.g. OP_COMMIT)
-		}
-	}
-	if hasSelect && hasWrite {
-		err := errors.New(ErrConstraintViolation)
-		txn.log.Error(err, "Can't mix select with other operations")
-		errStr := err.Error()
-		txn.response.Error = &errStr
-		return -1, err
-	}
 	// insert name-uuid preprocessing
 	for i, ovsOp := range txn.request.Operations {
 		if ovsOp.Op == libovsdb.OperationInsert {
@@ -486,13 +459,11 @@ func (txn *Transaction) doOperation(ovsOp *libovsdb.Operation, ovsResult *libovs
 			case libovsdb.OperationInsert:
 				err, details = txn.doInsert(ovsOp, ovsResult)
 			case libovsdb.OperationSelect:
-				ovsResult.InitRows()
-				err, details = txn.doSelectDelete(ovsOp, ovsResult)
+				err, details = txn.doSelect(ovsOp, ovsResult)
 			case libovsdb.OperationUpdate, libovsdb.OperationMutate:
 				err, details = txn.doModify(ovsOp, ovsResult)
 			case libovsdb.OperationDelete:
-				ovsResult.InitCount()
-				err, details = txn.doSelectDelete(ovsOp, ovsResult)
+				err, details = txn.doDelete(ovsOp, ovsResult)
 			case libovsdb.OperationWait:
 				err, details = txn.doWait(ovsOp, ovsResult)
 			}
@@ -698,15 +669,15 @@ func (txn *Transaction) validateOpsTableName(tableName *string) (error, string) 
 	return nil, ""
 }
 
-func reduceRowByColumns(row *map[string]interface{}, columns *[]string) (*map[string]interface{}, error) {
+func reduceRowByColumns(row map[string]interface{}, columns *[]string) (map[string]interface{}, error) {
 	if columns == nil {
 		return row, nil
 	}
 	newRow := map[string]interface{}{}
 	for _, column := range *columns {
-		newRow[column] = (*row)[column]
+		newRow[column] = row[column]
 	}
-	return &newRow, nil
+	return newRow, nil
 }
 
 func (txn *Transaction) rowMutate(tableSchema *libovsdb.TableSchema, mapUUID namedUUIDResolver, oldRow *map[string]interface{}, mutations *[]interface{}) (newRow *map[string]interface{}, err error) {
@@ -937,19 +908,13 @@ func (txn *Transaction) doInsert(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 /* update and mutate */
 func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) (err error, details string) {
 	ovsResult.InitCount()
+
 	tableSchema, e := txn.schema.LookupTable(*ovsOp.Table)
 	if e != nil {
 		err = errors.New(ErrInternalError)
 		return
 	}
 	tCache := txn.cache.getTable(*ovsOp.Table)
-	lCache := txn.localCache.getLocalTableCache(*ovsOp.Table)
-	conditions, e := txn.updateConditions(ovsOp)
-	if e != nil {
-		err = errors.New(ErrInternalError)
-		return
-	}
-
 	rowProcess := func(key string, row map[string]interface{}, version int64) {
 		var newRow *map[string]interface{}
 		if ovsOp.Op == libovsdb.OperationUpdate {
@@ -984,124 +949,149 @@ func (txn *Transaction) doModify(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 		ovsResult.IncrementCount()
 	}
 
-	uuid, e := conditions.getUUIDIfSelected()
+	cRows, e := txn.findRows(ovsOp)
 	if e != nil {
+		txn.log.Error(e, "find rows")
+		details = e.Error()
 		err = errors.New(ErrInternalError)
 		return
 	}
-	cache := lCache
-	if uuid != "" {
-		key := common.NewDataKey(txn.request.DBName, *ovsOp.Table, uuid)
-		keyS := key.String()
-		row, ok := lCache[keyS]
-		cache = localTableCache{}
-		if ok {
-			cache[keyS] = row
-		}
-	}
-	for key, row := range cache {
-		var ok bool
-		ok, err = conditions.isRowSelected(&row)
-		if err != nil {
-			return
-		}
-		if !ok {
-			continue
-		}
-		rowProcess(key, row, -1)
-	}
-
-	if uuid != "" {
-		row, ok := tCache.rows[uuid]
-		tCache = tCache.newEmptyTableCache()
-		if ok {
-			tCache.rows[uuid] = row
-		}
-	}
-	for _, cRow := range tCache.rows {
-		_, ok := lCache[cRow.key]
-		if ok {
-			// the row was modified by this transaction, we handled it above
-			continue
-		}
-		if uuid == "" || len(conditions) > 1 {
-			// there are other conditions in addition or instead of _uuid
-			ok, err = conditions.isRowSelected(&cRow.row.Fields)
-			if err != nil {
-				return
-			}
-			if !ok {
-				continue
-			}
-		}
+	for _, cRow := range cRows {
 		rowProcess(cRow.key, cRow.row.Fields, cRow.version)
 	}
 	return
 }
 
-/* Select and Delete */
-func (txn *Transaction) doSelectDelete(ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) (err error, details string) {
+func (txn *Transaction) findRows(ovsOp *libovsdb.Operation) (map[string]cachedRow, error) {
+	returnRows := make(map[string]cachedRow)
 	tCache := txn.cache.getTable(*ovsOp.Table)
+	lCache := txn.localCache.getLocalTableCache(*ovsOp.Table)
 	conditions, e := txn.updateConditions(ovsOp)
 	if e != nil {
-		err = errors.New(ErrInternalError)
-		return
+		err := errors.New(ErrInternalError)
+		return nil, err
 	}
 	uuid, e := conditions.getUUIDIfSelected()
 	if e != nil {
-		err = errors.New(ErrInternalError)
-		return
+		err := errors.New(ErrInternalError)
+		return nil, err
+	}
+
+	validateUUIDCond := func(key string, cRow cachedRow) (map[string]cachedRow, error) {
+		if len(conditions) > 1 { // there are other conditions in addition to uuid, just in case ;-)
+			ok, err := conditions.isRowSelected(cRow.row.Fields)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				returnRows[key] = cRow
+				return returnRows, nil
+			} else {
+				// other conditions do not match
+				return nil, nil
+			}
+		}
+		returnRows[key] = cRow
+		return returnRows, nil
 	}
 
 	if uuid != "" {
-		kv, ok := tCache.rows[uuid]
-		if !ok {
-			return
+		key := common.NewDataKey(txn.request.DBName, *ovsOp.Table, uuid)
+		keyS := key.String()
+		row, ok := lCache[keyS]
+		if ok {
+			// the operation defines uuid and a row with this uuid is in the local trx cache
+			return validateUUIDCond(keyS, cachedRow{row: libovsdb.Row{Fields: row}, key: keyS, version: -1})
 		}
-		tCache = tCache.newEmptyTableCache()
-		tCache.rows[uuid] = kv
+		cRow, ok := tCache.rows[uuid]
+		if ok {
+			return validateUUIDCond(keyS, cRow)
+		}
+		// uuid is defined, but it is not in the local or server cache
+		return nil, nil
+	}
+	for keyS, row := range lCache {
+		var ok bool
+		ok, err := conditions.isRowSelected(row)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+		returnRows[keyS] = cachedRow{row: libovsdb.Row{Fields: row}, key: keyS, version: -1}
 	}
 	for _, cRow := range tCache.rows {
-		if uuid == "" || len(conditions) > 1 {
-			// there are other conditions in addition or instead of _uuid
-			ok, e := conditions.isRowSelected(&cRow.row.Fields)
-			if e != nil {
-				err = errors.New(ErrInternalError)
-				return
-			}
-			if !ok {
+		_, ok := lCache[cRow.key]
+		if ok {
+			// the row is in the local cache, we handled it above
+			continue
+		}
+		ok, err := conditions.isRowSelected(cRow.row.Fields)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			returnRows[cRow.key] = cRow
+		}
+	}
+	return returnRows, nil
+}
+
+func (txn *Transaction) doDelete(ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) (err error, details string) {
+	ovsResult.InitCount()
+	cRows, e := txn.findRows(ovsOp)
+	if e != nil {
+		txn.log.Error(e, "find rows")
+		details = e.Error()
+		err = errors.New(ErrInternalError)
+		return
+	}
+	lCache := txn.localCache.getLocalTableCache(*ovsOp.Table)
+	tCache := txn.cache.getTable(*ovsOp.Table)
+	for _, cRow := range cRows {
+		if cRow.row.Fields == nil {
+			// the row was deleted in this transaction
+			continue
+		}
+		etcdOp := clientv3.OpDelete(string(cRow.key))
+		txn.etcdTrx.appendThen(etcdOp)
+		lCache[string(cRow.key)] = nil
+		tableSchema, e := txn.schema.LookupTable(*ovsOp.Table)
+		if e != nil {
+			err = errors.New(ErrInternalError)
+			return
+		}
+		for cName, destTable := range tCache.refColumns {
+			val := cRow.row.Fields[cName]
+			if val == nil {
 				continue
 			}
+			cSchema, _ := tableSchema.LookupColumn(cName)
+			txn.refCounter.updateCounters(destTable, checkCounters(nil, val, cSchema.Type))
 		}
-		if ovsOp.Op == libovsdb.OperationDelete {
-			etcdOp := clientv3.OpDelete(string(cRow.key))
-			txn.etcdTrx.appendThen(etcdOp)
-			tableSchema, e := txn.schema.LookupTable(*ovsOp.Table)
-			if e != nil {
-				err = errors.New(ErrInternalError)
-				return
-			}
-			for cName, destTable := range tCache.refColumns {
-				val := cRow.row.Fields[cName]
-				if val == nil {
-					continue
-				}
-				cSchema, _ := tableSchema.LookupColumn(cName)
-				txn.refCounter.updateCounters(destTable, checkCounters(nil, val, cSchema.Type))
-			}
-			ovsResult.IncrementCount()
-		} else if ovsOp.Op == libovsdb.OperationSelect {
-			resultRow, e := reduceRowByColumns(&cRow.row.Fields, ovsOp.Columns)
-			if e != nil {
-				txn.log.Error(err, "failed to reduce row by columns", "columns", ovsOp.Columns)
-				err = e
-				return
-			}
-			ovsResult.AppendRows(*resultRow)
-		} else {
-			txn.log.Error(err, "wrong operation", "operation", ovsOp.Op)
-			err = errors.New(ErrInternalError)
+		ovsResult.IncrementCount()
+	}
+	return
+}
+
+func (txn *Transaction) doSelect(ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) (err error, details string) {
+	ovsResult.InitRows()
+	cRows, e := txn.findRows(ovsOp)
+	if e != nil {
+		txn.log.Error(e, "find rows")
+		details = e.Error()
+		err = errors.New(ErrInternalError)
+		return
+	}
+	for _, cRow := range cRows {
+		resultRow, e := reduceRowByColumns(cRow.row.Fields, ovsOp.Columns)
+		if e != nil {
+			txn.log.Error(err, "failed to reduce row by columns", "columns", ovsOp.Columns)
+			err = e
+			return
 		}
+		ovsResult.AppendRows(resultRow)
 	}
 	return
 }
@@ -1174,7 +1164,7 @@ func (txn *Transaction) doWait(ovsOp *libovsdb.Operation, ovsResult *libovsdb.Op
 
 		if uuid == "" || len(conditions) > 1 {
 			// there are other conditions in addition or instead of _uuid
-			ok, e := conditions.isRowSelected(&kv.row.Fields)
+			ok, e := conditions.isRowSelected(kv.row.Fields)
 			if e != nil {
 				err = errors.New(ErrInternalError)
 				return
@@ -1184,13 +1174,13 @@ func (txn *Transaction) doWait(ovsOp *libovsdb.Operation, ovsResult *libovsdb.Op
 			}
 		}
 		if ovsOp.Columns != nil {
-			ac, err1 := reduceRowByColumns(&kv.row.Fields, ovsOp.Columns)
+			ac, err1 := reduceRowByColumns(kv.row.Fields, ovsOp.Columns)
 			if err1 != nil {
 				err = err1
 				txn.log.Error(err, "failed to reduce row by columns", "row", kv.row.Fields, "columns", ovsOp.Columns)
 				return
 			}
-			kv.row.Fields = *ac
+			kv.row.Fields = ac
 		}
 
 		for _, expected := range *ovsOp.Rows {
