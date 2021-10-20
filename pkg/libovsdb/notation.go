@@ -227,7 +227,8 @@ func (res *OperationResult) InitUUID(uuid string) {
 }
 
 func (res *OperationResult) InitRows() {
-	res.Rows = new([]ResultRow)
+	r := make([]ResultRow, 0)
+	res.Rows = &r
 }
 
 func (res *OperationResult) InitCount() {
