@@ -114,7 +114,7 @@ func (c Conditions) getUUIDIfSelected() (string, error) {
 	return "", nil
 }
 
-func (c Conditions) isRowSelected(row *map[string]interface{}) (bool, error) {
+func (c Conditions) isRowSelected(row map[string]interface{}) (bool, error) {
 	for _, cond := range c {
 		ok, err := cond.Compare(row)
 		if err != nil {
@@ -146,18 +146,18 @@ func (c *Condition) validateCompareFunction() error {
 	}
 }
 
-func (c *Condition) CompareInteger(row *map[string]interface{}) (bool, error) {
+func (c *Condition) CompareInteger(row map[string]interface{}) (bool, error) {
 	var err error
 	// According to Decode docs, Unmarshal stores float64, for JSON numbers.
 	// We will convert it to int before the comparison.
-	val, ok := (*row)[c.Column].(float64)
+	val, ok := row[c.Column].(float64)
 	if !ok {
 		err = errors.New(ErrConstraintViolation)
-		c.Log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
+		c.Log.Error(err, "failed to convert row value", "value", row[c.Column])
 		return false, err
 	}
 	if !(val == float64(int(val))) {
-		c.Log.Error(err, "failed to convert row value", "value", (*row)[c.Column], "is not an integer")
+		c.Log.Error(err, "failed to convert row value", "value", row[c.Column], "is not an integer")
 		return false, err
 	}
 
@@ -190,12 +190,12 @@ func (c *Condition) CompareInteger(row *map[string]interface{}) (bool, error) {
 	return false, nil
 }
 
-func (c *Condition) CompareReal(row *map[string]interface{}) (bool, error) {
+func (c *Condition) CompareReal(row map[string]interface{}) (bool, error) {
 	var err error
-	actual, ok := (*row)[c.Column].(float64)
+	actual, ok := row[c.Column].(float64)
 	if !ok {
 		err = errors.New(ErrConstraintViolation)
-		c.Log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
+		c.Log.Error(err, "failed to convert row value", "value", row[c.Column])
 		return false, err
 	}
 	fn := c.Function
@@ -224,12 +224,12 @@ func (c *Condition) CompareReal(row *map[string]interface{}) (bool, error) {
 	}
 }
 
-func (c *Condition) CompareBoolean(row *map[string]interface{}) (bool, error) {
+func (c *Condition) CompareBoolean(row map[string]interface{}) (bool, error) {
 	var err error
-	actual, ok := (*row)[c.Column].(bool)
+	actual, ok := row[c.Column].(bool)
 	if !ok {
 		err = errors.New(ErrConstraintViolation)
-		c.Log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
+		c.Log.Error(err, "failed to convert row value", "value", row[c.Column])
 		return false, err
 	}
 	fn := c.Function
@@ -249,12 +249,12 @@ func (c *Condition) CompareBoolean(row *map[string]interface{}) (bool, error) {
 	}
 }
 
-func (c *Condition) CompareString(row *map[string]interface{}) (bool, error) {
+func (c *Condition) CompareString(row map[string]interface{}) (bool, error) {
 	var err error
-	actual, ok := (*row)[c.Column].(string)
+	actual, ok := row[c.Column].(string)
 	if !ok {
 		err = errors.New(ErrConstraintViolation)
-		c.Log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
+		c.Log.Error(err, "failed to convert row value", "value", row[c.Column])
 		return false, err
 	}
 	fn := c.Function
@@ -274,17 +274,17 @@ func (c *Condition) CompareString(row *map[string]interface{}) (bool, error) {
 	}
 }
 
-func (c *Condition) CompareUUID(row *map[string]interface{}) (bool, error) {
+func (c *Condition) CompareUUID(row map[string]interface{}) (bool, error) {
 	var err error
 	var actual libovsdb.UUID
-	ar, ok := (*row)[c.Column].([]interface{})
+	ar, ok := row[c.Column].([]interface{})
 	if ok {
 		actual = libovsdb.UUID{GoUUID: ar[1].(string)}
 	} else {
-		actual, ok = (*row)[c.Column].(libovsdb.UUID)
+		actual, ok = row[c.Column].(libovsdb.UUID)
 		if !ok {
 			err = errors.New(ErrConstraintViolation)
-			c.Log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
+			c.Log.Error(err, "failed to convert row value", "value", row[c.Column])
 			return false, err
 		}
 	}
@@ -305,7 +305,7 @@ func (c *Condition) CompareUUID(row *map[string]interface{}) (bool, error) {
 	}
 }
 
-func (c *Condition) CompareEnum(row *map[string]interface{}) (bool, error) {
+func (c *Condition) CompareEnum(row map[string]interface{}) (bool, error) {
 	var err error
 	switch c.ColumnSchema.TypeObj.Key.Type {
 	case libovsdb.TypeString:
@@ -317,17 +317,17 @@ func (c *Condition) CompareEnum(row *map[string]interface{}) (bool, error) {
 	}
 }
 
-func (c *Condition) CompareSet(row *map[string]interface{}) (bool, error) {
+func (c *Condition) CompareSet(row map[string]interface{}) (bool, error) {
 	var err error
 	var actual libovsdb.OvsSet
-	switch data := (*row)[c.Column].(type) {
+	switch data := row[c.Column].(type) {
 	case libovsdb.OvsSet:
 		actual = data
 	case int, float64, bool, string, libovsdb.UUID, libovsdb.OvsMap:
 		actual = libovsdb.OvsSet{GoSet: []interface{}{data}}
 	default:
 		err = errors.New(ErrConstraintViolation)
-		c.Log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
+		c.Log.Error(err, "failed to convert row value", "value", row[c.Column])
 		return false, err
 	}
 	fn := c.Function
@@ -352,12 +352,12 @@ func (c *Condition) CompareSet(row *map[string]interface{}) (bool, error) {
 	}
 }
 
-func (c *Condition) CompareMap(row *map[string]interface{}) (bool, error) {
+func (c *Condition) CompareMap(row map[string]interface{}) (bool, error) {
 	var err error
-	actual, ok := (*row)[c.Column].(libovsdb.OvsMap)
+	actual, ok := row[c.Column].(libovsdb.OvsMap)
 	if !ok {
 		err = errors.New(ErrConstraintViolation)
-		c.Log.Error(err, "failed to convert row value", "value", (*row)[c.Column])
+		c.Log.Error(err, "failed to convert row value", "value", row[c.Column])
 		return false, err
 	}
 	fn := c.Function
@@ -399,7 +399,7 @@ func (c *Condition) getUUIDIfExists() (string, error) {
 	return ovsUUID.GoUUID, nil
 }
 
-func (c *Condition) Compare(row *map[string]interface{}) (bool, error) {
+func (c *Condition) Compare(row map[string]interface{}) (bool, error) {
 	switch c.ColumnSchema.Type {
 	case libovsdb.TypeInteger:
 		return c.CompareInteger(row)
