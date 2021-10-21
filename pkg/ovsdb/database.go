@@ -175,7 +175,7 @@ func (con *DatabaseEtcd) StartLeaderElection() {
 		return
 	}
 	// create a sessions to elect a Leader
-	s, err := concurrency.NewSession(con.cli)
+	s, err := concurrency.NewSession(con.cli, concurrency.WithTTL(5))
 	if err != nil {
 		con.log.Error(err, "new session returned")
 	}
