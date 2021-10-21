@@ -44,6 +44,7 @@ type Operation struct {
 	UUID      *UUID                     `json:"uuid,omitempty"`
 	Comment   *string                   `json:"comment,omitempty"`
 	Durable   *bool                     `json:"durable,omitempty"`
+	Lock      *string                   `json:"lock,omitempty"`
 }
 
 // String, serialize Transact

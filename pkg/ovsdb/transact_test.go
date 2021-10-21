@@ -325,7 +325,7 @@ func testTransact(t *testing.T, req *libovsdb.Transact, schema *libovsdb.Databas
 		}
 		assert.Equal(t, expCacheElements, elements)
 	}
-	txn, err := NewTransaction(context.Background(), cli, req, dbCache, schema, klogr.New())
+	txn, err := NewTransaction(context.Background(), cli, req, dbCache, schema, &databaseLocks{}, klogr.New())
 	assert.Nil(t, err)
 	// TODO check error
 	txn.Commit()
@@ -1628,7 +1628,7 @@ func TestTransactionSelectByIndex(t *testing.T) {
 
 	cli, err := testEtcdNewCli()
 	assert.Nil(t, err)
-	trx, err := NewTransaction(context.Background(), cli, req, &databaseCache{}, testSchemaIndex, klogr.New())
+	trx, err := NewTransaction(context.Background(), cli, req, &databaseCache{}, testSchemaIndex, &databaseLocks{}, klogr.New())
 	assert.Nil(t, err)
 	ok, err := trx.isSpecificRowSelected(&req.Operations[0])
 	assert.Nil(t, err)

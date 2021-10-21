@@ -9,13 +9,11 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/ibm/ovsdb-etcd/pkg/common"
+	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 	"github.com/jinzhu/copier"
 	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
-	"go.etcd.io/etcd/client/v3/concurrency"
-
-	"github.com/ibm/ovsdb-etcd/pkg/common"
-	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 )
 
 const (
@@ -300,14 +298,14 @@ type Transaction struct {
 	mapUUID    namedUUIDResolver
 	refCounter refCounter
 	etcdTrx    *etcdTransaction
-	session    *concurrency.Session // session for tables locks
+	dbLocks    *databaseLocks
 
 	/* cache */
 	cache      *databaseCache // per transaction cache [tableName]->[key]->value
 	localCache *localCache
 }
 
-func NewTransaction(ctx context.Context, cli *clientv3.Client, request *libovsdb.Transact, cache *databaseCache, schema *libovsdb.DatabaseSchema, log logr.Logger) (*Transaction, error) {
+func NewTransaction(ctx context.Context, cli *clientv3.Client, request *libovsdb.Transact, cache *databaseCache, schema *libovsdb.DatabaseSchema, dbLocks *databaseLocks, log logr.Logger) (*Transaction, error) {
 	txn := new(Transaction)
 	txn.log = log.WithValues()
 	txn.log.V(5).Info("new transaction", "size", len(request.Operations), "request", request)
@@ -316,6 +314,7 @@ func NewTransaction(ctx context.Context, cli *clientv3.Client, request *libovsdb
 	txn.refCounter = refCounter{}
 	txn.schema = schema
 	txn.request = *request
+	txn.dbLocks = dbLocks
 	txn.localCache = &localCache{}
 	txn.response.Result = make([]libovsdb.OperationResult, len(request.Operations))
 	txn.etcdTrx = &etcdTransaction{ctx: ctx, cli: cli}
@@ -1258,5 +1257,20 @@ func (txn *Transaction) doComment(ovsOp *libovsdb.Operation, ovsResult *libovsdb
 
 /* assert */
 func (txn *Transaction) doAssert(ovsOp *libovsdb.Operation, ovsResult *libovsdb.OperationResult) (error, string) {
+	if ovsOp.Lock == nil {
+		err := errors.New(ErrConstraintViolation)
+		txn.log.Error(err, "lock ID is not defined", "operation", ovsOp.Op)
+		return err, "lock ID is not defined"
+	}
+	v, err := txn.dbLocks.getLocker(*ovsOp.Lock)
+	if err != nil {
+		return err, ""
+	}
+	if v == nil {
+		msg := fmt.Sprintf("there is no lock with ID %s", *ovsOp.Lock)
+		txn.log.V(5).Info(ErrNotOwner, "cause", msg)
+		return errors.New(ErrNotOwner), msg
+	}
+	txn.etcdTrx.appendIf(v.mutex.IsOwner())
 	return nil, ""
 }
