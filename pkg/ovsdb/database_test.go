@@ -172,14 +172,14 @@ func TestDatabaseEtcdLeaderElection(t *testing.T) {
 		}
 	}
 	assert.NotEqual(t, leader, -1)
-	/*  uncomment to validate leader election over a server failure.
+	/*  uncomment to validate leader election over a server failure. */
 	start = time.Now()
 	cli[leader].Close()
 	cli[leader] = nil
 	oldLeader := leader
 	leader = -1
 	log.Info("start reelection loop")
-	for j := 0; j < 100; j++ {
+	for j := 0; j < 10; j++ {
 		for i := 0; i < size; i++ {
 			if i == oldLeader {
 				continue
@@ -198,7 +198,7 @@ func TestDatabaseEtcdLeaderElection(t *testing.T) {
 			time.Sleep(time.Duration(1*j) * time.Second)
 		}
 	}
-	*/
+	assert.NotEqual(t, -1, leader)
 }
 
 func isLeader(t *testing.T, db *DatabaseEtcd) bool {
