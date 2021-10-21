@@ -1,9 +1,7 @@
 package ovsdb
 
 import (
-	"context"
 	"fmt"
-	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 	"path"
 	"testing"
 	"time"
@@ -12,20 +10,8 @@ import (
 	etcdClient "go.etcd.io/etcd/client/v3"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
+	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 )
-
-func TestMockLock(t *testing.T) {
-	expectedResponse := &LockerMock{}
-	var expectedError error
-	mock := DatabaseMock{
-		Response: expectedResponse,
-		Error:    expectedError,
-	}
-	context.Background()
-	actualResponse, actualError := mock.GetLock(context.Background(), "id")
-	assert.Equal(t, expectedResponse, actualResponse)
-	assert.Equal(t, expectedError, actualError)
-}
 
 func TestMockAddSchema(t *testing.T) {
 	var expectedError error

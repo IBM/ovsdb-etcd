@@ -19,7 +19,6 @@ import (
 )
 
 type Databaser interface {
-	GetLock(ctx context.Context, id string) (Locker, error)
 	CreateMonitor(dbName string, handler *Handler, log logr.Logger) *dbMonitor
 	AddSchema(schemaFile string) error
 	GetKeyData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error)
@@ -57,35 +56,6 @@ type DatabaseEtcd struct {
 	dbName     string
 }
 
-type Locker interface {
-	tryLock() error
-	lock() error
-	unlock() error
-	cancel()
-}
-
-type lock struct {
-	mutex    *concurrency.Mutex
-	myCancel context.CancelFunc
-	ctx      context.Context
-}
-
-func (l *lock) tryLock() error {
-	return l.mutex.TryLock(l.ctx)
-}
-
-func (l *lock) lock() error {
-	return l.mutex.Lock(l.ctx)
-}
-
-func (l *lock) unlock() error {
-	return l.mutex.Unlock(l.ctx)
-}
-
-func (l *lock) cancel() {
-	l.myCancel()
-}
-
 var EtcdClientTimeout = time.Second
 
 func NewEtcdClient(ctx context.Context, endpoints []string, keepAliveTime, keepAliveTimeout time.Duration) (*clientv3.Client, error) {
@@ -115,18 +85,6 @@ func NewDatabaseEtcd(cli *clientv3.Client, model string, log logr.Logger) (Datab
 	}
 	return &DatabaseEtcd{cli: cli, log: log, cache: cache{}, model: model,
 		schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}, serverID: uuid.NewString()}, nil
-}
-
-func (con *DatabaseEtcd) GetLock(ctx context.Context, id string) (Locker, error) {
-	ctxt, cancel := context.WithCancel(ctx)
-	session, err := concurrency.NewSession(con.cli, concurrency.WithContext(ctxt))
-	if err != nil {
-		cancel()
-		return nil, err
-	}
-	key := common.NewLockKey(id)
-	mutex := concurrency.NewMutex(session, key.String())
-	return &lock{mutex: mutex, myCancel: cancel, ctx: ctxt}, nil
 }
 
 func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
@@ -397,10 +355,6 @@ func (l *LockerMock) cancel() {
 
 func NewDatabaseMock() (Databaser, error) {
 	return &DatabaseMock{ServerID: uuid.NewString()}, nil
-}
-
-func (con *DatabaseMock) GetLock(ctx context.Context, id string) (Locker, error) {
-	return &LockerMock{}, nil
 }
 
 func (con *DatabaseMock) StartLeaderElection() {
