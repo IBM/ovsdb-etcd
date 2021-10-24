@@ -120,7 +120,8 @@ check-env:
 
 .PHONY: docker-build
 docker-build: check-env build docker-downloads
-	cd ${OVN_KUBERNETES_ROOT} && git checkout origin/ovsdb-etcd2
+	#cd ${OVN_KUBERNETES_ROOT} && git checkout origin/ovsdb-etcd2
+	cd ${OVN_KUBERNETES_ROOT}
 	cp ${OVN_KUBERNETES_ROOT}/dist/images/ovndb-raft-functions.sh dist/images/.
 	cp ${OVN_KUBERNETES_ROOT}/dist/images/ovnkube.sh dist/images/.
 	docker build . -t etcd -f dist/images/Dockerfile.etcd
@@ -154,7 +155,8 @@ OVSDB_ETCD_TCPDUMP ?= false
 ovnkube-deploy: check-env
 	#cd ${OVN_KUBERNETES_ROOT} && git checkout origin/ovsdb-etcd2 WIP - uncomment when finish
 	#cd ${OVN_KUBERNETES_ROOT} && git checkout working-ha-backup
-	cd ${OVN_KUBERNETES_ROOT} && git checkout working-ha
+	#cd ${OVN_KUBERNETES_ROOT} && git checkout working-ha
+	cd ${OVN_KUBERNETES_ROOT}
 	cd ${OVN_KUBERNETES_ROOT}/go-controller && make
 	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh \
 		--ovn-etcd-image "${OVSDB_ETCD_REPOSITORY}/etcd:latest" \
@@ -165,7 +167,8 @@ ovnkube-deploy: check-env
 .PHONY: ovnkube-deploy-ha
 ovnkube-deploy-ha: check-env
 	#cd ${OVN_KUBERNETES_ROOT} && git checkout origin/ha
-	cd ${OVN_KUBERNETES_ROOT} && git checkout working-ha
+	#cd ${OVN_KUBERNETES_ROOT} && git checkout working-ha
+	cd ${OVN_KUBERNETES_ROOT}
 	cd ${OVN_KUBERNETES_ROOT}/go-controller && make
 	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh \
 		--ovn-etcd-image "${OVSDB_ETCD_REPOSITORY}/etcd:latest" \
