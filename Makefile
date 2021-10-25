@@ -154,7 +154,6 @@ OVSDB_ETCD_TCPDUMP ?= false
 .PHONY: ovnkube-deploy
 ovnkube-deploy: check-env
 	#cd ${OVN_KUBERNETES_ROOT} && git checkout origin/ovsdb-etcd2 WIP - uncomment when finish
-	#cd ${OVN_KUBERNETES_ROOT} && git checkout working-ha-backup
 	#cd ${OVN_KUBERNETES_ROOT} && git checkout working-ha
 	cd ${OVN_KUBERNETES_ROOT}
 	cd ${OVN_KUBERNETES_ROOT}/go-controller && make
