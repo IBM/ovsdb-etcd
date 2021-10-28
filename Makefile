@@ -180,6 +180,16 @@ ovnkube-deploy-org: check-env
 		--ovn-loglevel-sb '-vconsole:dbg -vfile:dbg' \
 		$(KIND_FLAGS)
 
+.PHONY: ovnkube-deploy-org-ha
+ovnkube-deploy-org-ha: check-env
+	cd ${OVN_KUBERNETES_ROOT} && git checkout d0fdcfbbb2702ed8482a0c1f6ba4561273399fdc
+	cd ${OVN_KUBERNETES_ROOT}/go-controller && make
+	#cd ${OVN_KUBERNETES_ROOT}/dist/images && make fedora
+	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh \
+		--ovn-loglevel-nb '-vconsole:dbg -vfile:dbg' \
+		--ovn-loglevel-sb '-vconsole:dbg -vfile:dbg' \
+		$(KIND_FLAGS) -ha
+
 .PHONY: ovnkube-status
 ovnkube-status:
 	$(KUBECTL) get pods
