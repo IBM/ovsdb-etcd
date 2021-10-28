@@ -386,11 +386,6 @@ func (m *dbMonitor) prepareTableNotification(events []*ovsdbNotificationEvent) (
 			m.log.V(5).Info("empty etcdTrx event", "event", fmt.Sprintf("%+v", ev))
 			continue
 		}
-		/*key, err := common.ParseKey(string(ev.Kv.Key))
-		if err != nil {
-			m.log.Error(err, "parseKey failed")
-			continue
-		}*/
 		key := ev.kv.key
 		updaters, ok := m.key2Updaters[key.ToTableKey()]
 		if !ok {
@@ -526,6 +521,9 @@ func (u *updater) prepareModifyRowUpdate(event *ovsdbNotificationEvent) (*ovsjso
 	if err != nil {
 		return nil, "", err
 	}
+	if len(deltaRow) == 0 {
+		return nil, uuid, nil
+	}
 	klog.V(7).Infof("deltaRow size is %d", len(deltaRow))
 	if !u.isV1 {
 		return &ovsjson.RowUpdate{Modify: &deltaRow}, uuid, nil
@@ -562,7 +560,7 @@ func (u *updater) compareModifiedRows(modifiedRow, prevRow map[string]interface{
 					return deltaRow, err
 				}
 				if len(deltaSet.GoSet) > 0 {
-					deltaValue = deltaSet
+					deltaValue = *deltaSet
 				}
 			} else {
 				if newOK {
@@ -638,6 +636,9 @@ func (u *updater) prepareInitialRow(row libovsdb.Row) (*ovsjson.RowUpdate, strin
 	data, uuid, err := u.prepareRow(&row)
 	if err != nil {
 		return nil, "", err
+	}
+	if data == nil {
+		return nil, "", nil
 	}
 	if !u.isV1 {
 		return &ovsjson.RowUpdate{Initial: &data}, uuid, nil
@@ -736,9 +737,9 @@ func (u *updater) prepareRow(row *libovsdb.Row) (map[string]interface{}, string,
 	if err != nil {
 		return nil, "", err
 	}
-	data = u.copySelectedColumns(data)
-	delete(data, libovsdb.ColUuid)
-	return data, uuid.GoUUID, nil
+	rData := u.copySelectedColumns(data)
+	delete(rData, libovsdb.ColUuid)
+	return rData, uuid.GoUUID, nil
 }
 
 // setsDifference returns a delta between 2 sets. It assumes that there is no duplicate elements in the sets.

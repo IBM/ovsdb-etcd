@@ -291,19 +291,17 @@ func createTestTableSchema() *libovsdb.TableSchema {
 	return &tableSchema
 }
 
-/*
 func TestMonitorPrepareInitialRow(t *testing.T) {
 	tableSchema := createTestTableSchema()
 	data := map[string]interface{}{"c1": "v1", "c2": "v2"}
 	expectedUUID := guuid.NewString()
 	data[libovsdb.ColUuid] = libovsdb.UUID{GoUUID: expectedUUID}
-	data1Json, err := json.Marshal(data)
-	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
-	testMonitorPrepareInitialRow_(t, tableSchema, &data1Json, expectedUUID, true)
-	testMonitorPrepareInitialRow_(t, tableSchema, &data1Json, expectedUUID, false)
+	row := libovsdb.Row{Fields: data}
+	testMonitorPrepareInitialRow_(t, tableSchema, row, expectedUUID, true)
+	testMonitorPrepareInitialRow_(t, tableSchema, row, expectedUUID, false)
 }
 
-func testMonitorPrepareInitialRow_(t *testing.T, tableSchema *libovsdb.TableSchema, data *[]byte, expectedUUID string, isV1 bool) {
+func testMonitorPrepareInitialRow_(t *testing.T, tableSchema *libovsdb.TableSchema, data libovsdb.Row, expectedUUID string, isV1 bool) {
 
 	var expRow *ovsjson.RowUpdate
 
@@ -334,7 +332,7 @@ func testMonitorPrepareInitialRow_(t *testing.T, tableSchema *libovsdb.TableSche
 	assert.Nil(t, err)
 	assert.Equal(t, expRow, row)
 }
-*/
+
 func TestMonitorPrepareInsertRow(t *testing.T) {
 	tableSchema := createTestTableSchema()
 	expectedUUID := guuid.NewString()
@@ -447,11 +445,7 @@ func testMonitorPrepareModifyRow_(t *testing.T, tableSchema *libovsdb.TableSchem
 
 	// TODO validate
 	// Columns are empty array
-	if isV1 {
-		expRow = &ovsjson.RowUpdate{Old: &map[string]interface{}{}, New: &map[string]interface{}{}}
-	} else {
-		expRow = &ovsjson.RowUpdate{Modify: &map[string]interface{}{}}
-	}
+	expRow = nil
 	updater = mcrToUpdater(ovsjson.MonitorCondRequest{Columns: &[]string{}}, "", tableSchema, isV1, log)
 	validateRowNotification(t, updater, event, expectedUUID, expRow, tableSchema)
 }
@@ -460,7 +454,8 @@ func TestMonitorPrepareModifyMapRow(t *testing.T) {
 	tableSchema := createTestTableSchema()
 	expectedUUID := guuid.NewString()
 	colMap := libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"k1": "v1", "k2": "v2", "k3": "v3"}}
-	data := map[string]interface{}{"c1": "v1", mapColumn: colMap}
+	mapColName := mapColumn + "0"
+	data := map[string]interface{}{"c1": "v1", mapColName: colMap}
 	data[libovsdb.ColUuid] = libovsdb.UUID{GoUUID: expectedUUID}
 	data1Json, err := json.Marshal(data)
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
@@ -479,10 +474,10 @@ func TestMonitorPrepareModifyMapRow(t *testing.T) {
 		var expRow *ovsjson.RowUpdate
 
 		if isV1 {
-			expRow = &ovsjson.RowUpdate{Old: &map[string]interface{}{mapColumn: libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"k1": "v1", "k2": "v2", "k3": "v3"}}},
-				New: &map[string]interface{}{"c1": "v1", mapColumn: libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"k1": "v1", "k2": "v3", "k4": "v4"}}}}
+			expRow = &ovsjson.RowUpdate{Old: &map[string]interface{}{mapColName: libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"k1": "v1", "k2": "v2", "k3": "v3"}}},
+				New: &map[string]interface{}{"c1": "v1", mapColName: libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"k1": "v1", "k2": "v3", "k4": "v4"}}}}
 		} else {
-			expRow = &ovsjson.RowUpdate{Modify: &map[string]interface{}{mapColumn: libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"k2": "v3", "k3": "v3", "k4": "v4"}}}}
+			expRow = &ovsjson.RowUpdate{Modify: &map[string]interface{}{mapColName: libovsdb.OvsMap{GoMap: map[interface{}]interface{}{"k2": "v3", "k3": "v3", "k4": "v4"}}}}
 		}
 		updater := mcrToUpdater(ovsjson.MonitorCondRequest{}, "", tableSchema, isV1, log)
 		validateRowNotification(t, updater, event, expectedUUID, expRow, tableSchema)
@@ -494,14 +489,15 @@ func TestMonitorPrepareModifyMapRow(t *testing.T) {
 func TestMonitorPrepareModifySetRow(t *testing.T) {
 	tableSchema := createTestTableSchema()
 	expectedUUID := guuid.NewString()
+	setColName := setColumn + "0"
 	colSet := libovsdb.OvsSet{GoSet: []interface{}{"e1", "e2"}}
-	data := map[string]interface{}{"c1": "v1", setColumn: colSet}
+	data := map[string]interface{}{"c1": "v1", setColName: colSet}
 	data[libovsdb.ColUuid] = libovsdb.UUID{GoUUID: expectedUUID}
 	data1Json, err := json.Marshal(data)
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
 
 	colSet = libovsdb.OvsSet{GoSet: []interface{}{"e4", "e2"}}
-	data[setColumn] = colSet
+	data[setColName] = colSet
 	data2Json, err := json.Marshal(data)
 	assert.Nilf(t, err, "marshalling %v, threw %v", data, err)
 
@@ -513,10 +509,10 @@ func TestMonitorPrepareModifySetRow(t *testing.T) {
 		var expRow *ovsjson.RowUpdate
 
 		if isV1 {
-			expRow = &ovsjson.RowUpdate{Old: &map[string]interface{}{setColumn: libovsdb.OvsSet{GoSet: []interface{}{"e1", "e2"}}},
-				New: &map[string]interface{}{"c1": "v1", setColumn: libovsdb.OvsSet{GoSet: []interface{}{"e2", "e4"}}}}
+			expRow = &ovsjson.RowUpdate{Old: &map[string]interface{}{setColName: libovsdb.OvsSet{GoSet: []interface{}{"e1", "e2"}}},
+				New: &map[string]interface{}{"c1": "v1", setColName: libovsdb.OvsSet{GoSet: []interface{}{"e2", "e4"}}}}
 		} else {
-			expRow = &ovsjson.RowUpdate{Modify: &map[string]interface{}{setColumn: libovsdb.OvsSet{GoSet: []interface{}{"e1", "e4"}}}}
+			expRow = &ovsjson.RowUpdate{Modify: &map[string]interface{}{setColName: libovsdb.OvsSet{GoSet: []interface{}{"e1", "e4"}}}}
 		}
 		updater := mcrToUpdater(ovsjson.MonitorCondRequest{}, "", tableSchema, isV1, log)
 		validateRowNotification(t, updater, event, expectedUUID, expRow, tableSchema)
@@ -842,6 +838,9 @@ func isEqualMaps(t *testing.T, m1 *map[string]interface{}, m2 *map[string]interf
 }
 
 func rowsAreEqual(t *testing.T, expRow *ovsjson.RowUpdate, row *ovsjson.RowUpdate, tableSchema *libovsdb.TableSchema) {
+	if row == nil && expRow == nil {
+		return
+	}
 	isEqualMaps(t, expRow.New, row.New, tableSchema)
 	isEqualMaps(t, expRow.Old, row.Old, tableSchema)
 	isEqualMaps(t, expRow.Initial, row.Initial, tableSchema)
