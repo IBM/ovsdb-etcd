@@ -330,7 +330,7 @@ func (ch *Handler) notify(jsonValueString string, updates ovsjson.TableUpdates, 
 		return
 	}
 	if klog.V(7).Enabled() {
-		ch.log.V(7).Info("monitor notification", "jsonValue", hmd.jsonValue, "revision", revision, "updates", updates)
+		ch.log.V(6).Info("monitor notification", "jsonValue", hmd.jsonValue, "revision", revision, "updates", updates)
 	} else {
 		ch.log.V(5).Info("monitor notification", "jsonValue", hmd.jsonValue, "revision", revision)
 	}
@@ -515,6 +515,9 @@ func (ch *Handler) getMonitoredData(dbName string, updatersMap Key2Updaters) (ov
 				if err != nil {
 					ch.log.Error(err, "prepareInitialRow returned")
 					return nil, err
+				}
+				if row == nil {
+					continue
 				}
 				// TODO merge
 				tableUpdate, ok := returnData[tableName]
