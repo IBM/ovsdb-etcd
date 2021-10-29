@@ -174,7 +174,7 @@ ovnkube-deploy-ha: check-env
 ovnkube-deploy-org: check-env
 	cd ${OVN_KUBERNETES_ROOT} && git checkout d0fdcfbbb2702ed8482a0c1f6ba4561273399fdc
 	cd ${OVN_KUBERNETES_ROOT}/go-controller && make
-	#cd ${OVN_KUBERNETES_ROOT}/dist/images && make fedora
+	cd ${OVN_KUBERNETES_ROOT}/dist/images && make fedora
 	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh \
 		--ovn-loglevel-nb '-vconsole:dbg -vfile:dbg' \
 		--ovn-loglevel-sb '-vconsole:dbg -vfile:dbg' \
@@ -184,7 +184,7 @@ ovnkube-deploy-org: check-env
 ovnkube-deploy-org-ha: check-env
 	cd ${OVN_KUBERNETES_ROOT} && git checkout d0fdcfbbb2702ed8482a0c1f6ba4561273399fdc
 	cd ${OVN_KUBERNETES_ROOT}/go-controller && make
-	#cd ${OVN_KUBERNETES_ROOT}/dist/images && make fedora
+	cd ${OVN_KUBERNETES_ROOT}/dist/images && make fedora
 	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh \
 		--ovn-loglevel-nb '-vconsole:dbg -vfile:dbg' \
 		--ovn-loglevel-sb '-vconsole:dbg -vfile:dbg' \

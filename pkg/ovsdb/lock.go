@@ -57,27 +57,42 @@ func (dbLocks *databaseLocks) cleanup(log logr.Logger) {
 }
 
 type locker struct {
+	locked   bool
 	mutex    *concurrency.Mutex
 	myCancel context.CancelFunc
 	ctx      context.Context
 }
 
 func (l *locker) tryLock() error {
-	return l.mutex.TryLock(l.ctx)
+	err := l.mutex.TryLock(l.ctx)
+	if err == nil {
+		l.locked = true
+	}
+	return err
 }
 
 func (l *locker) lock() error {
-	return l.mutex.Lock(l.ctx)
+	err := l.mutex.Lock(l.ctx)
+	if err == nil {
+		l.locked = true
+	}
+	return err
 }
 
 func (l *locker) unlock() error {
+	l.locked = false
 	return l.mutex.Unlock(l.ctx)
 }
 
 func (l *locker) cancel() {
+	l.locked = false
 	l.myCancel()
 }
 
-func (l *locker) isLocked() clientv3.Cmp {
+func (l *locker) isLocalLocked() bool {
+	return l.locked
+}
+
+func (l *locker) isGlobalLocked() clientv3.Cmp {
 	return l.mutex.IsOwner()
 }
