@@ -1256,11 +1256,11 @@ func (txn *Transaction) doAssert(ovsOp *libovsdb.Operation, ovsResult *libovsdb.
 	if err != nil {
 		return err, ""
 	}
-	if v == nil {
+	if v == nil || !v.isLocalLocked() {
 		msg := fmt.Sprintf("there is no lock with ID %s", *ovsOp.Lock)
 		txn.log.V(5).Info(ErrNotOwner, "cause", msg)
 		return errors.New(ErrNotOwner), msg
 	}
-	txn.etcdTrx.appendIf(v.mutex.IsOwner())
+	txn.etcdTrx.appendIf(v.isGlobalLocked())
 	return nil, ""
 }
