@@ -402,8 +402,8 @@ func (txn *Transaction) Commit() (int64, error) {
 	}
 	processOperations := func() error {
 		// TODO try to replace Lock to RLock
-		txn.cache.mu.Lock()
-		defer txn.cache.mu.Unlock()
+		txn.cache.mu.RLock()
+		defer txn.cache.mu.RUnlock()
 
 		for i, ovsOp := range txn.request.Operations {
 			err = txn.doOperation(&ovsOp, &txn.response.Result[i])
