@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/go-logr/logr"
@@ -51,6 +52,7 @@ type Handler struct {
 }
 
 func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interface{}, error) {
+	txnStart := time.Now()
 	req := jrpc2.InboundRequest(ctx)
 	id := ""
 	if !req.IsNotification() {
@@ -82,6 +84,7 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	if err != nil {
 		return nil, errors.New(ErrInternalError)
 	}
+	txn.txnStart = txnStart
 	ch.mu.RLock()
 	monitor, thereIsMonitor := ch.monitors[txn.request.DBName]
 	ch.mu.RUnlock()
@@ -102,7 +105,16 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 		wg.Add(1)
 		monitor.tQueue.endTransaction(rev, &wg)
 		log.V(5).Info("transact added", "etcdTrx revision", rev)
+		beforeNotifWait := time.Now()
 		wg.Wait()
+		afterNotifWait := time.Now()
+		txn.log.V(1).Info("AfterNotificationWait",
+			"notifWait", fmt.Sprintf("%s", afterNotifWait.Sub(beforeNotifWait)),
+			"txnDuration", fmt.Sprintf("%s", afterNotifWait.Sub(txnStart)),
+			"txnProcess", fmt.Sprintf("%v", txn.txnProcess),
+			"etcdTxn", fmt.Sprintf("%v", txn.etcdTxnProcess),
+			"txnSize", len(txn.request.Operations),
+			"etcdTxnSize", txn.etcdTrx.ifSize()+txn.etcdTrx.thenSize())
 	}
 
 	log.V(5).Info("transact response", "response", txn.response, "etcdTrx revision", rev)
