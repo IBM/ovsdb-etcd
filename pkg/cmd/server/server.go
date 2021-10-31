@@ -153,7 +153,7 @@ func main() {
 		log.Error(err, "failed to add schema", "schema file", *schemaFile)
 		os.Exit(1)
 	}
-	db.StartLeaderElection()
+	//db.StartLeaderElection()
 
 	servOptions := &jrpc2.ServerOptions{
 		Concurrency: *maxTasks,
