@@ -108,7 +108,7 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 		beforeNotifWait := time.Now()
 		wg.Wait()
 		afterNotifWait := time.Now()
-		txn.log.V(1).Info("AfterNotificationWait",
+		txn.log.V(4).Info("AfterNotificationWait",
 			"notifWait", fmt.Sprintf("%s", afterNotifWait.Sub(beforeNotifWait)),
 			"txnDuration", fmt.Sprintf("%s", afterNotifWait.Sub(txnStart)),
 			"txnProcess", fmt.Sprintf("%v", txn.txnProcess),
