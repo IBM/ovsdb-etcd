@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	etcdClient "go.etcd.io/etcd/client/v3"
@@ -59,13 +60,12 @@ func TestDatabaseSetDatabase(t *testing.T) {
 
 		v, ok = row[DBColLeader]
 		assert.True(t, ok)
-		/*
-			if expectedModel == ModStandalone {
-				assert.True(t, v.(bool))
-			} else {
-				assert.False(t, v.(bool))
-			}
-		*/
+		if expectedModel == ModStandalone {
+			assert.True(t, v.(bool))
+		} else {
+			assert.False(t, v.(bool))
+		}
+
 		v, ok = row[DBColModel]
 		assert.True(t, ok)
 		assert.Equal(t, expectedModel, v)
@@ -121,7 +121,6 @@ func TestDatabaseSetDatabase(t *testing.T) {
 	checkDBModels(t, ModClustered)
 }
 
-/*
 func TestDatabaseEtcdLeaderElection(t *testing.T) {
 	size := 3
 	dbs := make([]*DatabaseEtcd, size, size)
@@ -173,7 +172,7 @@ func TestDatabaseEtcdLeaderElection(t *testing.T) {
 		}
 	}
 	assert.NotEqual(t, leader, -1)
-	//  uncomment to validate leader election over a server failure.
+	/*  uncomment to validate leader election over a server failure. */
 	start = time.Now()
 	cli[leader].Close()
 	cli[leader] = nil
@@ -201,7 +200,7 @@ func TestDatabaseEtcdLeaderElection(t *testing.T) {
 	}
 	assert.NotEqual(t, -1, leader)
 }
-*/
+
 func isLeader(t *testing.T, db *DatabaseEtcd) bool {
 	dbCache, err := db.GetDBCache(IntServer)
 	assert.Nil(t, err)
