@@ -86,47 +86,30 @@ func (tc *tableCache) size() int {
 	return len(tc.rows)
 }
 
-func (c *cache) addDatabaseCache(dbSchema *libovsdb.DatabaseSchema, etcdClient *clientv3.Client, log logr.Logger) error {
+func (c *cache) addDatabaseCache(dbSchema *libovsdb.DatabaseSchema, etcdClient *clientv3.Client, log logr.Logger) (int64, error) {
 	dbName := dbSchema.Name
 	if _, ok := (*c)[dbName]; ok {
-		return errors.New("Duplicate DatabaseCache: " + dbName)
+		return -1, errors.New("Duplicate DatabaseCache: " + dbName)
 	}
 	dbCache := newDatabaseCache(dbSchema, log)
 	(*c)[dbName] = dbCache
 	// we don't need etcd watcher
 	if etcdClient == nil {
-		return nil
+		return 0, nil
 	}
 	ctxt := context.Background()
 	key := common.NewDBPrefixKey(dbName)
 	resp, err := etcdClient.Get(ctxt, key.String(), clientv3.WithPrefix())
 	if err != nil {
 		log.Error(err, "get KeyData")
-		return err
+		return -1, err
 	}
 	err = dbCache.storeValues(resp.Kvs)
-	wch := etcdClient.Watch(clientv3.WithRequireLeader(ctxt), key.String(),
-		clientv3.WithPrefix(),
-		clientv3.WithCreatedNotify(),
-		clientv3.WithRev(resp.Header.Revision))
-
 	if err != nil {
 		log.Error(err, "storeValues")
-		return err
+		return -1, err
 	}
-
-	go func() {
-		// TODO propagate to monitors
-		for wresp := range wch {
-			if wresp.Canceled {
-				log.V(1).Info("DB cache monitor was canceled", "dbName", dbName)
-				// TODO: reconnect ?
-				return
-			}
-			dbCache.updateCache(wresp.Events)
-		}
-	}()
-	return nil
+	return resp.Header.Revision, nil
 }
 
 func newCachedRow(key string, value []byte, version int64) (*cachedRow, error) {
@@ -145,6 +128,9 @@ func (dc *databaseCache) getRow(key common.Key) (cachedRow, bool) {
 }
 
 func (dc *databaseCache) updateCache(events []*clientv3.Event) {
+	if len(events) == 0 {
+		return
+	}
 	// we want to minimize the lock time, so we first prepare ALL the rows, and only after that update the cache
 	rows := map[common.Key]*cachedRow{}
 	for _, event := range events {

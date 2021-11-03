@@ -107,7 +107,7 @@ func TestCacheUpdateUUID(t *testing.T) {
 	kv_r := mvccpb.KeyValue{Key: []byte(keyR.String()), Value: bufR}
 
 	tCache := cache{}
-	err = tCache.addDatabaseCache(testSchemaGC, nil, klogr.New())
+	_, err = tCache.addDatabaseCache(testSchemaGC, nil, klogr.New())
 	assert.Nil(t, err)
 	dbCache := tCache.getDBCache("gc")
 
@@ -124,7 +124,7 @@ func TestCacheUpdateUUID(t *testing.T) {
 
 	// reset the cache and store values in a different order
 	tCache = cache{}
-	err = tCache.addDatabaseCache(testSchemaGC, nil, klogr.New())
+	_, err = tCache.addDatabaseCache(testSchemaGC, nil, klogr.New())
 	assert.Nil(t, err)
 	dbCache = tCache.getDBCache("gc")
 	dbCache.updateCache([]*clientv3.Event{&ePT2, &ePR})
@@ -192,7 +192,7 @@ func TestCacheUpdateMap(t *testing.T) {
 	kv_r := mvccpb.KeyValue{Key: []byte(keyR.String()), Value: bufR}
 
 	tCache := cache{}
-	err = tCache.addDatabaseCache(testSchemaGC, nil, klogr.New())
+	_, err = tCache.addDatabaseCache(testSchemaGC, nil, klogr.New())
 	assert.Nil(t, err)
 	dbCache := tCache.getDBCache("gc")
 
@@ -209,7 +209,7 @@ func TestCacheUpdateMap(t *testing.T) {
 
 	// reset the cache and store values in a different order
 	tCache = cache{}
-	err = tCache.addDatabaseCache(testSchemaGC, nil, klogr.New())
+	_, err = tCache.addDatabaseCache(testSchemaGC, nil, klogr.New())
 	assert.Nil(t, err)
 	dbCache = tCache.getDBCache("gc")
 	dbCache.updateCache([]*clientv3.Event{&ePT2, &ePR})
@@ -278,7 +278,7 @@ func TestCacheUpdateSet(t *testing.T) {
 	kv_r := mvccpb.KeyValue{Key: []byte(keyR.String()), Value: bufR}
 
 	tCache := cache{}
-	err = tCache.addDatabaseCache(testSchemaGC, nil, klogr.New())
+	_, err = tCache.addDatabaseCache(testSchemaGC, nil, klogr.New())
 	assert.Nil(t, err)
 	dbCache := tCache.getDBCache("gc")
 
@@ -295,7 +295,7 @@ func TestCacheUpdateSet(t *testing.T) {
 
 	// reset the cache and store values in a different order
 	tCache = cache{}
-	err = tCache.addDatabaseCache(testSchemaGC, nil, klogr.New())
+	_, err = tCache.addDatabaseCache(testSchemaGC, nil, klogr.New())
 	assert.Nil(t, err)
 	dbCache = tCache.getDBCache("gc")
 	dbCache.updateCache([]*clientv3.Event{&ePT2, &ePR})

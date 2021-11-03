@@ -2,11 +2,9 @@ package ovsdb
 
 import (
 	"container/list"
-	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"strconv"
 	"sync"
 
 	"github.com/go-logr/logr"
@@ -79,9 +77,9 @@ type dbMonitor struct {
 	log logr.Logger
 
 	// etcdTrx watcher channel
-	watchChannel clientv3.WatchChan
+	//watchChannel clientv3.WatchChan
 	// cancel function to close the etcdTrx watcher
-	cancel context.CancelFunc
+	//cancel context.CancelFunc
 
 	mu sync.Mutex
 	// database name that the dbMonitor is watching
@@ -245,7 +243,7 @@ func (m *dbMonitor) hasUpdaters() bool {
 	return len(m.key2Updaters) > 0
 }
 
-func (m *dbMonitor) start() {
+/*func (m *dbMonitor) start() {
 	go func() {
 		m.log.V(6).Info("Start DB monitor", "dbName", m.dataBaseName)
 		for wresp := range m.watchChannel {
@@ -260,7 +258,7 @@ func (m *dbMonitor) start() {
 		}
 		m.log.V(6).Info("Start DB monitor ended", "dbName", m.dataBaseName)
 	}()
-}
+}*/
 
 func (hm *handlerMonitorData) notifier(ch *Handler) {
 	// we need some time to allow to the monitor calls return data
@@ -316,25 +314,15 @@ func (hm *handlerMonitorData) notifier(ch *Handler) {
 	}
 }
 
-func (m *dbMonitor) notify(events []*clientv3.Event, revision int64) {
+func (m *dbMonitor) notify(events []*ovsdbNotificationEvent, revision int64) {
 
 	if len(events) == 0 {
 		m.log.V(5).Info("there is no events, return")
 		// we called here to release transaction queue, if there are elements there
 		m.handler.notifyAll(revision)
 	}
-	ovsdbEvents := make([]*ovsdbNotificationEvent, 0, len(events))
-	for _, event := range events {
-		ovsdbEvent, err := etcd2ovsdbEvent(event, m.log)
-		if err != nil {
-			mvccpbEvent := mvccpb.Event(*event)
-			m.log.Error(err, "etcd2ovsdbEvent returned", "event", mvccpbEvent.String())
-			continue
-		}
-		ovsdbEvents = append(ovsdbEvents, ovsdbEvent)
-	}
 	m.log.V(5).Info("notify:", "notification revision", revision)
-	result, err := m.prepareTableNotification(ovsdbEvents)
+	result, err := m.prepareTableNotification(events)
 	if err != nil {
 		// TODO what should I do here?
 		m.log.Error(err, "prepareTableNotification failed")
@@ -354,7 +342,7 @@ func (m *dbMonitor) notify(events []*clientv3.Event, revision int64) {
 }
 
 func (m *dbMonitor) cancelDbMonitor() {
-	m.cancel()
+	//m.cancel()
 	jasonValues := map[string]string{}
 	m.mu.Lock()
 	for _, updaters := range m.key2Updaters {

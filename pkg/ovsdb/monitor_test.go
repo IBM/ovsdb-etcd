@@ -863,12 +863,10 @@ func initHandler(t *testing.T, jsonValue string, notificationType ovsjson.Update
 	msg := `["dbName",` + jsonValue + `,{"T1":[{"columns":["c1","c2"]}]}]`
 	row := map[string]interface{}{"c1": "v1", "c2": "v2"}
 	dataJson := prepareData(t, row, true)
-	common.SetPrefix(keyPrefix)
 	keyStr := fmt.Sprintf("%s/%s/%s/000", keyPrefix, dbName, tableName)
 	events := []*clientv3.Event{
 		{Type: mvccpb.PUT, Kv: &mvccpb.KeyValue{Key: []byte(keyStr), Value: dataJson, CreateRevision: 1, ModRevision: 1}}}
 
-	//db, _ := NewDatabaseMock()
 	db := DatabaseMock{Response: schemas}
 	ctx := context.Background()
 	handler := NewHandler(ctx, &db, nil, klogr.New())
@@ -918,13 +916,13 @@ func (j *jrpcServerMock) Wait() error {
 
 func (j *jrpcServerMock) Stop() {}
 
-func (j *jrpcServerMock) Notify(_ context.Context, method string, _ interface{}) error {
+func (j *jrpcServerMock) Notify(_ context.Context, method string, message interface{}) error {
 	assert.NotNil(j.t, method)
 	assert.Equal(j.t, j.expMethod, method)
+	assert.Equal(j.t, j.expMessage, message)
 	if j.wg != nil {
 		j.wg.Done()
 	}
-
 	return nil
 }
 

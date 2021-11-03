@@ -383,7 +383,7 @@ func (ch *Handler) removeMonitor(jsonValue interface{}, notify bool) error {
 	monitor.removeUpdaters(monitorData.updatersKeys, jsonValueString)
 
 	if !monitor.hasUpdaters() {
-		monitor.cancel()
+		ch.db.RemoveMonitor(monitor)
 		delete(ch.monitors, monitorData.dataBaseName)
 	}
 	delete(ch.handlerMonitorData, jsonValueString)
@@ -435,7 +435,7 @@ func (ch *Handler) addMonitor(params []interface{}, notificationType ovsjson.Upd
 		monitor, ok := ch.monitors[cmpr.DatabaseName]
 		if !ok {
 			monitor = ch.db.CreateMonitor(cmpr.DatabaseName, ch, log)
-			monitor.start()
+			//monitor.start()
 			ch.monitors[cmpr.DatabaseName] = monitor
 		}
 		monitor.addUpdaters(updatersMap)
