@@ -151,7 +151,7 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 			if err != nil {
 				return err
 			}
-			row[DBColLeader] = true // TODO return false
+			row[DBColLeader] = false
 			row[DBColCID] = cidSet
 			row[DBColSID] = sidSet
 		}
