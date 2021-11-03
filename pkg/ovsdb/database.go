@@ -20,12 +20,14 @@ import (
 
 type Databaser interface {
 	CreateMonitor(dbName string, handler *Handler, log logr.Logger) *dbMonitor
+	RemoveMonitor(monitor *dbMonitor)
 	AddSchema(schemaFile string) error
 	GetKeyData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error)
 	PutData(ctx context.Context, key common.Key, obj interface{}) error
 	GetSchema(dbName string) map[string]interface{}
 	GetDBSchema(dbName string) (*libovsdb.DatabaseSchema, bool)
 	GetDBCache(dbName string) (*databaseCache, error)
+	GetDBWatcher(dbName string) (*dbWatcher, error)
 	GetServerID() string
 	StartLeaderElection()
 }
@@ -49,6 +51,7 @@ type DatabaseEtcd struct {
 	log logr.Logger
 	//  we don't protect the fields below, because they are initialized during start of the server and aren't modified after that
 	cache      cache
+	watchers   map[string]*dbWatcher
 	schemas    libovsdb.Schemas // dataBaseName -> schema
 	strSchemas map[string]map[string]interface{}
 	serverID   string
@@ -84,7 +87,7 @@ func NewDatabaseEtcd(cli *clientv3.Client, model string, log logr.Logger) (Datab
 		return nil, errors.New(fmt.Sprintf("wrong deployment model %s", model))
 	}
 	return &DatabaseEtcd{cli: cli, log: log, cache: cache{}, model: model,
-		schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}, serverID: uuid.NewString()}, nil
+		schemas: libovsdb.Schemas{}, strSchemas: map[string]map[string]interface{}{}, serverID: uuid.NewString(), watchers: map[string]*dbWatcher{}}, nil
 }
 
 func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
@@ -123,7 +126,7 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 	row[libovsdb.ColVersion] = libovsdb.UUID{GoUUID: uuid.NewString()}
 	row[libovsdb.ColUuid] = libovsdb.UUID{GoUUID: uuid.NewString()}
 	if schemaName == IntServer {
-		err = con.cache.addDatabaseCache(con.schemas[schemaName], nil, con.log)
+		_, err = con.cache.addDatabaseCache(con.schemas[schemaName], nil, con.log)
 		if err != nil {
 			return err
 		}
@@ -131,10 +134,14 @@ func (con *DatabaseEtcd) AddSchema(schemaFile string) error {
 		row[DBColLeader] = true
 	} else {
 		con.dbName = schemaName
-		err = con.cache.addDatabaseCache(con.schemas[schemaName], con.cli, con.log)
+		rev, err := con.cache.addDatabaseCache(con.schemas[schemaName], con.cli, con.log)
 		if err != nil {
 			return err
 		}
+		dbWatcher := CreateDBWatcher(schemaName, con.cli, rev+1, con.log)
+		con.watchers[schemaName] = dbWatcher
+		dbWatcher.cacheListener = con.cache.getDBCache(schemaName)
+		dbWatcher.start()
 		row[DBColModel] = con.model
 		if con.model == ModStandalone {
 			row[DBColLeader] = true
@@ -243,6 +250,21 @@ func (con *DatabaseEtcd) GetDBCache(dbName string) (*databaseCache, error) {
 	return dbCache, nil
 }
 
+func (con *DatabaseEtcd) GetDBWatcher(dbName string) (*dbWatcher, error) {
+	if con.watchers == nil {
+		err := errors.New(ErrInternalError)
+		con.log.V(1).Info("dbWatchers are not created")
+		return nil, err
+	}
+	dbWatcher, ok := con.watchers[dbName]
+	if !ok {
+		err := errors.New(ErrInternalError)
+		con.log.V(1).Info("Database watcher is not created", "dbName", dbName)
+		return nil, err
+	}
+	return dbWatcher, nil
+}
+
 func (con *DatabaseEtcd) GetKeyData(key common.Key, keysOnly bool) (*clientv3.GetResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), EtcdClientTimeout)
 	var resp *clientv3.GetResponse
@@ -278,15 +300,16 @@ func (con *DatabaseEtcd) PutData(ctx context.Context, key common.Key, obj interf
 
 func (con *DatabaseEtcd) CreateMonitor(dbName string, handler *Handler, log logr.Logger) *dbMonitor {
 	m := newMonitor(dbName, handler, log)
-	ctxt, cancel := context.WithCancel(context.Background())
-	m.cancel = cancel
-	key := common.NewDBPrefixKey(dbName)
-	wch := con.cli.Watch(clientv3.WithRequireLeader(ctxt), key.String(),
-		clientv3.WithPrefix(),
-		clientv3.WithCreatedNotify(),
-		clientv3.WithPrevKV())
-	m.watchChannel = wch
+	// TODO propagate error
+	dbWatcher, _ := con.GetDBWatcher(dbName)
+	dbWatcher.addMonitor(m)
 	return m
+}
+
+func (con *DatabaseEtcd) RemoveMonitor(monitor *dbMonitor) {
+	dbName := monitor.dataBaseName
+	dbWatcher, _ := con.GetDBWatcher(dbName)
+	dbWatcher.removeMonitor(monitor)
 }
 
 func (con *DatabaseEtcd) GetServerID() string {
@@ -388,12 +411,19 @@ func (con *DatabaseMock) GetUUID() string {
 
 func (con *DatabaseMock) CreateMonitor(dbName string, handler *Handler, log logr.Logger) *dbMonitor {
 	m := newMonitor(dbName, handler, log)
-	_, cancel := context.WithCancel(context.Background())
-	m.cancel = cancel
 	return m
 }
 
+func (con *DatabaseMock) RemoveMonitor(monitor *dbMonitor) {
+	//TODO
+}
+
 func (con *DatabaseMock) GetDBCache(dbName string) (*databaseCache, error) {
+	// TODO
+	return nil, nil
+}
+
+func (con *DatabaseMock) GetDBWatcher(dbName string) (*dbWatcher, error) {
 	// TODO
 	return nil, nil
 }
