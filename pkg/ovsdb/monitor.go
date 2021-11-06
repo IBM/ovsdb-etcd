@@ -105,15 +105,16 @@ type transactionsQueue struct {
 	mu    sync.Mutex
 }
 
-type ovsdbKeyValue struct {
-	key common.Key
-	row libovsdb.Row
-}
 type ovsdbNotificationEvent struct {
 	createEvent bool
 	modifyEvent bool
-	kv          *ovsdbKeyValue
-	prevKv      *ovsdbKeyValue
+	key         common.Key
+	row         libovsdb.Row
+	prevRow     libovsdb.Row
+}
+
+func (e ovsdbNotificationEvent) String() string {
+	return fmt.Sprintf("Event: create=%v, modify=%v, key=%s, row=%v, prevRow=%v", e.createEvent, e.modifyEvent, e.key.String(), e.row, e.prevRow)
 }
 
 func etcd2ovsdbEvent(event *clientv3.Event, log logr.Logger) (*ovsdbNotificationEvent, error) {
@@ -127,17 +128,15 @@ func etcd2ovsdbEvent(event *clientv3.Event, log logr.Logger) (*ovsdbNotification
 		log.Error(err, "ParseKey error", "key", string(event.Kv.Key), "event", mvccpbEvent.String())
 		return nil, err
 	}
-	if !ovsdbEvent.createEvent && !ovsdbEvent.modifyEvent {
-		// delete event
-		ovsdbEvent.kv = &ovsdbKeyValue{key: *key}
-	} else {
+	ovsdbEvent.key = *key
+	if ovsdbEvent.createEvent || ovsdbEvent.modifyEvent {
 		var row libovsdb.Row
 		err = row.UnmarshalJSON(event.Kv.Value)
 		if err != nil {
 			log.Error(err, "cannot unmarshal JsonValue", "value", string(event.Kv.Value), "event", mvccpbEvent.String())
 			return nil, err
 		}
-		ovsdbEvent.kv = &ovsdbKeyValue{key: *key, row: row}
+		ovsdbEvent.row = row
 	}
 	if !ovsdbEvent.createEvent {
 		var pRow libovsdb.Row
@@ -146,7 +145,7 @@ func etcd2ovsdbEvent(event *clientv3.Event, log logr.Logger) (*ovsdbNotification
 			log.Error(err, "cannot unmarshal previous JsonValue", "value", string(event.PrevKv.Value), "event", mvccpbEvent.String())
 			return nil, err
 		}
-		ovsdbEvent.prevKv = &ovsdbKeyValue{key: *key, row: pRow}
+		ovsdbEvent.prevRow = pRow
 	}
 	return &ovsdbEvent, nil
 }
@@ -342,7 +341,6 @@ func (m *dbMonitor) notify(events []*ovsdbNotificationEvent, revision int64) {
 }
 
 func (m *dbMonitor) cancelDbMonitor() {
-	//m.cancel()
 	jasonValues := map[string]string{}
 	m.mu.Lock()
 	for _, updaters := range m.key2Updaters {
@@ -370,11 +368,7 @@ func (m *dbMonitor) prepareTableNotification(events []*ovsdbNotificationEvent) (
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, ev := range events {
-		if ev.kv == nil {
-			m.log.V(5).Info("empty etcdTrx event", "event", fmt.Sprintf("%+v", ev))
-			continue
-		}
-		key := ev.kv.key
+		key := ev.key
 		updaters, ok := m.key2Updaters[key.ToTableKey()]
 		if !ok {
 			m.log.V(7).Info("no monitors for table path", "table-path", key.TableKeyString())
@@ -430,22 +424,17 @@ func (u *updater) prepareDeleteRowUpdate(event *ovsdbNotificationEvent) (*ovsjso
 	if !libovsdb.MSIsTrue(u.mcr.Select.Delete) {
 		return nil, "", nil
 	}
+	data, uuid, err := u.prepareRow(&event.prevRow)
+	if err != nil {
+		return nil, "", err
+	}
+	if data == nil {
+		return nil, "", nil
+	}
 	if !u.isV1 {
 		// according to https://docs.openvswitch.org/en/latest/ref/ovsdb-server.7/#update2-notification,
 		// "<row> is always a null object for delete updates."
-		data, uuid, err := u.prepareRow(&event.prevKv.row)
-		if err != nil {
-			return nil, "", err
-		}
-		if data == nil {
-			return nil, "", nil
-		}
 		return &ovsjson.RowUpdate{Delete: true}, uuid, nil
-	}
-
-	data, uuid, err := u.prepareRow(&event.prevKv.row)
-	if err != nil {
-		return nil, "", err
 	}
 	// for !u.isV1 we have returned before
 	return &ovsjson.RowUpdate{Old: &data}, uuid, nil
@@ -455,7 +444,7 @@ func (u *updater) prepareCreateRowUpdate(event *ovsdbNotificationEvent) (*ovsjso
 	if !libovsdb.MSIsTrue(u.mcr.Select.Insert) {
 		return nil, "", nil
 	}
-	data, uuid, err := u.prepareRow(&event.kv.row)
+	data, uuid, err := u.prepareRow(&event.row)
 	if err != nil {
 		return nil, "", err
 	}
@@ -472,12 +461,12 @@ func (u *updater) prepareModifyRowUpdate(event *ovsdbNotificationEvent) (*ovsjso
 	if !libovsdb.MSIsTrue(u.mcr.Select.Modify) {
 		return nil, "", nil
 	}
-	modifiedRow, uuid, err := u.prepareRow(&event.kv.row)
+	modifiedRow, uuid, err := u.prepareRow(&event.row)
 	if err != nil {
 		return nil, "", err
 	}
 
-	prevRow, prevUUID, err := u.prepareRow(&event.prevKv.row)
+	prevRow, prevUUID, err := u.prepareRow(&event.prevRow)
 	if err != nil {
 		return nil, "", err
 	}
@@ -501,8 +490,8 @@ func (u *updater) prepareModifyRowUpdate(event *ovsdbNotificationEvent) (*ovsjso
 		return &ovsjson.RowUpdate{Insert: &modifiedRow}, uuid, nil
 	}
 	if uuid != prevUUID {
-		err := fmt.Errorf("UUID was changed key=%s, prev uuid=%q, new uuid=%q", event.kv.key.String(), prevUUID, uuid)
-		u.log.Error(err, "", "prevRow", event.prevKv.row, "newRow", event.kv.row)
+		err := fmt.Errorf("UUID was changed key=%s, prev uuid=%q, new uuid=%q", event.key.String(), prevUUID, uuid)
+		u.log.Error(err, "", "prevRow", event.prevRow, "newRow", event.row)
 		return nil, "", err
 	}
 	deltaRow, err := u.compareModifiedRows(modifiedRow, prevRow)
@@ -723,6 +712,7 @@ func (u *updater) prepareRow(row *libovsdb.Row) (map[string]interface{}, string,
 	}
 	uuid, err := row.GetUUID()
 	if err != nil {
+		u.log.V(1).Info("wrong row", "row", fmt.Sprintf("%#v", row))
 		return nil, "", err
 	}
 	rData := u.copySelectedColumns(data)

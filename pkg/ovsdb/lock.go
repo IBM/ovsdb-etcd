@@ -43,7 +43,8 @@ func (dbLocks *databaseLocks) cleanup(log logr.Logger) {
 	dbLocks.Range(func(key, value interface{}) bool {
 		mLock, ok := value.(*locker)
 		if !ok {
-			log.V(1).Info("cleanup, cannot transform to Locker", "type", fmt.Sprintf("%T", value), "lockID", key)
+			// should we return error ?
+			log.V(3).Info("cleanup, cannot transform to Locker", "type", fmt.Sprintf("%T", value), "lockID", key)
 			return true
 		}
 		if err := mLock.unlock(); err != nil {

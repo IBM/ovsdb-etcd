@@ -114,7 +114,8 @@ func TestCacheUpdateUUID(t *testing.T) {
 	// store values in the cache and check counters
 	ePR := clientv3.Event{Type: clientv3.EventTypePut, Kv: &kv_r}
 	ePT2 := clientv3.Event{Type: clientv3.EventTypePut, Kv: &kv_t1}
-	dbCache.updateCache([]*clientv3.Event{&ePR, &ePT2})
+	rows := events2Rows(t, []*clientv3.Event{&ePR, &ePT2})
+	dbCache.updateRows(rows)
 	r, ok := dbCache.getRow(keyR)
 	assert.True(t, ok)
 	assert.Equal(t, 0, r.counter)
@@ -127,7 +128,8 @@ func TestCacheUpdateUUID(t *testing.T) {
 	_, err = tCache.addDatabaseCache(testSchemaGC, nil, klogr.New())
 	assert.Nil(t, err)
 	dbCache = tCache.getDBCache("gc")
-	dbCache.updateCache([]*clientv3.Event{&ePT2, &ePR})
+	rows = events2Rows(t, []*clientv3.Event{&ePT2, &ePR})
+	dbCache.updateRows(rows)
 	r, ok = dbCache.getRow(keyR)
 	assert.True(t, ok)
 	assert.Equal(t, 0, r.counter)
@@ -137,7 +139,7 @@ func TestCacheUpdateUUID(t *testing.T) {
 
 	//remove the root row
 	eDR := clientv3.Event{Type: clientv3.EventTypeDelete, Kv: &kv_r}
-	dbCache.updateCache([]*clientv3.Event{&eDR})
+	dbCache.updateRows(events2Rows(t, []*clientv3.Event{&eDR}))
 	r, ok = dbCache.getRow(keyR)
 	assert.False(t, ok)
 	r, ok = dbCache.getRow(key1)
@@ -145,7 +147,7 @@ func TestCacheUpdateUUID(t *testing.T) {
 	assert.Equal(t, 0, r.counter)
 
 	// return the root row
-	dbCache.updateCache([]*clientv3.Event{&ePR})
+	dbCache.updateRows(events2Rows(t, []*clientv3.Event{&ePR}))
 	r, ok = dbCache.getRow(keyR)
 	assert.True(t, ok)
 	r, ok = dbCache.getRow(key1)
@@ -158,7 +160,7 @@ func TestCacheUpdateUUID(t *testing.T) {
 	assert.Nil(t, err)
 	kv_r = mvccpb.KeyValue{Key: []byte(keyR.String()), Value: bufR}
 	ePR = clientv3.Event{Type: clientv3.EventTypePut, Kv: &kv_r}
-	dbCache.updateCache([]*clientv3.Event{&ePR})
+	dbCache.updateRows(events2Rows(t, []*clientv3.Event{&ePR}))
 	r, ok = dbCache.getRow(keyR)
 	assert.True(t, ok)
 	r, ok = dbCache.getRow(key1)
@@ -199,7 +201,7 @@ func TestCacheUpdateMap(t *testing.T) {
 	// store values in the cache and check counters
 	ePR := clientv3.Event{Type: clientv3.EventTypePut, Kv: &kv_r}
 	ePT2 := clientv3.Event{Type: clientv3.EventTypePut, Kv: &kv_t1}
-	dbCache.updateCache([]*clientv3.Event{&ePR, &ePT2})
+	dbCache.updateRows(events2Rows(t, []*clientv3.Event{&ePR, &ePT2}))
 	r, ok := dbCache.getRow(keyR)
 	assert.True(t, ok)
 	assert.Equal(t, 0, r.counter)
@@ -212,7 +214,7 @@ func TestCacheUpdateMap(t *testing.T) {
 	_, err = tCache.addDatabaseCache(testSchemaGC, nil, klogr.New())
 	assert.Nil(t, err)
 	dbCache = tCache.getDBCache("gc")
-	dbCache.updateCache([]*clientv3.Event{&ePT2, &ePR})
+	dbCache.updateRows(events2Rows(t, []*clientv3.Event{&ePT2, &ePR}))
 	r, ok = dbCache.getRow(keyR)
 	assert.True(t, ok)
 	assert.Equal(t, 0, r.counter)
@@ -222,7 +224,7 @@ func TestCacheUpdateMap(t *testing.T) {
 
 	//remove the root row
 	eDR := clientv3.Event{Type: clientv3.EventTypeDelete, Kv: &kv_r}
-	dbCache.updateCache([]*clientv3.Event{&eDR})
+	dbCache.updateRows(events2Rows(t, []*clientv3.Event{&eDR}))
 	r, ok = dbCache.getRow(keyR)
 	assert.False(t, ok)
 	r, ok = dbCache.getRow(key1)
@@ -230,7 +232,7 @@ func TestCacheUpdateMap(t *testing.T) {
 	assert.Equal(t, 0, r.counter)
 
 	// return the root row
-	dbCache.updateCache([]*clientv3.Event{&ePR})
+	dbCache.updateRows(events2Rows(t, []*clientv3.Event{&ePR}))
 	r, ok = dbCache.getRow(keyR)
 	assert.True(t, ok)
 	r, ok = dbCache.getRow(key1)
@@ -243,7 +245,7 @@ func TestCacheUpdateMap(t *testing.T) {
 	assert.Nil(t, err)
 	kv_r = mvccpb.KeyValue{Key: []byte(keyR.String()), Value: bufR}
 	ePR = clientv3.Event{Type: clientv3.EventTypePut, Kv: &kv_r}
-	dbCache.updateCache([]*clientv3.Event{&ePR})
+	dbCache.updateRows(events2Rows(t, []*clientv3.Event{&ePR}))
 	r, ok = dbCache.getRow(keyR)
 	assert.True(t, ok)
 	r, ok = dbCache.getRow(key1)
@@ -285,7 +287,7 @@ func TestCacheUpdateSet(t *testing.T) {
 	// store values in the cache and check counters
 	ePR := clientv3.Event{Type: clientv3.EventTypePut, Kv: &kv_r}
 	ePT2 := clientv3.Event{Type: clientv3.EventTypePut, Kv: &kv_t1}
-	dbCache.updateCache([]*clientv3.Event{&ePR, &ePT2})
+	dbCache.updateRows(events2Rows(t, []*clientv3.Event{&ePR, &ePT2}))
 	r, ok := dbCache.getRow(keyR)
 	assert.True(t, ok)
 	assert.Equal(t, 0, r.counter)
@@ -298,7 +300,7 @@ func TestCacheUpdateSet(t *testing.T) {
 	_, err = tCache.addDatabaseCache(testSchemaGC, nil, klogr.New())
 	assert.Nil(t, err)
 	dbCache = tCache.getDBCache("gc")
-	dbCache.updateCache([]*clientv3.Event{&ePT2, &ePR})
+	dbCache.updateRows(events2Rows(t, []*clientv3.Event{&ePT2, &ePR}))
 	r, ok = dbCache.getRow(keyR)
 	assert.True(t, ok)
 	assert.Equal(t, 0, r.counter)
@@ -308,7 +310,7 @@ func TestCacheUpdateSet(t *testing.T) {
 
 	//remove the root row
 	eDR := clientv3.Event{Type: clientv3.EventTypeDelete, Kv: &kv_r}
-	dbCache.updateCache([]*clientv3.Event{&eDR})
+	dbCache.updateRows(events2Rows(t, []*clientv3.Event{&eDR}))
 	r, ok = dbCache.getRow(keyR)
 	assert.False(t, ok)
 	r, ok = dbCache.getRow(key1)
@@ -316,7 +318,7 @@ func TestCacheUpdateSet(t *testing.T) {
 	assert.Equal(t, 0, r.counter)
 
 	// return the root row
-	dbCache.updateCache([]*clientv3.Event{&ePR})
+	dbCache.updateRows(events2Rows(t, []*clientv3.Event{&ePR}))
 	r, ok = dbCache.getRow(keyR)
 	assert.True(t, ok)
 	r, ok = dbCache.getRow(key1)
@@ -329,7 +331,7 @@ func TestCacheUpdateSet(t *testing.T) {
 	assert.Nil(t, err)
 	kv_r = mvccpb.KeyValue{Key: []byte(keyR.String()), Value: bufR}
 	ePR = clientv3.Event{Type: clientv3.EventTypePut, Kv: &kv_r}
-	dbCache.updateCache([]*clientv3.Event{&ePR})
+	dbCache.updateRows(events2Rows(t, []*clientv3.Event{&ePR}))
 	r, ok = dbCache.getRow(keyR)
 	assert.True(t, ok)
 	r, ok = dbCache.getRow(key1)
@@ -396,4 +398,22 @@ func TestCacheCheckMap(t *testing.T) {
 	counts = checkCounters(map1, map11, libovsdb.TypeMap)
 	assert.Equal(t, 0, counts[val1UUID.GoUUID])
 	assert.Equal(t, 0, counts[val2UUID.GoUUID])
+}
+
+func events2Rows(t *testing.T, events []*clientv3.Event) map[common.Key]*cachedRow {
+	rows := map[common.Key]*cachedRow{}
+	for _, event := range events {
+		strKey := string(event.Kv.Key)
+		key, err := common.ParseKey(strKey)
+		assert.Nil(t, err)
+
+		if event.Type == mvccpb.DELETE {
+			rows[*key] = nil
+		} else {
+			cr, err := newCachedRow(strKey, event.Kv.Value, event.Kv.Version)
+			assert.Nil(t, err)
+			rows[*key] = cr
+		}
+	}
+	return rows
 }

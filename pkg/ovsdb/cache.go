@@ -3,7 +3,6 @@ package ovsdb
 import (
 	"context"
 	"fmt"
-	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 	"reflect"
 	"sync"
 
@@ -13,6 +12,7 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 
 	"github.com/ibm/ovsdb-etcd/pkg/common"
+	"github.com/ibm/ovsdb-etcd/pkg/libovsdb"
 )
 
 type cachedRow struct {
@@ -127,37 +127,6 @@ func (dc *databaseCache) getRow(key common.Key) (cachedRow, bool) {
 	return row, ok
 }
 
-func (dc *databaseCache) updateCache(events []*clientv3.Event) {
-	if len(events) == 0 {
-		return
-	}
-	// we want to minimize the lock time, so we first prepare ALL the rows, and only after that update the cache
-	rows := map[common.Key]*cachedRow{}
-	for _, event := range events {
-		strKey := string(event.Kv.Key)
-		key, err := common.ParseKey(strKey)
-		if err != nil {
-			dc.log.Error(err, "got a wrong formatted key from etcd", "key", strKey)
-			continue
-		}
-		if key.IsCommentKey() {
-			continue
-		}
-		if event.Type == mvccpb.DELETE {
-			rows[*key] = nil
-		} else {
-			cr, err := newCachedRow(strKey, event.Kv.Value, event.Kv.Version)
-			if err != nil {
-				dc.log.Error(err, "cannot update cache value")
-				continue
-			}
-			rows[*key] = cr
-		}
-	}
-	// now actually update the cache
-	dc.updateRows(rows)
-}
-
 // TODO combine with updateCache
 func (dc *databaseCache) storeValues(kvs []*mvccpb.KeyValue) error {
 	rows := map[common.Key]*cachedRow{}
@@ -184,36 +153,6 @@ func (dc *databaseCache) storeValues(kvs []*mvccpb.KeyValue) error {
 	dc.updateRows(rows)
 	return nil
 }
-
-/*
-func (dc *databaseCache) deleteCounters(newVal interface{}, oldVal interface{}, columnType string, refTable *tableCache ) {
-	if columnType == libovsdb.TypeSet {
-		valSet, ok := newVal.(libovsdb.OvsSet)
-		if !ok {
-			// TODO
-		}
-		for _, uuid := range valSet.GoSet {
-			ovsUUID := uuid.(libovsdb.UUID)
-			cRow, ok := refTable.rows[ovsUUID.GoUUID]
-			if ok {
-				cRow.counter--
-			}
-		}
-	} else if columnType == libovsdb.TypeMap {
-		valMap, ok := newVal.(libovsdb.OvsMap)
-		if !ok {
-			// TODO
-		}
-		for _, v := range valMap.GoMap {
-			ovsUUID, _ := v.(libovsdb.UUID)
-			cRow, ok := refTable.rows[ovsUUID.GoUUID]
-			if ok {
-				cRow.counter--
-			}
-		}
-	}
-}
-*/
 
 func (dc *databaseCache) updateCountersSet(newVal interface{}, oldVal interface{}, refTable *tableCache, tableKey *common.Key, newRows map[common.Key]*cachedRow) {
 	newValSet := interfaceToSet(newVal)
