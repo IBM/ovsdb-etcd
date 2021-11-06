@@ -20,16 +20,21 @@ import (
 func TestDBWatcher(t *testing.T) {
 	dbName := "test"
 	key := common.GenerateDataKey(dbName, "table1")
-	value := "test/value"
+	row := libovsdb.Row{Fields: map[string]interface{}{"c1": "v1", "c2": "v2"}}
+	row.Fields[libovsdb.ColUuid] = common.GenerateUUID()
+	value, err := json.Marshal(row)
+	assert.Nil(t, err)
 	cli, err := testEtcdNewCli()
 	assert.Nil(t, err)
 	defer cli.Close()
-	tcl := testCacheListener{expectedValue: value, expectedKey: key.String(), t: t}
+	cli.Delete(context.Background(), dbName, clientv3.WithFromKey())
+	expValue := string(value)
+	tcl := testCacheListener{expectedValue: &expValue, expectedKey: key.String(), t: t}
 
-	dbw := CreateDBWatcher(dbName, cli, 4367)
+	dbw := CreateDBWatcher(dbName, cli, -1, log)
 	dbw.cacheListener = &tcl
 	dbw.start()
-	cli.Put(context.Background(), key.String(), value)
+	cli.Put(context.Background(), key.String(), string(value))
 	for i := 0; i < 5; i++ {
 		if tcl.cacheUpdated {
 			break
@@ -37,6 +42,7 @@ func TestDBWatcher(t *testing.T) {
 		time.Sleep(time.Duration(1*i) * time.Second)
 	}
 	assert.True(t, tcl.cacheUpdated)
+	tcl.expectedValue = nil
 	cli.Delete(context.Background(), dbName, clientv3.WithFromKey())
 }
 
@@ -104,15 +110,27 @@ func TestMonitorWatcher(t *testing.T) {
 type testCacheListener struct {
 	t             *testing.T
 	expectedKey   string
-	expectedValue string
+	expectedValue *string
 	cacheUpdated  bool
 }
 
-func (tcl *testCacheListener) updateCache(events []*clientv3.Event) {
-	for _, event := range events {
-		if string(event.Kv.Key) == tcl.expectedKey && string(event.Kv.Value) == tcl.expectedValue {
-			tcl.cacheUpdated = true
-			return
+func (tcl *testCacheListener) updateRows(rows map[common.Key]*cachedRow) {
+	for key, crow := range rows {
+		if key.String() != tcl.expectedKey {
+			continue
+		}
+		if tcl.expectedValue == nil {
+			if crow == nil {
+				tcl.cacheUpdated = true
+				break
+			}
+		} else {
+			str, err := json.Marshal((*crow).row.Fields)
+			assert.Nil(tcl.t, err)
+			if string(str) == *tcl.expectedValue {
+				tcl.cacheUpdated = true
+				break
+			}
 		}
 	}
 }

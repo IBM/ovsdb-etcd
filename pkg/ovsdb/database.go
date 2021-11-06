@@ -198,7 +198,6 @@ func (con *DatabaseEtcd) StartLeaderElection() {
 			if err != nil {
 				con.log.Error(err, "Leader Election error", "serverId", con.serverID)
 			} else {
-				con.log.V(1).Info("err is nil")
 				break
 			}
 		}
@@ -210,7 +209,7 @@ func (con *DatabaseEtcd) StartLeaderElection() {
 		}
 		cRow.row.Fields[DBColLeader] = true
 		tCache.rows[con.dbName] = cRow
-		con.log.V(1).Info("I'm the leader", "serverID", con.serverID)
+		con.log.V(3).Info("I'm the leader", "serverID", con.serverID)
 		// print to pod log too
 		fmt.Printf("I'm the leader, serverID %s\n", con.serverID)
 	}()
@@ -238,13 +237,13 @@ func (con *DatabaseEtcd) GetDBSchema(dbName string) (*libovsdb.DatabaseSchema, b
 func (con *DatabaseEtcd) GetDBCache(dbName string) (*databaseCache, error) {
 	if con.cache == nil {
 		err := errors.New(ErrInternalError)
-		con.log.V(1).Info("Cache is not created")
+		con.log.Error(err, "cache is not created")
 		return nil, err
 	}
 	dbCache, ok := con.cache[dbName]
 	if !ok {
 		err := errors.New(ErrInternalError)
-		con.log.V(1).Info("Database cache is not created", "dbName", dbName)
+		con.log.Error(err, "database cache is not created", "dbName", dbName)
 		return nil, err
 	}
 	return dbCache, nil
@@ -253,13 +252,13 @@ func (con *DatabaseEtcd) GetDBCache(dbName string) (*databaseCache, error) {
 func (con *DatabaseEtcd) GetDBWatcher(dbName string) (*dbWatcher, error) {
 	if con.watchers == nil {
 		err := errors.New(ErrInternalError)
-		con.log.V(1).Info("dbWatchers are not created")
+		con.log.Error(err, "database watchers are not created")
 		return nil, err
 	}
 	dbWatcher, ok := con.watchers[dbName]
 	if !ok {
 		err := errors.New(ErrInternalError)
-		con.log.V(1).Info("Database watcher is not created", "dbName", dbName)
+		con.log.Error(err, "database watcher is not created", "dbName", dbName)
 		return nil, err
 	}
 	return dbWatcher, nil

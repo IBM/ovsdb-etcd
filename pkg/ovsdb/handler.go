@@ -70,12 +70,11 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	schema, ok := ch.db.GetDBSchema(ovsReq.DBName)
 	if !ok {
 		err := errors.New(ErrInternalError)
-		log.V(1).Info("Unknown schema", "dbName", ovsReq.DBName)
+		log.Error(err, "Unknown schema", "dbName", ovsReq.DBName)
 		return nil, err
 	}
 	dbCache, err := ch.db.GetDBCache(ovsReq.DBName)
 	if err != nil {
-		log.V(1).Info("Database cache is not created", "dbName", ovsReq.DBName)
 		return nil, err
 	}
 	txn, err := NewTransaction(ctx, ch.etcdClient, ovsReq, dbCache, schema, &ch.dbLocks, log)
@@ -309,6 +308,7 @@ func (ch *Handler) Cleanup() {
 	ch.dbLocks.cleanup(ch.log)
 	for _, monitor := range ch.monitors {
 		monitor.cancelDbMonitor()
+		ch.db.RemoveMonitor(monitor)
 	}
 }
 
@@ -491,7 +491,6 @@ func (ch *Handler) monitorInternal(params []interface{}, notificationType ovsjso
 func (ch *Handler) getMonitoredData(dbName string, updatersMap Key2Updaters) (ovsjson.TableUpdates, error) {
 	dbCache, err := ch.db.GetDBCache(dbName)
 	if err != nil {
-		ch.log.V(1).Info("Database cache is not created", "dbName", dbName)
 		return nil, err
 	}
 	returnData := ovsjson.TableUpdates{}
@@ -527,7 +526,6 @@ func (ch *Handler) getMonitoredData(dbName string, updatersMap Key2Updaters) (ov
 				}
 				tableUpdate[uuid] = *row
 			}
-
 		}
 	}
 	ch.log.V(6).Info("getMonitoredData completed", "data", returnData)
