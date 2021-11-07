@@ -158,6 +158,7 @@ ovnkube-deploy: check-env
 		--ovn-etcd-image "${OVSDB_ETCD_REPOSITORY}/etcd:latest" \
 		--ovn-ovsdb-etcd-image "${OVSDB_ETCD_REPOSITORY}/ovsdb-etcd:latest" \
 		--ovsdb-etcd-tcpdump "${OVSDB_ETCD_TCPDUMP}" \
+		--use-ovsdb-etcd \
 		$(KIND_FLAGS)
 
 .PHONY: ovnkube-deploy-ha
@@ -168,11 +169,12 @@ ovnkube-deploy-ha: check-env
 		--ovn-etcd-image "${OVSDB_ETCD_REPOSITORY}/etcd:latest" \
 		--ovn-ovsdb-etcd-image "${OVSDB_ETCD_REPOSITORY}/ovsdb-etcd:latest" \
 		--ovsdb-etcd-tcpdump "${OVSDB_ETCD_TCPDUMP}" \
+		--use-ovsdb-etcd \
 		$(KIND_FLAGS) -ha
 
 .PHONY: ovnkube-deploy-org
 ovnkube-deploy-org: check-env
-	cd ${OVN_KUBERNETES_ROOT} && git checkout d0fdcfbbb2702ed8482a0c1f6ba4561273399fdc
+	cd ${OVN_KUBERNETES_ROOT} && git checkout origin/ovsdb-etcd2
 	cd ${OVN_KUBERNETES_ROOT}/go-controller && make
 	cd ${OVN_KUBERNETES_ROOT}/dist/images && make fedora
 	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh \
@@ -182,7 +184,7 @@ ovnkube-deploy-org: check-env
 
 .PHONY: ovnkube-deploy-org-ha
 ovnkube-deploy-org-ha: check-env
-	cd ${OVN_KUBERNETES_ROOT} && git checkout d0fdcfbbb2702ed8482a0c1f6ba4561273399fdc
+	cd ${OVN_KUBERNETES_ROOT} && git checkout origin/ovsdb-etcd2
 	cd ${OVN_KUBERNETES_ROOT}/go-controller && make
 	cd ${OVN_KUBERNETES_ROOT}/dist/images && make fedora
 	cd ${OVN_KUBERNETES_ROOT}/contrib && ./kind.sh \
