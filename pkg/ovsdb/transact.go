@@ -303,7 +303,10 @@ type Transaction struct {
 	/* the server cache */
 	cache *databaseCache // dbCache -> map[tableName]tableCache -> rows -> map[uuid]->cachedRow
 	/* the current transaction cache with results from the previous operations */
-	localCache *localCache //  [tableName]localTableCache -> map[full common.Key.String()]map[ColumnName]interface{}
+	localCache     *localCache //  [tableName]localTableCache -> map[full common.Key.String()]map[ColumnName]interface{}
+	txnStart       time.Time
+	txnProcess     []time.Duration
+	etcdTxnProcess []time.Duration
 }
 
 func NewTransaction(ctx context.Context, cli *clientv3.Client, request *libovsdb.Transact, cache *databaseCache, schema *libovsdb.DatabaseSchema, dbLocks *databaseLocks, log logr.Logger) (*Transaction, error) {
@@ -424,11 +427,17 @@ func (txn *Transaction) Commit() (int64, error) {
 		if err != nil {
 			return -1, err
 		}
+		beforeEtcdtxn := time.Now()
+		txn.txnProcess = append(txn.txnProcess, beforeEtcdtxn.Sub(txn.txnStart))
+		//txn.log.V(1).Info("Before etcdTransact", "i", i, "timeBeforeEtcd", fmt.Sprintf("%s", beforeEtcdtxn.Sub(txn.txnStart)), "txnSize", len(txn.request.Operations), "etcdTxnSize", txn.etcdTrx.ifSize()+txn.etcdTrx.thenSize())
 		trResponse, err = txn.etcdTransaction()
 		if err != nil {
 			txn.log.Error(err, "etcd trx error", "cmpSize", txn.etcdTrx.ifSize(), "thenSize", txn.etcdTrx.thenSize())
 			return -1, err
 		}
+		txn.etcdTxnProcess = append(txn.etcdTxnProcess, time.Now().Sub(beforeEtcdtxn))
+		//afterEtcdtxn := time.Now()
+		//txn.log.V(1).Info("After etcdTransact", "i", i, "etcdTxnDuration", fmt.Sprintf("%s", afterEtcdtxn.Sub(beforeEtcdtxn)), "etcdTxnSize", txn.etcdTrx.ifSize()+txn.etcdTrx.thenSize())
 		if trResponse.Succeeded {
 			if i > 0 {
 				txn.log.V(6).Info("concurrency resolved", "trx", txn.etcdTrx.String())
