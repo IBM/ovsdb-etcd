@@ -65,8 +65,9 @@ func NewEtcdClient(ctx context.Context, endpoints []string, keepAliveTime, keepA
 	cfg := clientv3.Config{
 		Endpoints:          endpoints,
 		Context:            ctx,
+		// TODO propagate these parameters as configurable
 		DialTimeout:        30 * time.Second,
-		MaxCallSendMsgSize: 120 * 1024 * 1024,
+		MaxCallSendMsgSize: 1 * 1024 * 1024 * 1024,
 		MaxCallRecvMsgSize: 0, /* max */
 	}
 	if keepAliveTime > 0 {
