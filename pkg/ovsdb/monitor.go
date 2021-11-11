@@ -301,10 +301,10 @@ func (hm *handlerMonitorData) notifier(ch *Handler) {
 				}
 			}
 			ch.mu.RLock()
-			dbMonitor, ok := ch.monitors[hm.dataBaseName]
+			monitor, ok := ch.monitors[hm.dataBaseName]
 			ch.mu.RUnlock()
-			if ok && dbMonitor != nil {
-				dbMonitor.tQueue.notificationSent(notificationEvent.revision)
+			if ok && monitor != nil {
+				monitor.tQueue.notificationSent(notificationEvent.revision)
 			} else {
 				hm.log.V(5).Info("dataBase monitor is nil", "dataBaseName", hm.dataBaseName)
 			}

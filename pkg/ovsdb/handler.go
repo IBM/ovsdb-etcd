@@ -83,18 +83,16 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 	if err != nil {
 		return nil, errors.New(ErrInternalError)
 	}
-	txn.timeStamps.txnStart = txnStart
-	beforeMonLock := time.Now()
+	txn.timeStamps.start = txnStart
+	txn.timeStamps.beforeMonitorLock = time.Now()
 	ch.mu.RLock()
-	txn.timeStamps.monitorLockAchievement = time.Now().Sub(beforeMonLock)
+	txn.timeStamps.afterMonitorLock = time.Now()
 	monitor, thereIsMonitor := ch.monitors[txn.request.DBName]
 	ch.mu.RUnlock()
-
-	queueStartTxn := time.Now()
 	if thereIsMonitor {
 		monitor.tQueue.startTransaction()
 	}
-	endStartQueueTxn := time.Now()
+	txn.timeStamps.beforeCommit = time.Now()
 	rev, errC := txn.Commit()
 	if errC != nil {
 		if thereIsMonitor {
@@ -103,30 +101,29 @@ func (ch *Handler) Transact(ctx context.Context, params []interface{}) (interfac
 		txn.log.Error(errC, "commit returned")
 		return nil, errC
 	}
+	txn.timeStamps.afterCommit = time.Now()
 	if thereIsMonitor {
 		// we have to guarantee that a new monitor call if it runs concurrently with the transaction, returns first
 		var wg sync.WaitGroup
 		wg.Add(1)
 		monitor.tQueue.endTransaction(rev, &wg)
-		endQueueTxn := time.Now()
 		log.V(5).Info("transact added", "etcdTrx revision", rev)
-		beforeNotifWait := time.Now()
+		txn.timeStamps.beforeWait4Notification = time.Now()
 		wg.Wait()
-		afterNotifyWait := time.Now()
-		txn.log.V(1).Info("AfterNotificationWait",
-			"notifWait", fmt.Sprintf("%s", afterNotifyWait.Sub(beforeNotifWait)),
-			"txnDuration", fmt.Sprintf("%s", afterNotifyWait.Sub(txnStart)),
-			"monitorLockAchiev", fmt.Sprintf("%s", txn.timeStamps.monitorLockAchievement),
-			"txnProcess", fmt.Sprintf("%v", txn.timeStamps.txnProcess),
-			"etcdTxn", fmt.Sprintf("%v", txn.timeStamps.etcdTxnProcess),
-			"cacheLock", fmt.Sprintf("%v", txn.timeStamps.cacheLockAchievement),
-			"txnSize", len(txn.request.Operations),
-			"queueStartTxn", fmt.Sprintf("%s", endStartQueueTxn.Sub(queueStartTxn)),
-			"queueTxn", fmt.Sprintf("%s", endQueueTxn.Sub(endStartQueueTxn)),
-			"operationDuration", fmt.Sprintf("%v", txn.timeStamps.operationDuration),
-			"etcdTxnSize", txn.etcdTrx.ifSize()+txn.etcdTrx.thenSize())
 	}
-
+	txn.timeStamps.end = time.Now()
+	txn.log.V(3).Info("transaction timestamps (all times are in µs)",
+		"txnSize", len(txn.request.Operations),
+		"etcdTxnSize", txn.etcdTrx.ifSize()+txn.etcdTrx.thenSize(),
+		"concurrencyErrors", len(txn.timeStamps.etcdProcesses)-1,
+		"txnDuration", txn.timeStamps.end.Sub(txn.timeStamps.start).Microseconds(),
+		"txnPreProcessing", txn.timeStamps.beforeCommit.Sub(txn.timeStamps.start).Microseconds(),
+		"txnProcessing", txn.timeStamps.afterCommit.Sub(txn.timeStamps.beforeCommit).Microseconds(),
+		"txnNotificationWaiting", txn.timeStamps.end.Sub(txn.timeStamps.afterCommit).Microseconds(),
+		"txnProcesses", fmt.Sprintf("%v", txn.timeStamps.txnProcesses),
+		"etcdTxn", fmt.Sprintf("%v", txn.timeStamps.etcdProcesses),
+		"cacheLock", fmt.Sprintf("%v", txn.timeStamps.cacheLockAchievements),
+		"operationDuration", fmt.Sprintf("%v", txn.timeStamps.operationDuration))
 	log.V(5).Info("transact response", "response", txn.response, "etcdTrx revision", rev)
 	return txn.response.Result, nil
 }
