@@ -289,16 +289,22 @@ func (lc *localCache) getLocalTableCache(tableName string) localTableCache {
 
 type operationDuration struct {
 	name     string
-	duration time.Duration
+	duration int64
 }
 
 type txnTimeStamps struct {
-	txnStart               time.Time
-	txnProcess             []time.Duration
-	etcdTxnProcess         []time.Duration
-	cacheLockAchievement   []time.Duration
-	monitorLockAchievement time.Duration
-	operationDuration      [][]operationDuration
+	start                   time.Time
+	beforeMonitorLock       time.Time
+	afterMonitorLock        time.Time
+	beforeCommit            time.Time
+	afterCommit             time.Time
+	beforeWait4Notification time.Time
+	end                     time.Time
+
+	txnProcesses          []int64
+	etcdProcesses         []int64
+	cacheLockAchievements []int64
+	operationDuration     [][]operationDuration
 }
 
 type Transaction struct {
@@ -433,32 +439,31 @@ func (txn *Transaction) Commit() (int64, error) {
 				//txn.response.Error = &errStr
 				return err
 			}
-			opsDuration = append(opsDuration, operationDuration{name: ovsOp.Op, duration: time.Now().Sub(startOperation)})
+			opsDuration = append(opsDuration, operationDuration{name: ovsOp.Op, duration: time.Now().Sub(startOperation).Microseconds()})
 		}
 		beforeGC := time.Now()
 		txn.gc()
-		opsDuration = append(opsDuration, operationDuration{name: "gc", duration: time.Now().Sub(beforeGC)})
+		opsDuration = append(opsDuration, operationDuration{name: "gc", duration: time.Now().Sub(beforeGC).Microseconds()})
 		txn.timeStamps.operationDuration = append(txn.timeStamps.operationDuration, opsDuration)
 		return nil
 	}
 	var trResponse *clientv3.TxnResponse
 	// TODO add configuration flag to iteration number
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		startProcessOperations = time.Now()
 		err = processOperations()
 		if err != nil {
 			return -1, err
 		}
-		beforeEtcdtxn := time.Now()
-		txn.timeStamps.txnProcess = append(txn.timeStamps.txnProcess, beforeEtcdtxn.Sub(startProcessOperations))
-		txn.timeStamps.cacheLockAchievement = append(txn.timeStamps.cacheLockAchievement, gotCacheLock.Sub(startProcessOperations))
-		txn.log.V(1).Info("Before etcdTransact", "i", i, "timeBeforeEtcd", fmt.Sprintf("%s", beforeEtcdtxn.Sub(txn.timeStamps.txnStart)), "txnSize", len(txn.request.Operations), "etcdTxnSize", txn.etcdTrx.ifSize()+txn.etcdTrx.thenSize())
+		beforeEtcd := time.Now()
+		txn.timeStamps.txnProcesses = append(txn.timeStamps.txnProcesses, beforeEtcd.Sub(startProcessOperations).Microseconds())
+		txn.timeStamps.cacheLockAchievements = append(txn.timeStamps.cacheLockAchievements, gotCacheLock.Sub(startProcessOperations).Microseconds())
 		trResponse, err = txn.etcdTransaction()
 		if err != nil {
 			txn.log.Error(err, "etcd trx error", "cmpSize", txn.etcdTrx.ifSize(), "thenSize", txn.etcdTrx.thenSize())
 			return -1, err
 		}
-		txn.timeStamps.etcdTxnProcess = append(txn.timeStamps.etcdTxnProcess, time.Now().Sub(beforeEtcdtxn))
+		txn.timeStamps.etcdProcesses = append(txn.timeStamps.etcdProcesses, time.Now().Sub(beforeEtcd).Microseconds())
 		if trResponse.Succeeded {
 			if i > 0 {
 				txn.log.V(6).Info("concurrency resolved", "trx", txn.etcdTrx.String())

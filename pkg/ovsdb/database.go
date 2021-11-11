@@ -63,8 +63,8 @@ var EtcdClientTimeout = time.Second
 
 func NewEtcdClient(ctx context.Context, endpoints []string, keepAliveTime, keepAliveTimeout time.Duration) (*clientv3.Client, error) {
 	cfg := clientv3.Config{
-		Endpoints:          endpoints,
-		Context:            ctx,
+		Endpoints: endpoints,
+		Context:   ctx,
 		// TODO propagate these parameters as configurable
 		DialTimeout:        30 * time.Second,
 		MaxCallSendMsgSize: 1 * 1024 * 1024 * 1024,
